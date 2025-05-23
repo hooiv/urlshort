@@ -1,0 +1,56 @@
+// This is your Prisma schema file.
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Url {
+  id          String   @id @default(cuid())
+  originalUrl String
+  shortCode   String   @unique
+  title       String?
+  description String?
+  clicks      Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  expiresAt   DateTime?
+  userId      String?
+  isActive    Boolean  @default(true)
+  
+  // Analytics
+  clickEvents ClickEvent[]
+  
+  @@map("urls")
+}
+
+model ClickEvent {
+  id        String   @id @default(cuid())
+  urlId     String
+  ip        String?
+  userAgent String?
+  referer   String?
+  country   String?
+  city      String?
+  createdAt DateTime @default(now())
+  
+  url Url @relation(fields: [urlId], references: [id], onDelete: Cascade)
+  
+  @@map("click_events")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@map("users")
+}
