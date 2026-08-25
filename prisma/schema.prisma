@@ -1,56 +1,576 @@
-// This is your Prisma schema file.
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+enum DeviceType {
+  mobile
+  tablet
+  desktop
+  bot
+}
+
+enum HealthStatus {
+  unknown
+  healthy
+  degraded
+  down
+}
+
+enum DomainStatus {
+  pending
+  verified
+  disabled
+}
+
+enum LinkRiskStatus {
+  cleared
+  review
+  blocked
+}
+
+enum AbuseReportStatus {
+  open
+  investigating
+  resolved
+  rejected
 }
 
 model Url {
-  id          String   @id @default(cuid())
-  originalUrl String
-  shortCode   String   @unique
-  title       String?
-  description String?
-  clicks      Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  expiresAt   DateTime?
-  userId      String?
-  isActive    Boolean  @default(true)
-  
-  // Analytics
-  clickEvents ClickEvent[]
-  
+  id                         String         @id @default(cuid())
+  originalUrl                String
+  shortCode                  String         @unique
+  title                      String?
+  description                String?
+  ogImage                    String?
+  clicks                     Int            @default(0)
+  createdAt                  DateTime       @default(now())
+  updatedAt                  DateTime       @updatedAt
+  expiresAt                  DateTime?
+  expiredUrl                 String?
+  passwordHash               String?
+  metaPixelId                String?
+  googleTagId                String?
+  xPixelId                   String?
+  cloaked                    Boolean        @default(false)
+  webhookUrl                 String?
+  maxClicks                  Int?
+  userId                     String?
+  user                       User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  isActive                   Boolean        @default(true)
+  managementTokenHash        String?
+  workspaceId                String?
+  workspace                  Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  healthStatus               HealthStatus   @default(unknown)
+  healthCheckedAt            DateTime?
+  healthLatencyMs            Int?
+  healthStatusCode           Int?
+  healthLastError            String?
+  healthConsecutiveFailures  Int            @default(0)
+  healthConsecutiveSuccesses Int            @default(0)
+  autoFailoverEnabled        Boolean        @default(true)
+  lastHealthyRevisionId      String?
+  riskStatus                 LinkRiskStatus @default(cleared)
+  riskReason                 String?
+  riskCheckedAt              DateTime?
+  deletedAt                  DateTime?
+  tags                       String[]
+
+  clickEvents  ClickEvent[]
+  clickDaily   ClickDaily[]
+  rules        LinkRule[]
+  goals        Goal[]
+  conversions  ConversionEvent[]
+  revisions    DestinationRevision[]
+  healthChecks DestinationHealthCheck[]
+  domainLinks  DomainLink[]
+  ownedDomains BrandedDomain[]          @relation("DomainOwner")
+  abuseReports AbuseReport[]
+
+  @@index([healthStatus, healthCheckedAt])
+  @@index([tags])
   @@map("urls")
 }
 
+model LinkRule {
+  id                   String         @id @default(cuid())
+  urlId                String
+  name                 String
+  destinationUrl       String
+  priority             Int            @default(100)
+  weight               Int            @default(100)
+  enabled              Boolean        @default(true)
+  countryCodes         String?
+  deviceType           DeviceType?
+  referrerDomain       String?
+  startAt              DateTime?
+  endAt                DateTime?
+  riskStatus           LinkRiskStatus @default(cleared)
+  riskReason           String?
+  riskCheckedAt        DateTime?
+  healthStatus         HealthStatus   @default(unknown)
+  healthCheckedAt      DateTime?
+  healthLatencyMs      Int?
+  healthStatusCode     Int?
+  healthLastError      String?
+  consecutiveFailures  Int            @default(0)
+  consecutiveSuccesses Int            @default(0)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  url          Url                      @relation(fields: [urlId], references: [id], onDelete: Cascade)
+  clickEvents  ClickEvent[]
+  conversions  ConversionEvent[]
+  healthChecks DestinationHealthCheck[]
+
+  @@index([urlId, enabled, priority])
+  @@index([healthStatus, healthCheckedAt])
+  @@map("link_rules")
+}
+
 model ClickEvent {
-  id        String   @id @default(cuid())
-  urlId     String
-  ip        String?
-  userAgent String?
-  referer   String?
-  country   String?
-  city      String?
-  createdAt DateTime @default(now())
-  
-  url Url @relation(fields: [urlId], references: [id], onDelete: Cascade)
-  
+  id            String      @id @default(cuid())
+  urlId         String
+  ruleId        String?
+  ip            String?
+  userAgent     String?
+  referer       String?
+  referrerHost  String?
+  country       String?
+  city          String?
+  deviceType    DeviceType?
+  visitorIdHash String?
+  createdAt     DateTime    @default(now())
+
+  url         Url               @relation(fields: [urlId], references: [id], onDelete: Cascade)
+  rule        LinkRule?         @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  conversions ConversionEvent[]
+
+  @@index([urlId, createdAt])
+  @@index([urlId, country])
+  @@index([urlId, deviceType])
+  @@index([ruleId, createdAt])
+  @@index([visitorIdHash, createdAt])
   @@map("click_events")
 }
 
-model User {
+model ClickDaily {
   id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  password  String
+  urlId     String
+  dateKey   String
+  clicks    Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  
+
+  url Url @relation(fields: [urlId], references: [id], onDelete: Cascade)
+
+  @@unique([urlId, dateKey])
+  @@index([urlId, dateKey])
+  @@map("click_daily")
+}
+
+model Goal {
+  id        String   @id @default(cuid())
+  urlId     String
+  name      String
+  eventKey  String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  url         Url               @relation(fields: [urlId], references: [id], onDelete: Cascade)
+  conversions ConversionEvent[]
+  daily       ConversionDaily[]
+
+  @@unique([urlId, eventKey])
+  @@index([urlId, enabled])
+  @@map("goals")
+}
+
+model ConversionEvent {
+  id            String   @id @default(cuid())
+  urlId         String
+  goalId        String
+  clickEventId  String?
+  ruleId        String?
+  visitorIdHash String?
+  valueCents    Int?
+  currency      String?
+  metadata      String?
+  createdAt     DateTime @default(now())
+
+  url        Url         @relation(fields: [urlId], references: [id], onDelete: Cascade)
+  goal       Goal        @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  clickEvent ClickEvent? @relation(fields: [clickEventId], references: [id], onDelete: SetNull)
+  rule       LinkRule?   @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+
+  @@index([urlId, createdAt])
+  @@index([goalId, createdAt])
+  @@index([ruleId, createdAt])
+  @@index([visitorIdHash, createdAt])
+  @@map("conversion_events")
+}
+
+model ConversionDaily {
+  id          String   @id @default(cuid())
+  goalId      String
+  dateKey     String
+  conversions Int      @default(0)
+  valueCents  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  goal Goal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@unique([goalId, dateKey])
+  @@index([goalId, dateKey])
+  @@map("conversion_daily")
+}
+
+model User {
+  id                      String                   @id @default(cuid())
+  email                   String                   @unique
+  name                    String?
+  password                String
+  emailVerifiedAt         DateTime?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  urls                    Url[]
+  sessions                Session[]
+  memberships             Membership[]
+  apiKeys                 ApiKey[]
+  passwordResetTokens     PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+  bioProfiles             BioProfile[]
+  webhookEndpoints        WebhookEndpoint[]
+
   @@map("users")
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  keyHash    String    @unique
+  prefix     String
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+  @@map("api_keys")
+}
+
+model Session {
+  id         String    @id @default(cuid())
+  tokenHash  String    @unique
+  userId     String
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  userAgent  String?
+  lastSeenAt DateTime  @default(now())
+  createdAt  DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt, revokedAt])
+  @@map("sessions")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+enum WorkspaceRole {
+  owner
+  admin
+  editor
+  analyst
+  viewer
+}
+
+model Workspace {
+  id               String            @id @default(cuid())
+  name             String
+  slug             String            @unique
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  urls             Url[]
+  members          Membership[]
+  invites          WorkspaceInvite[]
+  bioProfiles      BioProfile[]
+  webhookEndpoints WebhookEndpoint[]
+
+  @@map("workspaces")
+}
+
+model Membership {
+  id          String        @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([userId, role])
+  @@map("workspace_memberships")
+}
+
+model WorkspaceInvite {
+  id          String        @id @default(cuid())
+  workspaceId String
+  email       String
+  role        WorkspaceRole @default(viewer)
+  tokenHash   String        @unique
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  revokedAt   DateTime?
+  createdById String
+  createdAt   DateTime      @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, email])
+  @@index([workspaceId, expiresAt])
+  @@map("workspace_invites")
+}
+
+model DestinationRevision {
+  id             String   @id @default(cuid())
+  urlId          String
+  destinationUrl String
+  reason         String?
+  effectiveAt    DateTime
+  createdAt      DateTime @default(now())
+
+  url Url @relation(fields: [urlId], references: [id], onDelete: Cascade)
+
+  @@index([urlId, effectiveAt])
+  @@map("destination_revisions")
+}
+
+model DestinationHealthCheck {
+  id         String       @id @default(cuid())
+  urlId      String
+  revisionId String?
+  ruleId     String?
+  targetUrl  String
+  status     HealthStatus
+  statusCode Int?
+  latencyMs  Int?
+  error      String?
+  checkedAt  DateTime     @default(now())
+
+  url  Url       @relation(fields: [urlId], references: [id], onDelete: Cascade)
+  rule LinkRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+
+  @@index([urlId, checkedAt])
+  @@index([ruleId, checkedAt])
+  @@index([revisionId, checkedAt])
+  @@map("destination_health_checks")
+}
+
+model BrandedDomain {
+  id                String       @id @default(cuid())
+  host              String       @unique
+  verificationToken String       @unique
+  ownerUrlId        String?
+  status            DomainStatus @default(pending)
+  verifiedAt        DateTime?
+  lastCheckedAt     DateTime?
+  tlsReady          Boolean      @default(false)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  owner Url?         @relation("DomainOwner", fields: [ownerUrlId], references: [id], onDelete: SetNull)
+  links DomainLink[]
+
+  @@index([status, lastCheckedAt])
+  @@map("branded_domains")
+}
+
+model DomainLink {
+  id        String   @id @default(cuid())
+  domainId  String
+  urlId     String
+  path      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  domain BrandedDomain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  url    Url           @relation(fields: [urlId], references: [id], onDelete: Cascade)
+
+  @@unique([domainId, path])
+  @@index([urlId])
+  @@map("domain_links")
+}
+
+model AbuseReport {
+  id        String            @id @default(cuid())
+  urlId     String
+  reason    String
+  details   String?
+  reporter  String?
+  status    AbuseReportStatus @default(open)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  url Url @relation(fields: [urlId], references: [id], onDelete: Cascade)
+
+  @@index([urlId, status, createdAt])
+  @@map("abuse_reports")
+}
+
+model AuditEvent {
+  id           String   @id @default(cuid())
+  action       String
+  actorType    String
+  actorUserId  String?
+  sessionId    String?
+  urlId        String?
+  resourceType String?
+  resourceId   String?
+  ipHash       String?
+  userAgent    String?
+  beforeJson   String?
+  afterJson    String?
+  metadataJson String?
+  createdAt    DateTime @default(now())
+
+  @@index([actorUserId, createdAt])
+  @@index([urlId, createdAt])
+  @@index([resourceType, resourceId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_events")
+}
+
+enum BioBlockType {
+  link
+  socials
+  text
+  image
+  youtube
+  spotify
+  divider
+}
+
+model BioProfile {
+  id          String   @id @default(cuid())
+  userId      String?
+  workspaceId String?
+  handle      String   @unique
+  displayName String?
+  bioText     String?
+  avatarUrl   String?
+  theme       String   @default("light")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user      User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  blocks    BioBlock[]
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@map("bio_profiles")
+}
+
+model BioBlock {
+  id           String       @id @default(cuid())
+  profileId    String
+  type         BioBlockType
+  position     Int          @default(0)
+  title        String?
+  url          String?
+  content      String?
+  metadataJson String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  profile BioProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId, position])
+  @@map("bio_blocks")
+}
+
+enum WebhookStatus {
+  pending
+  success
+  failed
+}
+
+model WebhookEndpoint {
+  id          String   @id @default(cuid())
+  workspaceId String?
+  userId      String?
+  url         String
+  secret      String
+  isActive    Boolean  @default(true)
+  events      String[] // Array of event names like "click", "conversion"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace  Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user       User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@index([workspaceId])
+  @@index([userId])
+  @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id            String        @id @default(cuid())
+  endpointId    String
+  event         String
+  payload       String // JSON string
+  status        WebhookStatus @default(pending)
+  responseCode  Int?
+  responseBody  String?
+  attempts      Int           @default(0)
+  nextAttemptAt DateTime?
+  lastAttemptAt DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([status, nextAttemptAt])
+  @@index([endpointId, createdAt])
+  @@map("webhook_deliveries")
 }

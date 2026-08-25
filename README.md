@@ -1,258 +1,110 @@
-# QuickLink - URL Shortener
+# QuickLink — Smart link infrastructure
 
-A modern, full-featured URL shortening service built with Next.js, TypeScript, and Tailwind CSS. Similar to Bitly, QuickLink provides URL shortening, click tracking, analytics, and a beautiful web interface.
+One permanent short link, many destinations. QuickLink routes visitors by country, device, referrer, or time window; runs deterministic weighted experiments; tracks conversions back to the exact click and routing rule; and fails over automatically when a destination goes down.
 
-## ✨ Features
+## Features
 
-- **URL Shortening**: Transform long URLs into short, memorable links
-- **Custom Short Codes**: Create custom short codes for your links
-- **Click Tracking**: Real-time click counting and analytics
-- **Analytics Dashboard**: Detailed analytics including:
-  - Clicks over time
-  - Geographic data
-  - Referrer tracking
-  - Recent click history
-- **Modern UI**: Beautiful, responsive design with Tailwind CSS
-- **TypeScript**: Full type safety throughout the application
-- **Database**: SQLite database with Prisma ORM
-- **Fast Redirects**: Lightning-fast URL redirections
+- **Smart routing** — per-link rules filtered by country, device type, referrer, and time window. Equal-priority rules run deterministic weighted experiments (sticky per visitor via SHA-256 bucketing).
+- **Destination releases** — append-only revision history with scheduled (`effectiveAt`) releases and one-click rollback.
+- **Conversion tracking** — HMAC-signed attribution tokens travel in the URL fragment (never sent to destination servers); the `/quicklink.js` snippet persists them and reports goals (`QuickLink.track()`), attributed to the originating click and rule.
+- **Analytics** — date-range click/conversion analytics with geo, device, referrer breakdowns, per-rule experiment performance, and CSV export.
+- **Health monitoring & auto-failover** — SSRF-hardened destination probes (DNS-resolved private-IP blocking, redirect re-validation), circuit-breaker thresholds, cron sweep endpoint, and on-demand checks.
+- **Branded domains** — customer-owned hostnames with DNS TXT verification and path-mapped links.
+- **Workspaces** — 5 roles (owner/admin/editor/analyst/viewer), email-bound expiring invites, per-role permissions.
+- **API keys** — programmatic access via `x-api-key` (hashed at rest, revocable, shown once).
+- **QR codes** — per-link PNG/SVG generation with configurable size and colors.
+- **Trust & safety** — heuristic risk scoring at creation, public abuse reporting, operator safety console, blocked/expired interstitials.
+- **Audit log** — every auth and management action recorded with hashed IPs.
 
-## 🚀 Tech Stack
+## Tech stack
 
-- **Framework**: Next.js 15 with App Router
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS
-- **Database**: SQLite with Prisma ORM
-- **UI Components**: Lucide React icons
-- **Notifications**: React Hot Toast
-- **Deployment**: Vercel-ready
+- Next.js 15 (App Router) · React 19 · TypeScript
+- Prisma ORM · PostgreSQL (Neon-ready, pooled + direct connections)
+- Tailwind CSS · lucide-react · react-hot-toast
+- bcryptjs sessions (opaque tokens, SHA-256 at rest) · nanoid · qrcode
 
-## 📋 Prerequisites
-
-- Node.js 18+ 
-- npm, yarn, pnpm, or bun
-
-## 🛠️ Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone <your-repo-url>
-   cd urlshort
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Set up the database**
-   ```bash
-   npx prisma generate
-   npx prisma db push
-   ```
-
-4. **Configure environment variables**
-   
-   The `.env` file is already configured with:
-   ```env
-   DATABASE_URL="file:./dev.db"
-   NEXT_PUBLIC_BASE_URL="http://localhost:3000"
-   JWT_SECRET="your-super-secret-jwt-key-change-this-in-production"
-   ```
-
-5. **Start the development server**
-   ```bash
-   npm run dev
-   ```
-
-6. **Open your browser**
-   
-   Navigate to [http://localhost:3000](http://localhost:3000)
-
-## 🎯 Usage
-
-### Shortening URLs
-
-1. Enter a long URL in the input field
-2. Optionally provide a custom short code
-3. Click "Shorten" to generate your short link
-4. Copy and share your shortened URL
-
-### Viewing Analytics
-
-1. After creating a short URL, click on it to view analytics
-2. Or navigate to `/analytics/[shortCode]` directly
-3. View detailed statistics including clicks, geographic data, and referrers
-
-## 📁 Project Structure
-
-```
-urlshort/
-├── prisma/
-│   ├── schema.prisma          # Database schema
-│   └── dev.db                 # SQLite database
-├── src/
-│   ├── app/
-│   │   ├── [shortCode]/       # Dynamic route for redirects
-│   │   ├── analytics/         # Analytics pages
-│   │   ├── api/               # API routes
-│   │   │   ├── shorten/       # URL shortening endpoint
-│   │   │   └── analytics/     # Analytics endpoint
-│   │   ├── globals.css        # Global styles
-│   │   ├── layout.tsx         # Root layout
-│   │   └── page.tsx           # Homepage
-│   └── lib/
-│       ├── prisma.ts          # Prisma client
-│       └── utils.ts           # Utility functions
-├── .env                       # Environment variables
-└── package.json
-```
-
-## 🔌 API Endpoints
-
-### POST `/api/shorten`
-Create a new shortened URL
-
-**Request Body:**
-```json
-{
-  "url": "https://example.com/very/long/url",
-  "customCode": "optional-custom-code"
-}
-```
-
-**Response:**
-```json
-{
-  "id": "url-id",
-  "originalUrl": "https://example.com/very/long/url",
-  "shortCode": "abc123",
-  "shortUrl": "http://localhost:3000/abc123",
-  "title": "Page Title",
-  "clicks": 0,
-  "createdAt": "2025-05-23T..."
-}
-```
-
-### GET `/api/analytics/[shortCode]`
-Get analytics data for a shortened URL
-
-**Response:**
-```json
-{
-  "url": {
-    "id": "url-id",
-    "originalUrl": "https://example.com",
-    "shortCode": "abc123",
-    "title": "Page Title",
-    "clicks": 42,
-    "createdAt": "2025-05-23T..."
-  },
-  "analytics": {
-    "totalClicks": 42,
-    "clicksByDate": {...},
-    "clicksByCountry": {...},
-    "clicksByReferrer": {...},
-    "recentClicks": [...]
-  }
-}
-```
-
-## 🚀 Deployment
-
-### Vercel (Recommended)
-
-1. Push your code to GitHub
-2. Connect your repository to Vercel
-3. Set environment variables in Vercel dashboard:
-   - `DATABASE_URL` (for production database)
-   - `NEXT_PUBLIC_BASE_URL` (your domain)
-   - `JWT_SECRET` (secure random string)
-4. Deploy!
-
-### Other Platforms
-
-This Next.js application can be deployed to any platform that supports Node.js, including:
-- Netlify
-- Railway
-- Heroku
-- DigitalOcean App Platform
-
-## 🔧 Configuration
-
-### Database
-
-For production, consider upgrading from SQLite to PostgreSQL:
-
-1. Update `prisma/schema.prisma`:
-   ```prisma
-   datasource db {
-     provider = "postgresql"
-     url      = env("DATABASE_URL")
-   }
-   ```
-
-2. Update your `DATABASE_URL` environment variable
-
-3. Run migrations:
-   ```bash
-   npx prisma migrate dev
-   ```
-
-### Custom Domain
-
-Update `NEXT_PUBLIC_BASE_URL` in your environment variables to match your custom domain.
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
-
-## 📝 License
-
-This project is open source and available under the [MIT License](LICENSE).
-
-## 🙏 Acknowledgments
-
-- [Next.js](https://nextjs.org/) - The React framework
-- [Tailwind CSS](https://tailwindcss.com/) - For styling
-- [Prisma](https://prisma.io/) - Database ORM
-- [Lucide](https://lucide.dev/) - Beautiful icons
-
-## Getting Started
-
-First, run the development server:
+## Getting started
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pnpm install
+cp .env.example .env   # fill in DATABASE_URL + QL_ATTRIBUTION_SECRET
+pnpm db:push           # sync schema to your database
+pnpm dev               # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Required environment variables (see `.env.example`):
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | Postgres connection string (pooled endpoint in production) |
+| `DIRECT_DATABASE_URL` | Direct connection for migrations |
+| `QL_ATTRIBUTION_SECRET` | ≥32-char HMAC secret for attribution tokens (required, validated at startup) |
+| `NEXT_PUBLIC_BASE_URL` | Public base URL used to build short URLs |
+| `HEALTH_SWEEP_SECRET` | Shared secret for the `POST /api/health/sweep` cron endpoint |
+| `TRACK_ALLOWED_ORIGINS` | Optional comma-separated origin allowlist for `/api/track` (default `*`) |
+| `EMAIL_PROVIDER` | `console` (default) or `resend` |
+| `RESEND_API_KEY` / `EMAIL_FROM` | Required when `EMAIL_PROVIDER=resend` |
+| `EVENT_RETENTION_DAYS` | Raw event retention for the maintenance sweep (default 180) |
+| `CRON_SECRET` | Vercel Cron bearer token (set equal to `HEALTH_SWEEP_SECRET`) |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## API overview
 
-## Learn More
+All management endpoints accept a session cookie, a per-link management token (`x-management-token` or `Authorization: Bearer`), or an API key (`x-api-key`).
 
-To learn more about Next.js, take a look at the following resources:
+| Endpoint | Description |
+|---|---|
+| `POST /api/shorten` | Create a link (custom code, title, workspace). Rate-limited. |
+| `GET /api/shorten` | List links — `?search=&cursor=&take=` keyset pagination. |
+| `GET/PATCH/DELETE /api/links/[shortCode]` | Link detail, edit (title/active/expiry/destination), soft-delete. |
+| `GET /api/analytics/[shortCode]` | Analytics — `?range=24h\|7d\|30d\|90d\|all` or `?from=&to=`. |
+| `GET /api/links/[shortCode]/export` | Click events as CSV (date-filterable, 10k row cap). |
+| `GET /api/links/[shortCode]/qr` | QR code — `?format=png\|svg&size=&margin=&dark=&light=`. |
+| `POST /api/links/[shortCode]/revisions` | Publish/schedule a destination release. |
+| `POST /api/links/[shortCode]/rules` | Create a smart-routing rule. |
+| `GET/PATCH/DELETE /api/links/[shortCode]/goals` | Conversion goal management. |
+| `GET/POST /api/links/[shortCode]/health` | Health snapshot / on-demand probe (rate-limited). |
+| `GET/PATCH /api/links/[shortCode]/safety` | Risk status + abuse reports. |
+| `GET/POST/DELETE /api/account/api-keys` | API key management. |
+| `POST /api/track` | Public conversion endpoint (HMAC token, CORS allowlist, 24h dedup). |
+| `POST /api/health/sweep` | Cron: probe the 50 stalest links (`x-health-sweep-secret` header). |
+| `POST /api/abuse/report` | Public abuse reporting. |
+| `POST /api/auth/reset` + `/confirm` | Password reset request / token confirmation. |
+| `POST /api/auth/verify` + `/confirm` | Email verification send / confirm. |
+| `POST /api/account/password` | Change password (revokes other sessions). |
+| `GET/POST/DELETE /api/account/api-keys` | API key management. |
+| `GET/PATCH/DELETE /api/workspaces/[id]/members` | List, role changes, remove/leave. |
+| `GET/POST/DELETE /api/workspaces/[id]/invites` | List, create, revoke invites. |
+| `POST /api/maintenance/sweep` | Cron: retention cleanup of expired rows. |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Cron scheduling
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+`vercel.json` pre-configures both sweeps for Vercel Cron (health every 10 min, retention every 3 h). Vercel sends `Authorization: Bearer $CRON_SECRET` — set `CRON_SECRET` equal to `HEALTH_SWEEP_SECRET`. For other platforms, call the endpoints with POST and the `x-health-sweep-secret` header.
 
-## Deploy on Vercel
+### Conversion tracking snippet
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```html
+<script src="https://your-domain/quicklink.js" async></script>
+<script>
+  window.QuickLink?.track('purchase_completed', { valueCents: 4900, currency: 'USD' })
+</script>
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Security model
+
+- **No raw IPs stored** — visitor IDs and audit IPs are hashed.
+- **Tokens in URL fragments** — management and attribution tokens never reach destination servers.
+- **SSRF defense** — destinations are DNS-resolved and checked against private/loopback/link-local ranges at creation, on every rule/revision change, and on every health-probe hop.
+- **Timing-safe** comparisons for all token/secret verification.
+- **Rate limiting** on creation, auth, tracking, analytics, QR, exports, and probes.
+- **Security headers** — CSP, HSTS, X-Frame-Options, nosniff, Referrer-Policy.
+
+## Deployment notes
+
+- Use Neon (or any serverless Postgres) with the **pooled** connection string in `DATABASE_URL`.
+- The in-process rate limiter and link cache are per-instance; for multi-instance deployments back the limiter with Redis (swap the `RateLimiterBackend` in `src/lib/rate-limit.ts`).
+- Schedule `POST /api/health/sweep` every 5–15 minutes with the `x-health-sweep-secret` header.
+- Rotate `QL_ATTRIBUTION_SECRET` carefully — it invalidates outstanding attribution tokens.
+
+<!-- Legacy documentation below -->
+
+## ✨ Features

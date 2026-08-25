@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: quicklink
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d quicklink"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/quicklink?schema=public
+      DIRECT_DATABASE_URL: postgresql://postgres:postgres@db:5432/quicklink?schema=public
+      NEXT_PUBLIC_BASE_URL: http://localhost:3000
+      QL_ATTRIBUTION_SECRET: local-dev-secret-at-least-32-characters-long!!
+      HEALTH_SWEEP_SECRET: ""
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    # Push the schema, then start the server.
+    command: sh -c "node_modules/.bin/prisma db push --skip-generate && pnpm start"
+
+volumes:
+  pgdata:
