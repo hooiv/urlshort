@@ -1,10 +1,14 @@
 /**
  * Sliding-window rate limiter.
  *
- * Single-instance in-memory implementation with LRU eviction. The public API is
- * async so a Redis/Upstash backend can be swapped in behind the same interface
- * when the app scales horizontally (see `RateLimiterBackend`).
+ * In-memory by default (single instance, LRU-bounded). When REDIS_URL is set,
+ * a Redis-backed sliding window shares the budget across serverless
+ * instances. If Redis is down or misconfigured the limiter degrades to the
+ * in-memory backend instead of failing requests — availability beats strict
+ * limiting.
  */
+
+import { getRedis, isRedisConfigured, withRedis } from '@/lib/redis'
 
 export type RateLimitResult = {
   allowed: boolean
@@ -79,9 +83,80 @@ class InMemoryBackend implements RateLimiterBackend {
   }
 }
 
+/**
+ * Redis sliding window. Every request goes through `withRedis`, so transport
+ * errors flip the connector into cooldown and the caller falls back to the
+ * in-memory backend for that duration.
+ */
+class RedisBackend implements RateLimiterBackend {
+  async hit(key: string, limit: number, windowMs: number): Promise<RateLimitResult> {
+    const fallback = memoryBackend.hit(key, limit, windowMs)
+    const result = await withRedis(
+      (redis) => this.hitRedis(redis, key, limit, windowMs),
+      null as RateLimitResult | null
+    )
+    return result ?? fallback
+  }
+
+  private async hitRedis(
+    redis: import('ioredis').Redis,
+    key: string,
+    limit: number,
+    windowMs: number
+  ): Promise<RateLimitResult> {
+    const now = Date.now()
+    const windowStart = now - windowMs
+    const redisKey = `ratelimit:${key}`
+
+    // Atomic-enough pipeline: prune expired hits, record this hit, read the
+    // resulting state. One round-trip.
+    const member = `${now}-${Math.random().toString(36).slice(2)}`
+    const results = await redis
+      .multi()
+      .zremrangebyscore(redisKey, 0, windowStart)
+      .zadd(redisKey, now, member)
+      .zcard(redisKey)
+      .pexpire(redisKey, windowMs)
+      .exec()
+    if (!results) throw new Error('Redis transaction returned no results')
+
+    // Collect any command-level errors instead of trusting indexes blindly.
+    for (const [err] of results) {
+      if (err) throw err
+    }
+    const hitsCount = Number(results[2][1])
+
+    if (hitsCount > limit) {
+      // Over limit: roll back the just-added hit so rejected requests don't
+      // consume budget.
+      await redis.zrem(redisKey, member)
+      // Oldest surviving hit defines when a slot frees up.
+      const oldest = await redis.zrange(redisKey, 0, 0)
+      let retryAfterSeconds = 1
+      if (oldest.length > 0) {
+        const oldestAt = parseFloat(String(oldest[0]).split('-')[0])
+        if (!Number.isNaN(oldestAt)) {
+          retryAfterSeconds = Math.max(1, Math.ceil((oldestAt + windowMs - now) / 1000))
+        }
+      }
+      return { allowed: false, remaining: 0, retryAfterSeconds, limit }
+    }
+
+    return { allowed: true, remaining: limit - hitsCount, retryAfterSeconds: 0, limit }
+  }
+}
+
 const globalForLimiter = globalThis as unknown as { __qlRateLimiter?: RateLimiterBackend }
-const backend: RateLimiterBackend = globalForLimiter.__qlRateLimiter ?? new InMemoryBackend()
-if (process.env.NODE_ENV !== 'production') globalForLimiter.__qlRateLimiter = backend
+const memoryBackend = new InMemoryBackend()
+
+function createBackend(): RateLimiterBackend {
+  return isRedisConfigured() ? new RedisBackend() : memoryBackend
+}
+
+// Reuse across hot reloads/multiple module instances; safe because both
+// backends are stateless w.r.t. requests and internally synchronized.
+const backend: RateLimiterBackend = globalForLimiter.__qlRateLimiter ?? createBackend()
+globalForLimiter.__qlRateLimiter = backend
 
 export function getClientIp(request: Request): string {
   const forwarded = request.headers.get('x-forwarded-for')

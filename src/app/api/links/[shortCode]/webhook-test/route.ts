@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHmac } from 'node:crypto'
 import { getManageableUrl, EDIT_ROLES } from '@/lib/authorization'
+import { assertDestinationSafeForStorage } from '@/lib/destination-health'
 
 export async function POST(request: NextRequest, context: { params: Promise<{ shortCode: string }> }) {
   try {
@@ -18,9 +19,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
 
     try {
       const parsed = new URL(webhookUrl)
-      if (!['http:', 'https:'].includes(parsed.protocol)) {
-        throw new Error('Webhook URL must be HTTP or HTTPS')
-      }
+      if (parsed.protocol !== 'https:') throw new Error('Webhook URL must use HTTPS')
+      await assertDestinationSafeForStorage(parsed.toString())
     } catch {
       return NextResponse.json({ error: 'Enter a valid webhook destination URL' }, { status: 400 })
     }

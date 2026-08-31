@@ -5,6 +5,7 @@ import { getManageableUrl } from '@/lib/authorization'
 import { normalizeSafeUrl } from '@/lib/smart-routing'
 import { assertDestinationSafeForStorage } from '@/lib/destination-health'
 import { invalidateLink } from '@/lib/link-cache'
+import { hashGatePassword } from '@/lib/password-gate'
 
 type UrlRow = NonNullable<Awaited<ReturnType<typeof getManageableUrl>>['url']>
 
@@ -96,7 +97,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
         data.passwordHash = null
       } else {
         const crypto = await import('node:crypto');
-        data.passwordHash = crypto.scryptSync(String(body.password), 'ql_salt', 64).toString('hex');
+        data.passwordHash = hashGatePassword(String(body.password));
       }
     }
     
@@ -138,7 +139,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
       return tx.url.update({ where: { id: link.id }, data, select: { id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, tags: true, isActive: true, expiresAt: true, expiredUrl: true, metaPixelId: true, googleTagId: true, xPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, updatedAt: true } })
     })
 
-    invalidateLink(updated.shortCode, updated.id)
+    await invalidateLink(updated.shortCode, updated.id)
     await recordAudit(request, {
       action: 'link.update',
       urlId: updated.id,
@@ -166,7 +167,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
       select: { id: true, shortCode: true },
     })
 
-    invalidateLink(link.shortCode, link.id)
+    await invalidateLink(link.shortCode, link.id)
     await recordAudit(request, { action: 'link.delete', urlId: link.id, resourceType: 'url', resourceId: link.id, after: { shortCode: link.shortCode } })
     return NextResponse.json({ deleted: true, shortCode: deleted.shortCode })
   } catch (error) {

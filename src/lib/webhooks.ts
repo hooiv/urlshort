@@ -1,5 +1,41 @@
 import { prisma } from './prisma';
 import crypto from 'crypto';
+import { assertDestinationSafeForStorage } from './destination-health';
+
+export const WEBHOOK_MAX_RETRIES = 5;
+
+/**
+ * Exponential backoff between delivery attempts: 5m, 25m, ~2h, ~10h, ~52h.
+ * Pure so it stays unit-testable and consistent across workers.
+ */
+export function webhookBackoffMs(attempt: number): number {
+  return Math.pow(5, Math.max(1, attempt)) * 60_000;
+}
+
+/**
+ * Tenant scoping for webhook fan-out: an event on a URL may only reach
+ * endpoints owned by the same workspace or the same user. Both ids are
+ * optional; a condition is emitted only for present ids so we never match
+ * NULL-ownership rows belonging to other tenants.
+ */
+export function webhookEndpointScope(
+  owner: { workspaceId: string | null; userId: string | null }
+): ({ workspaceId: string } | { userId: string })[] | undefined {
+  if (owner.workspaceId && owner.userId) {
+    return [{ workspaceId: owner.workspaceId }, { userId: owner.userId }];
+  }
+  if (owner.workspaceId) return [{ workspaceId: owner.workspaceId }];
+  if (owner.userId) return [{ userId: owner.userId }];
+  return undefined;
+}
+
+export type WebhookDeliveryResult = {
+  /** False when the delivery was skipped (already succeeded, endpoint disabled, or claimed by another worker). */
+  attempted: boolean
+  status: 'success' | 'failed' | 'pending' | null
+  responseCode: number | null
+  latencyMs: number
+}
 
 export async function enqueueWebhook(
   endpointId: string,
@@ -15,35 +51,61 @@ export async function enqueueWebhook(
       nextAttemptAt: new Date(),
     },
   });
-  
+
   // Ideally this would be pushed to a message broker (SQS/Kafka) or triggered asynchronously
   // For this V1, we'll process it in-line synchronously or just rely on a cron
   return delivery;
 }
 
-export async function processWebhookDelivery(deliveryId: string) {
+export async function processWebhookDelivery(deliveryId: string): Promise<WebhookDeliveryResult> {
+  const skipped: WebhookDeliveryResult = { attempted: false, status: null, responseCode: null, latencyMs: 0 };
+
   const delivery = await prisma.webhookDelivery.findUnique({
     where: { id: deliveryId },
     include: { endpoint: true },
   });
 
-  if (!delivery || delivery.status === 'success' || !delivery.endpoint.isActive) return;
+  if (!delivery || delivery.status === 'success' || !delivery.endpoint.isActive) return skipped;
 
   const endpoint = delivery.endpoint;
+  // DNS can change between endpoint creation and delivery. Revalidate on every
+  // attempt so a once-public hostname cannot later turn the webhook worker into
+  // an SSRF primitive.
+  try {
+    await assertDestinationSafeForStorage(endpoint.url);
+  } catch (error) {
+    await prisma.webhookDelivery.update({
+      where: { id: delivery.id },
+      data: {
+        status: 'failed',
+        responseBody: error instanceof Error ? error.message.slice(0, 1000) : 'Webhook destination rejected',
+        lastAttemptAt: new Date(),
+        nextAttemptAt: null,
+      },
+    });
+    return { attempted: false, status: 'failed', responseCode: null, latencyMs: 0 };
+  }
   const payloadStr = delivery.payload;
   
   // Generate HMAC signature
-  const signature = crypto
-    .createHmac('sha256', endpoint.secret)
-    .update(payloadStr)
-    .digest('hex');
+  const signature = generateWebhookSignature(payloadStr, endpoint.secret);
 
-  const MAX_RETRIES = 5;
   const currentAttempt = delivery.attempts + 1;
+
+  // Atomic claim: only the worker that flips `attempts` from its read value
+  // may deliver. Concurrent cron invocations (multi-instance deploys, manual
+  // retries) observe count === 0 and skip instead of double-posting.
+  const claimed = await prisma.webhookDelivery.updateMany({
+    where: { id: delivery.id, attempts: delivery.attempts },
+    data: { attempts: currentAttempt },
+  });
+  if (claimed.count === 0) return skipped;
+
   let status: 'success' | 'failed' | 'pending' = 'pending';
   let responseCode = null;
   let responseBody = null;
   
+  const startedAt = Date.now();
   try {
     const res = await fetch(endpoint.url, {
       method: 'POST',
@@ -64,18 +126,18 @@ export async function processWebhookDelivery(deliveryId: string) {
     if (res.ok) {
       status = 'success';
     } else {
-      status = currentAttempt >= MAX_RETRIES ? 'failed' : 'pending';
+      status = currentAttempt >= WEBHOOK_MAX_RETRIES ? 'failed' : 'pending';
     }
   } catch (error: any) {
-    status = currentAttempt >= MAX_RETRIES ? 'failed' : 'pending';
+    status = currentAttempt >= WEBHOOK_MAX_RETRIES ? 'failed' : 'pending';
     responseBody = error.message;
   }
+  const latencyMs = Date.now() - startedAt;
 
-  // Calculate exponential backoff (e.g. 1m, 5m, 25m, 2h, etc) if pending
+  // Exponential backoff if retrying
   let nextAttemptAt = null;
   if (status === 'pending') {
-    const backoffMs = Math.pow(5, currentAttempt) * 60 * 1000; 
-    nextAttemptAt = new Date(Date.now() + backoffMs);
+    nextAttemptAt = new Date(Date.now() + webhookBackoffMs(currentAttempt));
   }
 
   await prisma.webhookDelivery.update({
@@ -84,13 +146,12 @@ export async function processWebhookDelivery(deliveryId: string) {
       status,
       responseCode,
       responseBody: responseBody ? responseBody.substring(0, 1000) : null,
-      attempts: currentAttempt,
       lastAttemptAt: new Date(),
       nextAttemptAt,
     },
   });
 
-  return status;
+  return { attempted: true, status, responseCode, latencyMs };
 }
 
 // DLQ processor that finds pending webhooks whose nextAttemptAt is in the past
@@ -114,4 +175,49 @@ export async function processDeadLetterQueue() {
     processed: pending.length,
     successes: results.filter(r => r.status === 'fulfilled').length,
   };
+}
+
+export async function dispatchWebhooksForUrl(
+  urlId: string,
+  event: string,
+  payload: Record<string, unknown>
+) {
+  const url = await prisma.url.findUnique({
+    where: { id: urlId },
+    select: { workspaceId: true, userId: true },
+  });
+  if (!url) return;
+
+  // Security-critical: scope strictly to the owning workspace/user. A naive
+  // `{ workspaceId: { not: null } }`-style filter here would fan this link's
+  // click payloads out to every other tenant's endpoints.
+  const scope = webhookEndpointScope(url);
+  if (!scope) return;
+
+  const endpoints = await prisma.webhookEndpoint.findMany({
+    where: {
+      isActive: true,
+      OR: scope,
+      events: {
+        has: event
+      }
+    },
+    select: { id: true },
+  });
+
+  await Promise.allSettled(endpoints.map((endpoint) => enqueueWebhook(endpoint.id, event, payload)));
+}
+
+export function generateWebhookSignature(payload: string, secret: string): string {
+  return crypto.createHmac('sha256', secret).update(payload).digest('hex');
+}
+
+export function verifyWebhookSignature(payload: string, secret: string, signature: string): boolean {
+  if (!payload || !secret || !signature) return false;
+  try {
+    const expected = generateWebhookSignature(payload, secret);
+    return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
+  } catch {
+    return false;
+  }
 }

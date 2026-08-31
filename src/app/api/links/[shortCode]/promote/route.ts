@@ -47,7 +47,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
       })
     })
 
-    invalidateLink(updated.shortCode, updated.id)
+    await invalidateLink(updated.shortCode, updated.id)
     await recordAudit(request, {
       action: 'link.promote_variant',
       urlId: updated.id,

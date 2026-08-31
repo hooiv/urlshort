@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { appendAttribution, createAttributionToken, hashVisitorId } from '@/lib/attribution'
-import { chooseSmartRule, getCountry, getDeviceType, getLanguage, getOperatingSystem, getReferrerHost, getVisitorId } from '@/lib/smart-routing'
+import { chooseSmartRule, getAiAgent, getBrowser, getCountry, getDeviceType, getLanguage, getOperatingSystem, getReferrerHost, getTrafficType, getVisitorId } from '@/lib/smart-routing'
 import { getBaseUrl } from '@/lib/utils'
 import { getLinkByCode, getLinkByDomainPath, getLatestRevision, invalidateLink } from '@/lib/link-cache'
+import { clickQueue } from '@/lib/queue'
+import { dispatchWebhooksForUrl } from '@/lib/webhooks'
+import { assertDestinationSafeForStorage } from '@/lib/destination-health'
 
 function utcDateKey(date: Date): string { return date.toISOString().slice(0, 10) }
 
@@ -27,15 +30,11 @@ function forwardQueryParams(destination: string, incoming: URLSearchParams): str
  * (proxy-set) Host header otherwise.
  */
 function requestHost(request: NextRequest): string {
-  const candidates = [request.headers.get('x-forwarded-host'), request.headers.get('host')]
-  for (const candidate of candidates) {
-    if (!candidate) continue
-    const host = candidate.split(',')[0].trim().split(':')[0].toLowerCase()
-    if (!host || host.length > 253) continue
-    if (!/^[a-z0-9.-]+$/.test(host)) continue
-    return host.replace(/^www\./, '')
-  }
-  return ''
+  // NextRequest.url is derived from the platform's trusted request host. Do
+  // not prefer x-forwarded-host: it is attacker-controlled when the app is
+  // deployed behind a proxy that does not strip it.
+  const candidate = request.nextUrl.hostname.toLowerCase().replace(/^www\./, '')
+  return /^[a-z0-9.-]{1,253}$/.test(candidate) ? candidate : ''
 }
 
 export async function GET(request: NextRequest, context: { params: Promise<{ shortCode: string }> }) {
@@ -86,55 +85,91 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     const deviceType = getDeviceType(userAgent)
     const os = getOperatingSystem(userAgent)
     const language = getLanguage(request)
+    const trafficType = getTrafficType(userAgent)
+    const aiAgent = getAiAgent(userAgent)
     const country = getCountry(request)
     const referrerHost = getReferrerHost(request)
-    const rule = chooseSmartRule(url.rules, { country, deviceType, referrerHost, now, os, language }, url.shortCode, visitor.id)
+    const rule = chooseSmartRule(url.rules, { country, deviceType, referrerHost, now, os, language, trafficType, aiAgent }, url.shortCode, visitor.id)
     const revision = rule ? null : await getLatestRevision(url.id)
     const dateKey = utcDateKey(now)
     const destination = forwardQueryParams(rule?.destinationUrl || revision?.destinationUrl || url.originalUrl, request.nextUrl.searchParams)
+
+    // Enforce max-click links atomically on the redirect hot path. This is a
+    // reservation counter, separate from the asynchronously aggregated click
+    // total, so concurrent requests cannot race past the limit.
+    if (url.maxClicks !== null) {
+      const reservation = await prisma.url.updateMany({
+        where: {
+          id: url.id,
+          OR: [
+            { maxClicks: null },
+            { clicksReserved: { lt: url.maxClicks } },
+          ],
+        },
+        data: { clicksReserved: { increment: 1 } },
+      })
+      if (reservation.count !== 1) {
+        return url.expiredUrl
+          ? NextResponse.redirect(url.expiredUrl, 307)
+          : NextResponse.redirect(new URL('/expired', getBaseUrl()), 307)
+      }
+    }
 
     // Record the click in the background using `after` so the redirect is
     // completely non-blocking (0ms added latency). We generate the ID locally
     // to instantly embed it in the attribution token.
     const clickEventId = crypto.randomUUID()
     const referer = request.headers.get('referer')
-    
-    after(() => {
-      prisma.$transaction(async (tx) => {
-        await tx.clickEvent.create({ data: { id: clickEventId, urlId: url!.id, ruleId: rule?.id, userAgent, referer, referrerHost, country: country === 'XX' ? null : country, deviceType, visitorIdHash } })
-        const updatedUrl = await tx.url.update({ where: { id: url!.id }, data: { clicks: { increment: 1 } }, select: { clicks: true, maxClicks: true } })
-        await tx.clickDaily.upsert({ where: { urlId_dateKey: { urlId: url!.id, dateKey } }, create: { urlId: url!.id, dateKey, clicks: 1 }, update: { clicks: { increment: 1 } } })
-        
-        if (updatedUrl.maxClicks && updatedUrl.clicks >= updatedUrl.maxClicks) {
-          await tx.url.update({ where: { id: url!.id }, data: { isActive: false } })
-          invalidateLink(url!.shortCode, url!.id)
-        }
-      }).catch((error) => console.error('Click recording failed:', error))
-      
-      if (url!.webhookUrl) {
-        const payload = {
-          event: 'link.clicked',
-          data: {
-            shortCode: url!.shortCode,
-            destination: finalDestination,
-            clickEventId,
-            timestamp: now.toISOString(),
-            visitor: visitorIdHash,
-            country: country === 'XX' ? null : country,
-            deviceType,
-            referrer: referrerHost
-          }
-        };
-        fetch(url!.webhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        }).catch(err => console.error('Webhook dispatch failed:', err));
-      }
-    })
 
     const attributionToken = createAttributionToken({ urlId: url.id, shortCode: url.shortCode, clickEventId: clickEventId ?? '', visitorIdHash, issuedAt: Date.now() })
     const finalDestination = appendAttribution(destination, attributionToken)
+
+    after(() => {
+      clickQueue.push({
+        clickEventId,
+        urlId: url!.id,
+        ruleId: rule?.id,
+        userAgent,
+        referer,
+        referrerHost,
+        country: country === 'XX' ? null : country,
+        deviceType,
+        trafficType,
+        aiAgent,
+        os,
+        browser: getBrowser(userAgent),
+        language,
+        visitorIdHash,
+        dateKey,
+        shortCode: url!.shortCode
+      }).catch(err => console.error('Queue push failed:', err))
+
+      const clickWebhookData = {
+        shortCode: url!.shortCode,
+        destination: finalDestination,
+        clickEventId,
+        timestamp: now.toISOString(),
+        visitor: visitorIdHash,
+        country: country === 'XX' ? null : country,
+        deviceType,
+        referrer: referrerHost
+      };
+
+      if (url!.webhookUrl) {
+        assertDestinationSafeForStorage(url!.webhookUrl)
+          .then(() => fetch(url!.webhookUrl!, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event: 'link.clicked', data: clickWebhookData }),
+            signal: AbortSignal.timeout(5000),
+          }))
+          .catch(err => console.error('Legacy webhook dispatch failed:', err));
+      }
+
+      dispatchWebhooksForUrl(url!.id, 'link.clicked', clickWebhookData).catch((err) =>
+        console.error('Enterprise webhook dispatch failed:', err)
+      );
+    })
 
     const escapeHtml = (unsafe: string) => unsafe
       .replace(/&/g, '&amp;')

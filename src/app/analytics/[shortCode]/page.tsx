@@ -16,6 +16,7 @@ import {
   MousePointerClick,
   QrCode,
   RefreshCw,
+  Sparkles,
   Smartphone,
   Tag,
   Target,
@@ -153,6 +154,8 @@ interface AnalyticsData {
     clicksByOS: TechStat[]
     clicksByBrowser: TechStat[]
     clicksByChannel: TechStat[]
+    clicksByTrafficType: Array<{ trafficType: string; clicks: number; percentage: number }>
+    clicksByAiAgent: Array<{ aiAgent: string; clicks: number; percentage: number }>
     clicksByReferrer: ReferrerStat[]
     utmPerformance: {
       sources: UtmStat[]
@@ -180,7 +183,7 @@ const RANGES = [
   { key: 'all', label: 'All Time' },
 ]
 
-type ActiveTab = 'overview' | 'geo' | 'channels' | 'tech' | 'utm' | 'goals' | 'experiments'
+type ActiveTab = 'overview' | 'geo' | 'channels' | 'tech' | 'agents' | 'utm' | 'goals' | 'experiments'
 
 export default function AnalyticsPage() {
   const { shortCode } = useParams<{ shortCode: string }>()
@@ -680,6 +683,13 @@ export default function AnalyticsPage() {
               label="Devices & Tech"
             />
             <TabButton
+              active={activeTab === 'agents'}
+              onClick={() => setActiveTab('agents')}
+              icon={<Zap className="h-4 w-4" />}
+              label="AI & Automation"
+              badge={analytics.clicksByAiAgent.length}
+            />
+            <TabButton
               active={activeTab === 'utm'}
               onClick={() => setActiveTab('utm')}
               icon={<Tag className="h-4 w-4" />}
@@ -881,6 +891,40 @@ export default function AnalyticsPage() {
                     />
                   ))}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'agents' && (
+            <div className="grid gap-6 lg:grid-cols-2">
+              <BreakdownCard
+                title="Traffic Classification"
+                icon={<Zap className="h-4 w-4 text-violet-400" />}
+                items={analytics.clicksByTrafficType.map((item) => ({
+                  id: item.trafficType,
+                  label: item.trafficType === 'ai_agent' ? 'AI agents' : item.trafficType === 'bot' ? 'Other bots' : 'Human traffic',
+                  count: item.clicks,
+                  percentage: item.percentage,
+                }))}
+              />
+              <BreakdownCard
+                title="AI Agent Sources"
+                icon={<Sparkles className="h-4 w-4 text-emerald-400" />}
+                items={analytics.clicksByAiAgent.map((item) => ({
+                  id: item.aiAgent,
+                  label: item.aiAgent,
+                  count: item.clicks,
+                  percentage: item.percentage,
+                }))}
+              />
+              <div className="lg:col-span-2 rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+                <h3 className="font-semibold text-white">AI Traffic Routing</h3>
+                <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-400">
+                  AI crawlers and AI-assisted browsers are classified separately from ordinary bots. Use a routing rule to send them to a documentation, citation, or crawler-safe destination without changing the human experience.
+                </p>
+                <Link href={`/manage/${url.shortCode}`} className="mt-4 inline-flex rounded-xl bg-blue-500 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-400">
+                  Configure AI routing →
+                </Link>
               </div>
             </div>
           )}

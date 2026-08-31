@@ -31,6 +31,10 @@ interface Rule {
   enabled: boolean
   countryCodes: string | null
   deviceType: string | null
+  trafficType: string | null
+  aiAgent: string | null
+  os: string | null
+  languageCodes: string | null
   referrerDomain: string | null
   startAt: string | null
   endAt: string | null
@@ -50,6 +54,10 @@ interface Form {
   weight: string
   countryCodes: string
   deviceType: string
+  trafficType: string
+  aiAgent: string
+  os: string
+  languageCodes: string
   referrerDomain: string
   startAt: string
   endAt: string
@@ -62,6 +70,10 @@ const emptyForm: Form = {
   weight: '100',
   countryCodes: '',
   deviceType: '',
+  trafficType: '',
+  aiAgent: '',
+  os: '',
+  languageCodes: '',
   referrerDomain: '',
   startAt: '',
   endAt: '',
@@ -208,6 +220,10 @@ export default function ManageLink() {
           priority: Number(form.priority),
           weight: Number(form.weight),
           deviceType: form.deviceType || null,
+          trafficType: form.trafficType || null,
+          aiAgent: form.aiAgent || null,
+          os: form.os || null,
+          languageCodes: form.languageCodes || null,
           startAt: form.startAt ? new Date(form.startAt).toISOString() : null,
           endAt: form.endAt ? new Date(form.endAt).toISOString() : null,
         }),
@@ -841,6 +857,69 @@ export default function ManageLink() {
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Traffic Class">
+                  <select
+                    value={form.trafficType}
+                    onChange={(e) => setForm({ ...form, trafficType: e.target.value })}
+                    className="input"
+                  >
+                    <option value="">Any traffic</option>
+                    <option value="human">Human visitors</option>
+                    <option value="ai_agent">AI agents</option>
+                    <option value="bot">Other bots</option>
+                  </select>
+                </Field>
+                <Field label="AI Agent">
+                  <select
+                    value={form.aiAgent}
+                    onChange={(e) => setForm({ ...form, aiAgent: e.target.value })}
+                    className="input"
+                  >
+                    <option value="">Any AI agent</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="openai-search">OpenAI Search</option>
+                    <option value="chatgpt-user">ChatGPT user agent</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="claude-user">Claude user agent</option>
+                    <option value="perplexity">Perplexity</option>
+                    <option value="google-ai">Google AI</option>
+                    <option value="google-gemini">Google Gemini</option>
+                    <option value="amazon">Amazon</option>
+                    <option value="bytedance">ByteDance</option>
+                    <option value="common-crawl">Common Crawl</option>
+                    <option value="cohere">Cohere</option>
+                    <option value="youcom">You.com</option>
+                  </select>
+                </Field>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Operating System">
+                  <select
+                    value={form.os}
+                    onChange={(e) => setForm({ ...form, os: e.target.value })}
+                    className="input"
+                  >
+                    <option value="">Any OS</option>
+                    <option value="ios">iOS</option>
+                    <option value="android">Android</option>
+                    <option value="macos">macOS</option>
+                    <option value="windows">Windows</option>
+                    <option value="linux">Linux</option>
+                    <option value="chromeos">ChromeOS</option>
+                  </select>
+                </Field>
+                <Field label="Languages (ISO codes)">
+                  <input
+                    value={form.languageCodes}
+                    onChange={(e) => setForm({ ...form, languageCodes: e.target.value })}
+                    className="input"
+                    placeholder="en, ja, de"
+                  />
+                </Field>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Country Codes (ISO, comma-separated)">
                   <input
                     value={form.countryCodes}
@@ -1215,6 +1294,10 @@ function RuleCard({ rule, onToggle, onDelete }: { rule: Rule; onToggle: () => vo
   const conditions = [
     rule.countryCodes ? `Geo: ${rule.countryCodes}` : null,
     rule.deviceType ? `Device: ${rule.deviceType}` : null,
+    rule.trafficType ? `Traffic: ${rule.trafficType}` : null,
+    rule.aiAgent ? `AI: ${rule.aiAgent}` : null,
+    rule.os ? `OS: ${rule.os}` : null,
+    rule.languageCodes ? `Lang: ${rule.languageCodes}` : null,
     rule.referrerDomain ? `Ref: ${rule.referrerDomain}` : null,
   ].filter(Boolean)
 

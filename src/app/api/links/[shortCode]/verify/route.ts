@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getLinkByCode } from '@/lib/link-cache'
 import crypto from 'node:crypto'
 import { createHmac } from 'node:crypto'
+import { verifyGatePassword } from '@/lib/password-gate'
+import { rateLimit } from '@/lib/rate-limit'
 
 function getSecret(): string { 
   const secret = process.env.QL_ATTRIBUTION_SECRET; 
@@ -12,6 +14,10 @@ function getSecret(): string {
 export async function POST(request: NextRequest, context: { params: Promise<{ shortCode: string }> }) {
   const { shortCode } = await context.params
   try {
+    const limit = await rateLimit(request, { name: `password:${shortCode}`, limit: 10, windowMs: 5 * 60_000 })
+    if (!limit.allowed) {
+      return NextResponse.json({ error: 'Too many password attempts. Try again later.' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
+    }
     const { password } = await request.json()
     if (!password) return NextResponse.json({ error: 'Password required' }, { status: 400 })
 
@@ -20,8 +26,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
       return NextResponse.json({ error: 'Not password protected' }, { status: 400 })
     }
 
-    const hash = crypto.scryptSync(String(password), 'ql_salt', 64).toString('hex')
-    if (hash !== url.passwordHash) {
+    if (!verifyGatePassword(String(password), url.passwordHash)) {
       return NextResponse.json({ error: 'Incorrect password' }, { status: 401 })
     }
 

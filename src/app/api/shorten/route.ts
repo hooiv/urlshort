@@ -9,6 +9,7 @@ import { EDIT_ROLES } from '@/lib/workspaces'
 import { assessDestination } from '@/lib/link-safety'
 import { assertDestinationSafeForStorage } from '@/lib/destination-health'
 import { rateLimit } from '@/lib/rate-limit'
+import { hashGatePassword } from '@/lib/password-gate'
 
 const CUSTOM_CODE = /^[A-Za-z0-9_-]{3,64}$/
 const CODE_COLLISION_RETRIES = 5
@@ -96,10 +97,10 @@ export async function POST(request: NextRequest) {
             description: description || null,
             ogImage: ogImage || null,
             tags,
-            passwordHash: body.password ? (await import('node:crypto')).scryptSync(String(body.password), 'ql_salt', 64).toString('hex') : null,
+            passwordHash: body.password ? hashGatePassword(String(body.password)) : null,
             expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
             expiredUrl: body.expiredUrl || null,
-            maxClicks: body.maxClicks ? parseInt(body.maxClicks) : null,
+            maxClicks: body.maxClicks ? parseInt(body.maxClicks, 10) : null,
             metaPixelId: body.metaPixelId || null,
             googleTagId: body.googleTagId || null,
             xPixelId: body.xPixelId || null,

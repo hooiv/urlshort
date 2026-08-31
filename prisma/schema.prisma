@@ -15,6 +15,12 @@ enum DeviceType {
   bot
 }
 
+enum TrafficType {
+  human
+  ai_agent
+  bot
+}
+
 enum HealthStatus {
   unknown
   healthy
@@ -60,6 +66,7 @@ model Url {
   cloaked                    Boolean        @default(false)
   webhookUrl                 String?
   maxClicks                  Int?
+  clicksReserved              Int            @default(0)
   userId                     String?
   user                       User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
   isActive                   Boolean        @default(true)
@@ -107,6 +114,10 @@ model LinkRule {
   enabled              Boolean        @default(true)
   countryCodes         String?
   deviceType           DeviceType?
+  trafficType          TrafficType?
+  aiAgent               String?
+  os                    String?
+  languageCodes         String?
   referrerDomain       String?
   startAt              DateTime?
   endAt                DateTime?
@@ -144,6 +155,11 @@ model ClickEvent {
   country       String?
   city          String?
   deviceType    DeviceType?
+  trafficType   TrafficType   @default(human)
+  aiAgent       String?
+  os            String?
+  browser       String?
+  language      String?
   visitorIdHash String?
   createdAt     DateTime    @default(now())
 

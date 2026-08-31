@@ -6,6 +6,7 @@ export type OperatingSystem = 'ios' | 'android' | 'macos' | 'windows' | 'linux' 
 export type BrowserKind = 'chrome' | 'safari' | 'firefox' | 'edge' | 'opera' | 'samsung' | 'brave' | 'other'
 export type TrafficChannel = 'direct' | 'social' | 'search' | 'email' | 'referral'
 export type RouteHealth = 'unknown' | 'healthy' | 'degraded' | 'down'
+export type TrafficKind = 'human' | 'ai_agent' | 'bot'
 
 export type SmartRule = {
   id: string
@@ -16,11 +17,13 @@ export type SmartRule = {
   healthStatus: RouteHealth
   countryCodes: string | null
   deviceType: DeviceKind | null
+  trafficType?: TrafficKind | null
+  aiAgent?: string | null
+  os?: string | null
+  languageCodes?: string | null
   referrerDomain: string | null
   startAt: Date | null
   endAt: Date | null
-  os?: string | null
-  languageCodes?: string | null
 }
 
 export function normalizeSafeUrl(input: string): string {
@@ -79,6 +82,34 @@ export function getBrowser(userAgent: string | null): BrowserKind {
   if (/chrome|crios/i.test(ua)) return 'chrome'
   if (/safari/i.test(ua) && !/chrome|crios|android/i.test(ua)) return 'safari'
   return 'other'
+}
+
+const AI_AGENT_PATTERNS: Array<[RegExp, string]> = [
+  [/GPTBot/i, 'openai'],
+  [/OAI-SearchBot/i, 'openai-search'],
+  [/ChatGPT-User/i, 'chatgpt-user'],
+  [/ClaudeBot|Claude-Web/i, 'anthropic'],
+  [/Claude-User/i, 'claude-user'],
+  [/PerplexityBot/i, 'perplexity'],
+  [/Google-Extended/i, 'google-ai'],
+  [/GoogleOther/i, 'google-other'],
+  [/Gemini/i, 'google-gemini'],
+  [/Amazonbot/i, 'amazon'],
+  [/Bytespider/i, 'bytedance'],
+  [/CCBot/i, 'common-crawl'],
+  [/cohere-ai/i, 'cohere'],
+  [/YouBot/i, 'youcom'],
+]
+
+export function getAiAgent(userAgent: string | null): string | null {
+  const ua = userAgent || ''
+  for (const [pattern, name] of AI_AGENT_PATTERNS) if (pattern.test(ua)) return name
+  return null
+}
+
+export function getTrafficType(userAgent: string | null): TrafficKind {
+  if (getAiAgent(userAgent)) return 'ai_agent'
+  return getDeviceType(userAgent) === 'bot' ? 'bot' : 'human'
 }
 
 export interface TrafficSourceInfo {
@@ -172,6 +203,13 @@ function languageMatches(rule: SmartRule, language?: string): boolean {
   return rule.languageCodes.split(/[\s,]+/).map((v) => v.trim().toLowerCase()).includes(language.toLowerCase())
 }
 
+function listMatches(ruleValue: string | null | undefined, actual: string | undefined, error: string): boolean {
+  if (!ruleValue) return true
+  if (!actual) return false
+  const values = ruleValue.split(/[\s,]+/).map((v) => v.trim().toLowerCase()).filter(Boolean)
+  return values.includes(actual.toLowerCase())
+}
+
 function referrerMatches(rule: SmartRule, host: string | null): boolean {
   if (!rule.referrerDomain) return true
   if (!host) return false
@@ -196,6 +234,8 @@ export interface RoutingContext {
   now: Date
   os?: OperatingSystem
   language?: string
+  trafficType?: TrafficKind
+  aiAgent?: string | null
 }
 
 function matches(rule: SmartRule, context: RoutingContext): boolean {
@@ -204,6 +244,9 @@ function matches(rule: SmartRule, context: RoutingContext): boolean {
     rule.healthStatus !== 'down' &&
     countryMatches(rule, context.country) &&
     (!rule.deviceType || rule.deviceType === context.deviceType) &&
+    (!rule.trafficType || rule.trafficType === context.trafficType) &&
+    listMatches(rule.aiAgent, context.aiAgent ?? undefined, 'AI agent') &&
+    listMatches(rule.os, context.os, 'OS') &&
     osMatches(rule, context.os) &&
     languageMatches(rule, context.language) &&
     referrerMatches(rule, context.referrerHost) &&
@@ -244,6 +287,13 @@ export function normalizeReferrerDomain(input: unknown): string | null {
   const value = String(input).trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0]
   if (!/^[a-z0-9.-]+$/.test(value) || !value.includes('.')) throw new Error('Enter a valid referrer domain')
   return value
+}
+
+export function normalizeList(input: unknown, allowed: Set<string>, label: string): string | null {
+  if (input === undefined || input === null || input === '') return null
+  const values = String(input).split(/[\s,]+/).map((v) => v.trim().toLowerCase()).filter(Boolean)
+  if (values.some((v) => !allowed.has(v))) throw new Error(`${label} contains an unsupported value`)
+  return [...new Set(values)].join(',')
 }
 
 export function parseOptionalDate(input: unknown): Date | null {

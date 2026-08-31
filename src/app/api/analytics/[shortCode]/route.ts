@@ -155,6 +155,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
           referer: true,
           userAgent: true,
           deviceType: true,
+          trafficType: true,
+          aiAgent: true,
+          os: true,
+          browser: true,
+          language: true,
           ruleId: true,
         },
         orderBy: { createdAt: 'asc' },
@@ -264,6 +269,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     const osMap: Record<string, number> = {}
     const browserMap: Record<string, number> = {}
     const channelMap: Record<string, number> = {}
+    const trafficTypeMap: Record<string, number> = {}
+    const aiAgentMap: Record<string, number> = {}
     const utmSources: Record<string, { clicks: number; conversions: number; valueCents: number }> = {}
     const utmMediums: Record<string, { clicks: number; conversions: number; valueCents: number }> = {}
     const utmCampaigns: Record<string, { clicks: number; conversions: number; valueCents: number }> = {}
@@ -276,6 +283,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
       osMap[os] = (osMap[os] || 0) + 1
       browserMap[browser] = (browserMap[browser] || 0) + 1
       channelMap[channel] = (channelMap[channel] || 0) + 1
+      trafficTypeMap[event.trafficType] = (trafficTypeMap[event.trafficType] || 0) + 1
+      if (event.aiAgent) aiAgentMap[event.aiAgent] = (aiAgentMap[event.aiAgent] || 0) + 1
 
       if (isHourly) {
         const hk = hourKey(event.createdAt)
@@ -528,6 +537,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
         clicksByOS,
         clicksByBrowser,
         clicksByChannel,
+        clicksByTrafficType: Object.entries(trafficTypeMap)
+          .map(([trafficType, clicks]) => ({ trafficType, clicks, percentage: windowClicks ? Number(((clicks / windowClicks) * 100).toFixed(1)) : 0 }))
+          .sort((a, b) => b.clicks - a.clicks),
+        clicksByAiAgent: Object.entries(aiAgentMap)
+          .map(([aiAgent, clicks]) => ({ aiAgent, clicks, percentage: windowClicks ? Number(((clicks / windowClicks) * 100).toFixed(1)) : 0 }))
+          .sort((a, b) => b.clicks - a.clicks),
         clicksByReferrer,
         utmPerformance,
         goals: goals.map((goal) => ({

@@ -41,7 +41,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
       return NextResponse.json({ error: 'An identical release is already scheduled for this time' }, { status: 409 })
     }
     const revision = await prisma.destinationRevision.create({ data: { urlId: auth.url.id, destinationUrl, effectiveAt, reason } })
-    invalidateLink(auth.url.shortCode, auth.url.id)
+    await invalidateLink(auth.url.shortCode, auth.url.id)
     await recordAudit(request, { action: 'destination_release.create', urlId: auth.url.id, resourceType: 'destination_revision', resourceId: revision.id, after: { destinationUrl, effectiveAt, reason } })
     return NextResponse.json(revision, { status: 201 })
   } catch (error) {

@@ -7,12 +7,17 @@ import { assertDestinationSafeForStorage } from '@/lib/destination-health'
 import { invalidateLink } from '@/lib/link-cache'
 import {
   normalizeCountryCodes,
+  normalizeList,
   normalizeReferrerDomain,
   normalizeSafeUrl,
   parseOptionalDate,
 } from '@/lib/smart-routing'
 
 const DEVICE_TYPES = new Set(['mobile', 'tablet', 'desktop', 'bot'])
+const TRAFFIC_TYPES = new Set(['human', 'ai_agent', 'bot'])
+const OS_TYPES = new Set(['ios', 'android', 'macos', 'windows', 'linux', 'chromeos', 'other'])
+const LANGUAGE_TYPES = new Set(['en', 'es', 'fr', 'de', 'it', 'pt', 'ja', 'ko', 'zh', 'hi', 'ar', 'ru', 'nl', 'pl', 'tr'])
+const AI_AGENTS = new Set(['openai', 'openai-search', 'chatgpt-user', 'anthropic', 'claude-user', 'perplexity', 'google-ai', 'google-other', 'google-gemini', 'amazon', 'bytedance', 'common-crawl', 'cohere', 'youcom'])
 
 type RuleInput = {
   name?: unknown
@@ -23,6 +28,10 @@ type RuleInput = {
   countryCodes?: unknown
   deviceType?: unknown
   referrerDomain?: unknown
+  trafficType?: unknown
+  aiAgent?: unknown
+  os?: unknown
+  languageCodes?: unknown
   startAt?: unknown
   endAt?: unknown
 }
@@ -57,6 +66,10 @@ function parseRule(input: RuleInput) {
     enabled: input.enabled === undefined ? true : Boolean(input.enabled),
     countryCodes: normalizeCountryCodes(input.countryCodes),
     deviceType: deviceType as 'mobile' | 'tablet' | 'desktop' | 'bot' | null,
+    trafficType: input.trafficType === '' || input.trafficType == null ? null : String(input.trafficType),
+    aiAgent: normalizeList(input.aiAgent, AI_AGENTS, 'AI agent'),
+    os: normalizeList(input.os, OS_TYPES, 'Operating system'),
+    languageCodes: normalizeList(input.languageCodes, LANGUAGE_TYPES, 'Language'),
     referrerDomain: normalizeReferrerDomain(input.referrerDomain),
     startAt,
     endAt,
@@ -80,13 +93,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
   if (result instanceof NextResponse) return result
 
   try {
-    const body = (await request.json()) as RuleInput
-    const rule = parseRule(body)
+  const body = (await request.json()) as RuleInput
+  const rule = parseRule(body)
+    if (rule.trafficType && !TRAFFIC_TYPES.has(rule.trafficType)) throw new Error('Invalid traffic type')
     // SSRF guard: rule destinations must be publicly routable, same as creation.
     await assertDestinationSafeForStorage(rule.destinationUrl)
     const risk = assessDestination(rule.destinationUrl)
     const created = await prisma.linkRule.create({ data: { ...rule, urlId: result.id, riskStatus: risk.status, riskReason: risk.reason, riskCheckedAt: new Date() } })
-    invalidateLink(result.shortCode, result.id)
+    await invalidateLink(result.shortCode, result.id)
     await recordAudit(request, { action: 'routing_rule.create', urlId: result.id, resourceType: 'link_rule', resourceId: created.id, after: { ...rule, riskStatus: risk.status, riskReason: risk.reason } })
     return NextResponse.json(created, { status: 201 })
   } catch (error) {
