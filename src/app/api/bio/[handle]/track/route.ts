@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma'
 import { hashVisitorId } from '@/lib/attribution'
 import { getDeviceType, getOperatingSystem, getBrowser, getTrafficSource, getVisitorId } from '@/lib/smart-routing'
 import { rateLimit } from '@/lib/rate-limit'
+import { enforceUsage } from '@/lib/tenant-usage'
+import { sanitizeAnalyticsMetadata } from '@/lib/privacy-ingestion'
 
 export async function POST(
   request: NextRequest,
@@ -17,7 +19,7 @@ export async function POST(
     const { handle } = await context.params
     const profile = await prisma.bioProfile.findUnique({
       where: { handle: handle.toLowerCase() },
-      select: { id: true, handle: true },
+      select: { id: true, handle: true, workspaceId: true },
     })
 
     if (!profile) {
@@ -43,6 +45,16 @@ export async function POST(
     }
     const { channel, sourceName } = getTrafficSource(referrerHost)
 
+    if (profile.workspaceId) {
+      const usage = await enforceUsage(request, profile.workspaceId, 'api_requests')
+      if (!usage.allowed) return NextResponse.json({ error: 'Usage quota exceeded' }, { status: 429 })
+    }
+    const rawMetadata: Record<string, unknown> = {
+      handle: profile.handle, blockId, deviceType, os, browser, referrerHost, channel, sourceName,
+      visitorIdHash,
+    }
+    const eventMetadata = profile.workspaceId ? await sanitizeAnalyticsMetadata(profile.workspaceId, rawMetadata) : rawMetadata
+
     // Run recording in background with Next.js `after`
     after(async () => {
       try {
@@ -56,14 +68,7 @@ export async function POST(
             ipHash: visitorIdHash,
             userAgent,
             metadataJson: JSON.stringify({
-              handle: profile.handle,
-              blockId,
-              deviceType,
-              os,
-              browser,
-              referrerHost,
-              channel,
-              sourceName,
+              ...eventMetadata,
               timestamp: new Date().toISOString(),
             }),
           },

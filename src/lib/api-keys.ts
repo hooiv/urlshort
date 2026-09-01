@@ -35,18 +35,19 @@ function extractApiKey(request: NextRequest): string | null {
 export type ApiKeyAuth = {
   userId: string
   apiKeyId: string
+  scopes: string[]
 }
 
 /** Validate an API key from the request and return its owner. Null if invalid. */
 export async function authenticateApiKey(request: NextRequest): Promise<ApiKeyAuth | null> {
   const key = extractApiKey(request)
   if (!key) return null
-  const record = await prisma.apiKey.findUnique({ where: { keyHash: hashApiKey(key) }, select: { id: true, userId: true, revokedAt: true } })
+  const record = await prisma.apiKey.findUnique({ where: { keyHash: hashApiKey(key) }, select: { id: true, userId: true, revokedAt: true, scopes: true } })
   if (!record || record.revokedAt) return null
   // Throttle last-used writes like sessions do (5 min).
   const now = new Date()
   void prisma.apiKey.update({ where: { id: record.id }, data: { lastUsedAt: now } }).catch(() => {})
-  return { userId: record.userId, apiKeyId: record.id }
+  return { userId: record.userId, apiKeyId: record.id, scopes: record.scopes.split(/[,\s]+/).filter(Boolean) }
 }
 
 /** Timing-safe comparison helper (used when re-verifying a supplied key). */
@@ -55,3 +56,5 @@ export function apiKeyMatches(supplied: string, storedHash: string): boolean {
   const expected = Buffer.from(storedHash, 'utf8')
   return actual.length === expected.length && timingSafeEqual(actual, expected)
 }
+
+export function hasApiScope(auth: ApiKeyAuth, scope: string): boolean { return auth.scopes.includes('*') || auth.scopes.includes(scope) }

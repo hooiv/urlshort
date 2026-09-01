@@ -25,6 +25,7 @@ import type { SmartRule } from '@/lib/smart-routing'
 
 export type CachedLink = {
   id: string
+  workspaceId: string | null
   shortCode: string
   originalUrl: string
   title: string | null
@@ -158,6 +159,7 @@ function ruleSelect() {
 
 const linkSelect = {
   id: true,
+  workspaceId: true,
   shortCode: true,
   originalUrl: true,
   title: true,

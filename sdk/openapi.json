@@ -1,0 +1,75 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "QuickLink API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/v1/campaigns": {
+      "get": {
+        "operationId": "listCampaigns",
+        "responses": { "200": { "description": "Campaigns", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Campaign" } } } } } }
+      }
+    },
+    "/api/v1/campaigns/create": {
+      "post": {
+        "operationId": "createCampaign",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateCampaignInput" } } } },
+        "responses": { "201": { "description": "Created campaign", "content": { "application/json": { "schema": { "type": "object", "properties": { "campaign": { "$ref": "#/components/schemas/Campaign" } }, "required": ["campaign"] } } } } }
+      }
+    },
+    "/api/campaigns/{campaignId}": {
+      "get": {
+        "operationId": "getCampaign",
+        "parameters": [{ "name": "campaignId", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Campaign", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Campaign" } } } } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "OptimizationObjective": {
+        "type": "string",
+        "enum": [
+          "conversion_rate",
+          "revenue_per_click",
+          "revenue",
+          "conversion_value"
+        ]
+      },
+      "CampaignVariant": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" }, "name": { "type": "string" }, "destinationUrl": { "type": "string" },
+          "weight": { "type": "integer" }, "enabled": { "type": "boolean" }, "isControl": { "type": "boolean" },
+          "clicks": { "type": "integer" }, "conversions": { "type": "integer" }, "valueCents": { "type": "string" }
+        },
+        "required": ["id","name","destinationUrl","weight","enabled","isControl","clicks","conversions","valueCents"]
+      },
+      "Campaign": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" }, "workspaceId": { "type": "string" }, "name": { "type": "string" },
+          "slug": { "type": "string" }, "status": { "type": "string" },
+          "objective": { "$ref": "#/components/schemas/OptimizationObjective" }, "version": { "type": "integer" },
+          "variants": { "type": "array", "items": { "$ref": "#/components/schemas/CampaignVariant" } }
+        },
+        "required": ["id","workspaceId","name","slug","status","objective","version","variants"]
+      },
+      "CreateCampaignInput": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" }, "slug": { "type": "string" },
+          "objective": { "$ref": "#/components/schemas/OptimizationObjective" }, "currency": { "type": "string" },
+          "autoOptimize": { "type": "boolean" }, "confidenceThreshold": { "type": "integer" },
+          "minSampleSize": { "type": "integer" }, "minConversions": { "type": "integer" },
+          "maxTrafficShiftPercent": { "type": "integer" },
+          "variants": { "type": "array", "items": { "type": "object", "properties": {
+            "name": { "type": "string" }, "destinationUrl": { "type": "string" }, "weight": { "type": "integer" }, "isControl": { "type": "boolean" }
+          }, "required": ["name","destinationUrl","weight"] } }
+        },
+        "required": ["name","slug","variants"]
+      }
+    }
+  }
+}

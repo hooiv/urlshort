@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- remote/session synchronization occurs after mount. */
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -232,13 +233,16 @@ export default function AnalyticsPage() {
     void fetchAnalytics(false)
   }, [fetchAnalytics])
 
-  // Auto-refresh interval
+  // Live event stream: analytics refreshes when the backend emits an event,
+  // rather than polling every 15 seconds.
   useEffect(() => {
-    if (!autoRefresh) return
-    const interval = setInterval(() => {
-      void fetchAnalytics(true)
-    }, 15000)
-    return () => clearInterval(interval)
+    if (!autoRefresh || typeof EventSource === 'undefined') return
+    const source = new EventSource('/api/events/stream')
+    const onEvent = () => void fetchAnalytics(true)
+    source.addEventListener('click.batch', onEvent)
+    source.addEventListener('conversion.created', onEvent)
+    source.addEventListener('campaign.updated', onEvent)
+    return () => { source.removeEventListener('click.batch', onEvent); source.removeEventListener('conversion.created', onEvent); source.removeEventListener('campaign.updated', onEvent); source.close() }
   }, [autoRefresh, fetchAnalytics])
 
   async function copyToClipboard(text: string, label = 'Copied') {

@@ -66,13 +66,15 @@ model Url {
   cloaked                    Boolean        @default(false)
   webhookUrl                 String?
   maxClicks                  Int?
-  clicksReserved              Int            @default(0)
+  clicksReserved             Int            @default(0)
   userId                     String?
   user                       User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
   isActive                   Boolean        @default(true)
   managementTokenHash        String?
   workspaceId                String?
   workspace                  Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  deepLinkAppId              String?
+  deepLinkApp                DeepLinkApp?   @relation(fields: [deepLinkAppId], references: [id], onDelete: SetNull)
   healthStatus               HealthStatus   @default(unknown)
   healthCheckedAt            DateTime?
   healthLatencyMs            Int?
@@ -88,16 +90,18 @@ model Url {
   deletedAt                  DateTime?
   tags                       String[]
 
-  clickEvents  ClickEvent[]
-  clickDaily   ClickDaily[]
-  rules        LinkRule[]
-  goals        Goal[]
-  conversions  ConversionEvent[]
-  revisions    DestinationRevision[]
-  healthChecks DestinationHealthCheck[]
-  domainLinks  DomainLink[]
-  ownedDomains BrandedDomain[]          @relation("DomainOwner")
-  abuseReports AbuseReport[]
+  clickEvents      ClickEvent[]
+  clickDaily       ClickDaily[]
+  rules            LinkRule[]
+  goals            Goal[]
+  conversions      ConversionEvent[]
+  revisions        DestinationRevision[]
+  healthChecks     DestinationHealthCheck[]
+  domainLinks      DomainLink[]
+  ownedDomains     BrandedDomain[]          @relation("DomainOwner")
+  abuseReports     AbuseReport[]
+  campaignLinks    CampaignLink[]
+  primaryCampaigns Campaign[]               @relation("CampaignPrimaryUrl")
 
   @@index([healthStatus, healthCheckedAt])
   @@index([tags])
@@ -115,9 +119,9 @@ model LinkRule {
   countryCodes         String?
   deviceType           DeviceType?
   trafficType          TrafficType?
-  aiAgent               String?
-  os                    String?
-  languageCodes         String?
+  aiAgent              String?
+  os                   String?
+  languageCodes        String?
   referrerDomain       String?
   startAt              DateTime?
   endAt                DateTime?
@@ -145,23 +149,29 @@ model LinkRule {
 }
 
 model ClickEvent {
-  id            String      @id @default(cuid())
-  urlId         String
-  ruleId        String?
-  ip            String?
-  userAgent     String?
-  referer       String?
-  referrerHost  String?
-  country       String?
-  city          String?
-  deviceType    DeviceType?
-  trafficType   TrafficType   @default(human)
-  aiAgent       String?
-  os            String?
-  browser       String?
-  language      String?
-  visitorIdHash String?
-  createdAt     DateTime    @default(now())
+  id                String      @id @default(cuid())
+  urlId             String
+  ruleId            String?
+  campaignVariantId String?
+  ip                String?
+  userAgent         String?
+  referer           String?
+  referrerHost      String?
+  country           String?
+  city              String?
+  deviceType        DeviceType?
+  trafficType       TrafficType @default(human)
+  aiAgent           String?
+  os                String?
+  browser           String?
+  language          String?
+  utmSource         String?
+  utmMedium         String?
+  utmCampaign       String?
+  utmTerm           String?
+  utmContent        String?
+  visitorIdHash     String?
+  createdAt         DateTime    @default(now())
 
   url         Url               @relation(fields: [urlId], references: [id], onDelete: Cascade)
   rule        LinkRule?         @relation(fields: [ruleId], references: [id], onDelete: SetNull)
@@ -264,6 +274,7 @@ model User {
   emailVerificationTokens EmailVerificationToken[]
   bioProfiles             BioProfile[]
   webhookEndpoints        WebhookEndpoint[]
+  scimIdentities          ScimIdentity[]
 
   @@map("users")
 }
@@ -289,6 +300,7 @@ model ApiKey {
   name       String
   keyHash    String    @unique
   prefix     String
+  scopes     String    @default("*")
   lastUsedAt DateTime?
   revokedAt  DateTime?
   createdAt  DateTime  @default(now())
@@ -337,16 +349,26 @@ enum WorkspaceRole {
 }
 
 model Workspace {
-  id               String            @id @default(cuid())
-  name             String
-  slug             String            @unique
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  urls             Url[]
-  members          Membership[]
-  invites          WorkspaceInvite[]
-  bioProfiles      BioProfile[]
-  webhookEndpoints WebhookEndpoint[]
+  id                     String                  @id @default(cuid())
+  name                   String
+  slug                   String                  @unique
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  urls                   Url[]
+  members                Membership[]
+  invites                WorkspaceInvite[]
+  bioProfiles            BioProfile[]
+  webhookEndpoints       WebhookEndpoint[]
+  campaigns              Campaign[]
+  routingConfigSnapshots RoutingConfigSnapshot[]
+  privacyPolicy          PrivacyPolicy?
+  tenantQuota            TenantQuota?
+  usageBuckets           UsageBucket[]
+  ssoConnections         SsoConnection[]
+  scimTokens             ScimToken[]
+  scimIdentities         ScimIdentity[]
+  deepLinkApps           DeepLinkApp[]
+  idempotencyKeys        IdempotencyKey[]
 
   @@map("workspaces")
 }
@@ -422,19 +444,24 @@ model DestinationHealthCheck {
 }
 
 model BrandedDomain {
-  id                String       @id @default(cuid())
-  host              String       @unique
-  verificationToken String       @unique
-  ownerUrlId        String?
-  status            DomainStatus @default(pending)
-  verifiedAt        DateTime?
-  lastCheckedAt     DateTime?
-  tlsReady          Boolean      @default(false)
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
+  id                      String       @id @default(cuid())
+  host                    String       @unique
+  verificationToken       String       @unique
+  ownerUrlId              String?
+  status                  DomainStatus @default(pending)
+  verifiedAt              DateTime?
+  lastCheckedAt           DateTime?
+  tlsReady                Boolean      @default(false)
+  tlsProvider             String?
+  tlsStatus               String?
+  tlsCertificateExpiresAt DateTime?
+  tlsLastCheckedAt        DateTime?
+  createdAt               DateTime     @default(now())
+  updatedAt               DateTime     @updatedAt
 
-  owner Url?         @relation("DomainOwner", fields: [ownerUrlId], references: [id], onDelete: SetNull)
-  links DomainLink[]
+  owner     Url?             @relation("DomainOwner", fields: [ownerUrlId], references: [id], onDelete: SetNull)
+  links     DomainLink[]
+  provision DomainProvision?
 
   @@index([status, lastCheckedAt])
   @@map("branded_domains")
@@ -581,6 +608,8 @@ model WebhookDelivery {
   attempts      Int           @default(0)
   nextAttemptAt DateTime?
   lastAttemptAt DateTime?
+  leaseToken    String?
+  leaseUntil    DateTime?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
@@ -589,4 +618,469 @@ model WebhookDelivery {
   @@index([status, nextAttemptAt])
   @@index([endpointId, createdAt])
   @@map("webhook_deliveries")
+}
+
+enum CampaignStatus {
+  draft
+  scheduled
+  running
+  paused
+  completed
+  archived
+}
+
+enum OptimizationObjective {
+  conversion_rate
+  revenue_per_click
+  revenue
+  conversion_value
+}
+
+enum ExperimentStatus {
+  draft
+  running
+  paused
+  completed
+  promoted
+}
+
+enum ReleaseStatus {
+  draft
+  pending_approval
+  approved
+  rejected
+  published
+  rolled_back
+}
+
+enum ApprovalStatus {
+  pending
+  approved
+  rejected
+}
+
+enum SsoProviderType {
+  saml
+}
+
+enum DomainProvisionStatus {
+  requested
+  verifying
+  provisioning
+  active
+  failed
+  renewal_due
+  renewal_in_progress
+  disabled
+}
+
+enum UsageMetric {
+  clicks
+  conversions
+  api_requests
+  webhook_deliveries
+  active_links
+  storage_bytes
+}
+
+enum AnomalyType {
+  traffic_spike
+  traffic_drop
+  destination_latency
+  destination_error_rate
+  conversion_drop
+  conversion_spike
+}
+
+enum AnomalySeverity {
+  info
+  warning
+  critical
+}
+
+model Campaign {
+  id                     String                @id @default(cuid())
+  workspaceId            String
+  name                   String
+  slug                   String
+  status                 CampaignStatus        @default(draft)
+  objective              OptimizationObjective @default(conversion_rate)
+  currency               String                @default("USD")
+  autoOptimize           Boolean               @default(false)
+  confidenceThreshold    Int                   @default(95)
+  minSampleSize          Int                   @default(100)
+  minConversions         Int                   @default(10)
+  maxTrafficShiftPercent Int                   @default(20)
+  startAt                DateTime?
+  endAt                  DateTime?
+  timezone               String                @default("UTC")
+  primaryUrlId           String?
+  currentExperimentId    String?
+  version                Int                   @default(1)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+
+  workspace   Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  primaryUrl  Url?                 @relation("CampaignPrimaryUrl", fields: [primaryUrlId], references: [id], onDelete: SetNull)
+  variants    CampaignVariant[]
+  links       CampaignLink[]
+  experiments CampaignExperiment[]
+  releases    CampaignRelease[]
+  decisions   CampaignDecision[]
+  anomalies   CampaignAnomaly[]
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId, status])
+  @@index([status, startAt])
+  @@map("campaigns")
+}
+
+model CampaignVariant {
+  id                String   @id @default(cuid())
+  campaignId        String
+  name              String
+  destinationUrl    String
+  isControl         Boolean  @default(false)
+  enabled           Boolean  @default(true)
+  weight            Int      @default(50)
+  clicks            Int      @default(0)
+  conversions       Int      @default(0)
+  valueCents        BigInt   @default(0)
+  valueSquaredCents Decimal  @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, enabled])
+  @@map("campaign_variants")
+}
+
+model CampaignLink {
+  id         String   @id @default(cuid())
+  campaignId String
+  urlId      String
+  createdAt  DateTime @default(now())
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  url        Url      @relation(fields: [urlId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, urlId])
+  @@index([urlId])
+  @@map("campaign_links")
+}
+
+model CampaignExperiment {
+  id                String                @id @default(cuid())
+  campaignId        String
+  status            ExperimentStatus      @default(draft)
+  objective         OptimizationObjective
+  controlVariantId  String?
+  startedAt         DateTime?
+  endedAt           DateTime?
+  promotedVariantId String?
+  lookCount         Int                   @default(0)
+  alphaSpent        Float                 @default(0)
+  lastLookAt        DateTime?
+  cooldownUntil     DateTime?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  campaign          Campaign              @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  snapshots         ExperimentSnapshot[]
+
+  @@index([campaignId, status])
+  @@map("campaign_experiments")
+}
+
+model ExperimentSnapshot {
+  id           String             @id @default(cuid())
+  experimentId String
+  sequence     Int
+  configJson   String
+  statsJson    String
+  decisionJson String?
+  contentHash  String
+  previousHash String?
+  createdAt    DateTime           @default(now())
+  experiment   CampaignExperiment @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+
+  @@unique([experimentId, sequence])
+  @@unique([experimentId, contentHash])
+  @@index([experimentId, createdAt])
+  @@map("experiment_snapshots")
+}
+
+model CampaignDecision {
+  id             String   @id @default(cuid())
+  campaignId     String
+  experimentId   String?
+  action         String
+  reason         String
+  confidenceBps  Int?
+  oldWeightsJson String?
+  newWeightsJson String?
+  actorType      String
+  actorUserId    String?
+  createdAt      DateTime @default(now())
+  campaign       Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, createdAt])
+  @@map("campaign_decisions")
+}
+
+model CampaignRelease {
+  id                    String                    @id @default(cuid())
+  campaignId            String
+  version               Int
+  status                ReleaseStatus             @default(draft)
+  configJson            String
+  configHash            String
+  scheduledAt           DateTime?
+  publishedAt           DateTime?
+  approvalQuorum        Int                       @default(1)
+  requiredApprovalRoles String                    @default("owner")
+  createdById           String?
+  createdAt             DateTime                  @default(now())
+  campaign              Campaign                  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  approvals             CampaignReleaseApproval[]
+
+  @@unique([campaignId, version])
+  @@index([status, scheduledAt])
+  @@map("campaign_releases")
+}
+
+model CampaignReleaseApproval {
+  id             String          @id @default(cuid())
+  releaseId      String
+  reviewerUserId String
+  status         ApprovalStatus  @default(pending)
+  roleSnapshot   WorkspaceRole?
+  comment        String?
+  createdAt      DateTime        @default(now())
+  decidedAt      DateTime?
+  release        CampaignRelease @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  @@unique([releaseId, reviewerUserId])
+  @@map("campaign_release_approvals")
+}
+
+model RoutingConfigSnapshot {
+  id                  String    @id @default(cuid())
+  workspaceId         String
+  version             Int
+  payloadJson         String
+  contentHash         String
+  previousHash        String?
+  signature           String
+  publishedAt         DateTime  @default(now())
+  replicatedAt        DateTime?
+  replicationAttempts Int       @default(0)
+  createdAt           DateTime  @default(now())
+  workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, version])
+  @@unique([workspaceId, contentHash])
+  @@index([workspaceId, publishedAt])
+  @@map("routing_config_snapshots")
+}
+
+model CampaignAnomaly {
+  id          String          @id @default(cuid())
+  campaignId  String
+  fingerprint String
+  type        AnomalyType
+  severity    AnomalySeverity
+  metric      String
+  baseline    Float
+  observed    Float
+  deviation   Float
+  detailsJson String?
+  startedAt   DateTime
+  resolvedAt  DateTime?
+  createdAt   DateTime        @default(now())
+  campaign    Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, fingerprint, startedAt])
+  @@index([campaignId, resolvedAt, createdAt])
+  @@map("campaign_anomalies")
+}
+
+model PrivacyPolicy {
+  id             String    @id @default(cuid())
+  workspaceId    String    @unique
+  region         String    @default("global")
+  retentionDays  Int       @default(90)
+  hashIp         Boolean   @default(true)
+  hashVisitor    Boolean   @default(true)
+  storeUserAgent Boolean   @default(false)
+  storeReferrer  Boolean   @default(true)
+  aggregateOnly  Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("privacy_policies")
+}
+
+model TenantQuota {
+  id                        String    @id @default(cuid())
+  workspaceId               String    @unique
+  clicksPerMonth            BigInt    @default(100000)
+  apiRequestsPerMonth       BigInt    @default(10000)
+  conversionsPerMonth       BigInt    @default(10000)
+  webhookDeliveriesPerMonth BigInt    @default(10000)
+  activeLinks               Int       @default(1000)
+  storageBytes              BigInt    @default(1073741824)
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+  workspace                 Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_quotas")
+}
+
+model UsageBucket {
+  id          String      @id @default(cuid())
+  workspaceId String
+  metric      UsageMetric
+  periodKey   String
+  quantity    BigInt      @default(0)
+  updatedAt   DateTime    @updatedAt
+  createdAt   DateTime    @default(now())
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, metric, periodKey])
+  @@index([workspaceId, periodKey])
+  @@map("usage_buckets")
+}
+
+model SamlRelayNonce {
+  id           String   @id @default(cuid())
+  nonce        String   @unique
+  connectionId String
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([connectionId, expiresAt])
+  @@index([consumedAt, expiresAt])
+  @@map("saml_relay_nonces")
+}
+
+model SsoConnection {
+  id              String          @id @default(cuid())
+  workspaceId     String
+  type            SsoProviderType @default(saml)
+  name            String
+  entityId        String
+  idpEntityId     String
+  ssoUrl          String
+  x509Certificate String
+  emailAttribute  String          @default("email")
+  nameAttribute   String?
+  allowedDomains  String?
+  enabled         Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, enabled])
+  @@map("sso_connections")
+}
+
+model ScimToken {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  tokenHash   String    @unique
+  prefix      String
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId, revokedAt])
+  @@map("scim_tokens")
+}
+
+model ScimIdentity {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  externalId  String
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, externalId])
+  @@unique([workspaceId, userId])
+  @@map("scim_identities")
+}
+
+model DomainProvision {
+  id                  String                @id @default(cuid())
+  domainId            String                @unique
+  status              DomainProvisionStatus @default(requested)
+  verificationMethod  String                @default("dns_txt")
+  verificationValue   String
+  dnsTarget           String?
+  certificateProvider String?
+  certificateId       String?
+  renewalAttempts     Int                   @default(0)
+  nextRenewalAt       DateTime?
+  lastError           String?
+  checkedAt           DateTime?
+  activatedAt         DateTime?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  domain              BrandedDomain         @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@map("domain_provisions")
+}
+
+model DeepLinkApp {
+  id                       String    @id @default(cuid())
+  workspaceId              String
+  name                     String
+  environment              String    @default("production")
+  appVersion               String?
+  minimumAppVersion        String?
+  resolverEnabled          Boolean   @default(true)
+  iosResolverScheme        String?
+  androidResolverScheme    String?
+  packageName              String?
+  bundleId                 String?
+  appleTeamId              String?
+  androidSha256            String?
+  iosStoreUrl              String?
+  androidStoreUrl          String?
+  iosAssociatedDomainsJson String?
+  androidAssetLinksJson    String?
+  enabled                  Boolean   @default(true)
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+  workspace                Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  urls                     Url[]
+
+  @@index([workspaceId, enabled])
+  @@map("deep_link_apps")
+}
+
+model IdempotencyKey {
+  id             String    @id @default(cuid())
+  workspaceId    String
+  keyHash        String
+  method         String
+  path           String
+  requestHash    String
+  responseStatus Int
+  responseJson   String
+  expiresAt      DateTime
+  createdAt      DateTime  @default(now())
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, keyHash])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
 }

@@ -47,7 +47,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
     }
 
     const payloadString = JSON.stringify(testPayload)
-    const secret = process.env.QL_ATTRIBUTION_SECRET || 'quicklink_webhook_secret'
+    const secret = process.env.QL_ATTRIBUTION_SECRET
+    if (!secret) return NextResponse.json({ error: 'Webhook signing secret is not configured' }, { status: 503 })
     const signature = createHmac('sha256', secret).update(payloadString).digest('hex')
 
     const startTime = Date.now()

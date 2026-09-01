@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Activity, Plus, Trash2, Key, RefreshCw, Server } from 'lucide-react';
-import Link from 'next/link';
+import { Activity, Plus, Trash2, RefreshCw, Server } from 'lucide-react';
 
 type Webhook = {
   id: string;

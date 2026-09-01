@@ -10,6 +10,7 @@ export type TrafficKind = 'human' | 'ai_agent' | 'bot'
 
 export type SmartRule = {
   id: string
+  name?: string
   destinationUrl: string
   priority: number
   weight: number
@@ -105,6 +106,10 @@ export function getAiAgent(userAgent: string | null): string | null {
   const ua = userAgent || ''
   for (const [pattern, name] of AI_AGENT_PATTERNS) if (pattern.test(ua)) return name
   return null
+}
+
+export function getTrafficConfidence(userAgent: string | null): number {
+  const ua=(userAgent||'').toLowerCase(); if(!ua)return 0.25; if(getAiAgent(userAgent))return 0.99; let score=0.05; if(/bot|crawler|spider|slurp|headless|scrapy|python-requests|curl|wget/i.test(ua))score+=0.65; if(/mozilla\/5\\.0/i.test(ua))score-=0.15; if(/chrome|safari|firefox|edg\//i.test(ua))score-=0.15; return Math.max(0.01,Math.min(0.99,score))
 }
 
 export function getTrafficType(userAgent: string | null): TrafficKind {
@@ -203,7 +208,7 @@ function languageMatches(rule: SmartRule, language?: string): boolean {
   return rule.languageCodes.split(/[\s,]+/).map((v) => v.trim().toLowerCase()).includes(language.toLowerCase())
 }
 
-function listMatches(ruleValue: string | null | undefined, actual: string | undefined, error: string): boolean {
+function listMatches(ruleValue: string | null | undefined, actual: string | undefined): boolean {
   if (!ruleValue) return true
   if (!actual) return false
   const values = ruleValue.split(/[\s,]+/).map((v) => v.trim().toLowerCase()).filter(Boolean)
@@ -245,8 +250,8 @@ function matches(rule: SmartRule, context: RoutingContext): boolean {
     countryMatches(rule, context.country) &&
     (!rule.deviceType || rule.deviceType === context.deviceType) &&
     (!rule.trafficType || rule.trafficType === context.trafficType) &&
-    listMatches(rule.aiAgent, context.aiAgent ?? undefined, 'AI agent') &&
-    listMatches(rule.os, context.os, 'OS') &&
+    listMatches(rule.aiAgent, context.aiAgent ?? undefined) &&
+    listMatches(rule.os, context.os) &&
     osMatches(rule, context.os) &&
     languageMatches(rule, context.language) &&
     referrerMatches(rule, context.referrerHost) &&

@@ -1,0 +1,26 @@
+{
+  "name": "@quicklink/sdk",
+  "version": "1.0.0",
+  "description": "Typed QuickLink API client",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "generate": "node scripts/generate.mjs",
+    "build": "npm run generate && tsc -p tsconfig.json",
+    "verify": "node scripts/generate.mjs && git diff --exit-code -- src/generated.ts && node scripts/verify.mjs"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}

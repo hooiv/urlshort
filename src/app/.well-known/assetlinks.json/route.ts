@@ -1,23 +1,19 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
 
 export async function GET() {
-  const assetlinks = [
-    {
-      relation: ["delegate_permission/common.handle_all_urls"],
-      target: {
-        namespace: "android_app",
-        package_name: "com.quicklink.app",
-        sha256_cert_fingerprints: [
-          "14:6D:E9:83:C5:7D:06:9D:14:E4:4E:1A:3F:2B:6E:B4:71:2F:3C:9A:89:15:3A:56:4C:E3:B2:7F:6A:9D:41:88"
-        ]
-      }
-    }
-  ];
-
-  return NextResponse.json(assetlinks, {
-    headers: {
-      'Content-Type': 'application/json',
-      'Cache-Control': 's-maxage=86400, stale-while-revalidate',
-    },
-  });
+  const apps = await prisma.deepLinkApp.findMany({
+    where: { enabled: true, resolverEnabled: true, packageName: { not: null }, androidSha256: { not: null } },
+    select: { packageName: true, androidSha256: true },
+  })
+  const statements = apps.flatMap((app) => {
+    const fingerprints = (app.androidSha256 ?? '').split(/[\n,]+/).map((x) => x.trim()).filter(Boolean)
+    return fingerprints.length ? [{
+      relation: ['delegate_permission/common.handle_all_urls'],
+      target: { namespace: 'android_app', package_name: app.packageName, sha256_cert_fingerprints: fingerprints },
+    }] : []
+  })
+  return NextResponse.json(statements, {
+    headers: { 'Cache-Control': 'public, max-age=300, s-maxage=300' },
+  })
 }

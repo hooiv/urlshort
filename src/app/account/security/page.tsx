@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect -- remote/session synchronization occurs after mount. */
 'use client'
 
 import { useEffect, useState } from 'react'

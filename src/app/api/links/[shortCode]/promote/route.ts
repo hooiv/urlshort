@@ -47,7 +47,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
       })
     })
 
-    await invalidateLink(updated.shortCode, updated.id)
+    await invalidateLink(updated.shortCode, updated.id); if (link.workspaceId) { const { publishWorkspaceRoutingConfig } = await import('@/lib/routing-config'); await publishWorkspaceRoutingConfig(link.workspaceId) }
     await recordAudit(request, {
       action: 'link.promote_variant',
       urlId: updated.id,

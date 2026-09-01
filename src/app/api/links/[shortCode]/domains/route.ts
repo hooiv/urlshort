@@ -30,6 +30,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
     const existing = await prisma.brandedDomain.findUnique({ where: { host } })
     if (existing?.ownerUrlId && existing.ownerUrlId !== result.id) return NextResponse.json({ error: 'This domain is already owned by another link account' }, { status: 409 })
     const domain = existing || await prisma.brandedDomain.create({ data: { host, ownerUrlId: result.id, verificationToken: createVerificationToken() } })
+    await prisma.domainProvision.upsert({ where: { domainId: domain.id }, create: { domainId: domain.id, verificationValue: domain.verificationToken, status: 'requested' }, update: { status: domain.status === 'verified' ? 'provisioning' : 'verifying' } })
     if (domain.status !== 'verified') {
       const record = verificationRecord(host, domain.verificationToken)
       return NextResponse.json({ verified: false, domain, dns: { ...record, cname: { name: host, type: 'CNAME', value: edgeTarget() } } })

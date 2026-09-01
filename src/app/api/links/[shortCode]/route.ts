@@ -1,3 +1,4 @@
+import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { recordAudit } from '@/lib/audit'
@@ -35,6 +36,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
       id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, tags: true, clicks: true,
       createdAt: true, updatedAt: true, expiresAt: true, expiredUrl: true, passwordHash: true, metaPixelId: true, googleTagId: true, xPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, isActive: true,
       riskStatus: true, healthStatus: true,
+      deepLinkApp: { select: { id: true, name: true, environment: true, appVersion: true, minimumAppVersion: true, enabled: true, resolverEnabled: true } },
       _count: { select: { clickEvents: true, rules: true, goals: true, revisions: true } },
     },
   })
@@ -64,6 +66,16 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
 
     if (body.isActive !== undefined) {
       data.isActive = Boolean(body.isActive)
+    }
+    if (body.deepLinkAppId !== undefined) {
+      if (body.deepLinkAppId === null || body.deepLinkAppId === '') {
+        data.deepLinkAppId = null
+      } else {
+        if (!link.workspaceId) throw new Error('A workspace link is required for native deep links')
+        const app = await prisma.deepLinkApp.findFirst({where:{id:String(body.deepLinkAppId),workspaceId:link.workspaceId}})
+        if (!app) throw new Error('Deep-link app not found in this workspace')
+        data.deepLinkAppId = app.id
+      }
     }
     if (body.cloaked !== undefined) {
       data.cloaked = Boolean(body.cloaked)
@@ -96,7 +108,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
       if (body.password === null || body.password === '') {
         data.passwordHash = null
       } else {
-        const crypto = await import('node:crypto');
         data.passwordHash = hashGatePassword(String(body.password));
       }
     }
@@ -140,6 +151,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
     })
 
     await invalidateLink(updated.shortCode, updated.id)
+    if (link.workspaceId) await publishWorkspaceRoutingConfig(link.workspaceId)
     await recordAudit(request, {
       action: 'link.update',
       urlId: updated.id,

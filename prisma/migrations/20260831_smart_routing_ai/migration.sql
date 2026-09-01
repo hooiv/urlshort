@@ -16,6 +16,11 @@ ALTER TABLE "click_events" ADD COLUMN IF NOT EXISTS "aiAgent" TEXT;
 ALTER TABLE "click_events" ADD COLUMN IF NOT EXISTS "os" TEXT;
 ALTER TABLE "click_events" ADD COLUMN IF NOT EXISTS "browser" TEXT;
 ALTER TABLE "click_events" ADD COLUMN IF NOT EXISTS "language" TEXT;
+ALTER TABLE "click_events" ADD COLUMN IF NOT EXISTS "utmSource" TEXT;
+ALTER TABLE "click_events" ADD COLUMN IF NOT EXISTS "utmMedium" TEXT;
+ALTER TABLE "click_events" ADD COLUMN IF NOT EXISTS "utmCampaign" TEXT;
+ALTER TABLE "click_events" ADD COLUMN IF NOT EXISTS "utmTerm" TEXT;
+ALTER TABLE "click_events" ADD COLUMN IF NOT EXISTS "utmContent" TEXT;
 
 CREATE INDEX IF NOT EXISTS "link_rules_urlId_trafficType_idx" ON "link_rules"("urlId", "trafficType");
 CREATE INDEX IF NOT EXISTS "click_events_urlId_trafficType_createdAt_idx" ON "click_events"("urlId", "trafficType", "createdAt");

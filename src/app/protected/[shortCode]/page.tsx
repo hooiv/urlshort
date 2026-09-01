@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useParams } from 'next/navigation'
 import { ArrowRight, Lock, ShieldCheck } from 'lucide-react'
 
 export default function ProtectedPage() {
+  const router = useRouter()
   const { shortCode } = useParams<{ shortCode: string }>()
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -29,7 +31,7 @@ export default function ProtectedPage() {
       }
 
       // Successfully unlocked, redirect to the short link route
-      window.location.href = `/${shortCode}`
+      router.push(`/${shortCode}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
@@ -78,7 +80,7 @@ export default function ProtectedPage() {
 
         <div className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-slate-500">
           <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-          End-to-End Encrypted Access Control
+          Password-protected access
         </div>
       </div>
     </div>

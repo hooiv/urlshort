@@ -1,0 +1,3 @@
+import {NextRequest,NextResponse} from 'next/server'
+import {getCurrentUser} from '@/lib/auth';import {requireWorkspaceRole} from '@/lib/workspaces';import {getUsage} from '@/lib/usage'
+export async function GET(request:NextRequest,{params}:{params:Promise<{workspaceId:string}>}){const {workspaceId}=await params;const u=await getCurrentUser(request);if(!u)return NextResponse.json({error:'Unauthorized'},{status:401});const access=await requireWorkspaceRole(request,workspaceId,['owner','admin','analyst']);if(!access.membership)return NextResponse.json({error:access.error},{status:access.status});return NextResponse.json(await getUsage(workspaceId))}

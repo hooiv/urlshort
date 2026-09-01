@@ -15,6 +15,18 @@
     {
       "path": "/api/webhooks/dlq",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/releases",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/campaigns",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/domains",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

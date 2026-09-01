@@ -4,9 +4,11 @@ import {
   countryToFlag,
   countryToName,
   getBrowser,
+  getAiAgent,
   getDeviceType,
   getOperatingSystem,
   getTrafficSource,
+  getTrafficType,
   normalizeCountryCodes,
   normalizeReferrerDomain,
   normalizeSafeUrl,
@@ -23,6 +25,10 @@ function rule(overrides: Partial<SmartRule> = {}): SmartRule {
     healthStatus: 'unknown',
     countryCodes: null,
     deviceType: null,
+    trafficType: null,
+    aiAgent: null,
+    os: null,
+    languageCodes: null,
     referrerDomain: null,
     startAt: null,
     endAt: null,
@@ -102,6 +108,13 @@ describe('chooseSmartRule', () => {
     expect(chooseSmartRule([iosRule], { ...context, os: 'ios' }, 'abc', 'v1')?.id).toBe('r1')
   })
 
+  it('routes AI agents independently from ordinary bots', () => {
+    const ai = rule({ trafficType: 'ai_agent', aiAgent: 'openai' })
+    expect(chooseSmartRule([ai], { ...context, trafficType: 'ai_agent', aiAgent: 'openai' }, 'abc', 'v1')?.id).toBe('r1')
+    expect(chooseSmartRule([ai], { ...context, trafficType: 'bot', aiAgent: null }, 'abc', 'v1')).toBeNull()
+    expect(chooseSmartRule([ai], { ...context, trafficType: 'ai_agent', aiAgent: 'perplexity' }, 'abc', 'v1')).toBeNull()
+  })
+
   it('filters by language', () => {
     const spanishRule = rule({ languageCodes: 'es' })
     expect(chooseSmartRule([spanishRule], { ...context, language: 'en' }, 'abc', 'v1')).toBeNull()
@@ -153,6 +166,22 @@ describe('getBrowser', () => {
   })
   it('identifies Edge', () => {
     expect(getBrowser('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0')).toBe('edge')
+  })
+})
+
+describe('AI traffic classification', () => {
+  it('recognizes major AI agents', () => {
+    expect(getAiAgent('Mozilla/5.0 GPTBot/1.2')).toBe('openai')
+    expect(getAiAgent('Mozilla/5.0 ClaudeBot/1.0')).toBe('anthropic')
+    expect(getAiAgent('PerplexityBot/1.0')).toBe('perplexity')
+    expect(getAiAgent('Google-Extended')).toBe('google-ai')
+    expect(getAiAgent('Mozilla/5.0 Chrome/120.0')).toBeNull()
+  })
+
+  it('classifies AI agents before the generic bot detector', () => {
+    expect(getTrafficType('GPTBot/1.0')).toBe('ai_agent')
+    expect(getTrafficType('Googlebot/2.1')).toBe('bot')
+    expect(getTrafficType('Mozilla/5.0 Chrome/120.0')).toBe('human')
   })
 })
 

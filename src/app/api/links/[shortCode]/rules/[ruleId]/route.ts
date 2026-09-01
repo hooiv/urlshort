@@ -10,6 +10,7 @@ import {
   parseOptionalDate,
 } from '@/lib/smart-routing'
 import { invalidateLink } from '@/lib/link-cache'
+import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
 
 const DEVICES = new Set(['mobile', 'tablet', 'desktop', 'bot'])
 
@@ -64,6 +65,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
 
     const updated = await prisma.linkRule.update({ where: { id: existing.id }, data: patch })
     await invalidateLink(url.shortCode, url.id)
+    if (url.workspaceId) await publishWorkspaceRoutingConfig(url.workspaceId)
     await recordAudit(request, { action: 'routing_rule.update', urlId: url.id, resourceType: 'link_rule', resourceId: existing.id, before: { name: existing.name, destinationUrl: existing.destinationUrl, priority: existing.priority, weight: existing.weight, enabled: existing.enabled, countryCodes: existing.countryCodes, deviceType: existing.deviceType, referrerDomain: existing.referrerDomain, startAt: existing.startAt, endAt: existing.endAt }, after: updated })
     return NextResponse.json(updated)
   } catch (error) {
@@ -79,6 +81,7 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   if (!existing) return NextResponse.json({ error: 'Rule not found' }, { status: 404 })
   await prisma.linkRule.delete({ where: { id: existing.id } })
   await invalidateLink(url.shortCode, url.id)
+  if (url.workspaceId) await publishWorkspaceRoutingConfig(url.workspaceId)
   await recordAudit(request, { action: 'routing_rule.delete', urlId: url.id, resourceType: 'link_rule', resourceId: existing.id, before: { name: existing.name, destinationUrl: existing.destinationUrl, priority: existing.priority, weight: existing.weight, enabled: existing.enabled } })
   return new NextResponse(null, { status: 204 })
 }

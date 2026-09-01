@@ -1,13 +1,16 @@
+/* eslint-disable react-hooks/set-state-in-effect -- remote/session synchronization occurs after mount. */
 'use client'
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, Link as LinkIcon, Settings, Code, BarChart2, Zap, LayoutDashboard, Globe } from 'lucide-react'
+import { Search, Link as LinkIcon, Code, Zap, LayoutDashboard, Globe } from 'lucide-react'
+
+type SearchLink = { id: string; shortCode: string; title: string | null; originalUrl: string }
 
 export function CommandPalette() {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const [links, setLinks] = useState<any[]>([])
+  const [links, setLinks] = useState<SearchLink[]>([])
   const [loading, setLoading] = useState(false)
   const router = useRouter()
 
@@ -132,7 +135,7 @@ export function CommandPalette() {
         
         {!loading && query.length >= 2 && actions.length === 0 && links.length === 0 && (
           <div className="p-6 text-center text-sm text-slate-500">
-            No results found for "{query}"
+            No results found for &quot;{query}&quot;
           </div>
         )}
       </div>

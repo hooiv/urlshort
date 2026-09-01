@@ -1,8 +1,10 @@
+/* eslint-disable react-hooks/set-state-in-effect -- remote/session synchronization occurs after mount. */
 'use client'
+import RuleConflictGraph from '@/components/RuleConflictGraph'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import {
   ArrowUpRight,
   BarChart3,
@@ -90,8 +92,11 @@ interface WebhookTestResponse {
 }
 
 export default function ManageLink() {
+  const router = useRouter()
   const { shortCode } = useParams<{ shortCode: string }>()
   const [token, setToken] = useState<string | null>(null)
+  const [nowMs, setNowMs] = useState<number | null>(null)
+  useEffect(() => { setNowMs(Date.now()) }, [])
 
   // Remote data state
   const [rules, setRules] = useState<Rule[]>([])
@@ -127,6 +132,9 @@ export default function ManageLink() {
   const [webhookUrl, setWebhookUrl] = useState('')
   const [webhookTestBusy, setWebhookTestBusy] = useState(false)
   const [webhookTestResult, setWebhookTestResult] = useState<WebhookTestResponse | null>(null)
+  const [preview, setPreview] = useState({ country: 'US', deviceType: 'desktop', os: 'windows', language: 'en', trafficType: 'human', aiAgent: '', referrerHost: '' })
+  const [previewResult, setPreviewResult] = useState<{ destination: string; fallback: boolean; matchedRule: { name: string } | null } | null>(null)
+  const [previewBusy, setPreviewBusy] = useState(false)
 
   // UTM builder
   const [utmSource, setUtmSource] = useState('')
@@ -403,6 +411,24 @@ export default function ManageLink() {
     }
   }
 
+  async function previewRouting() {
+    setPreviewBusy(true)
+    try {
+      const response = await fetch(`/api/links/${encodeURIComponent(shortCode)}/routing/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-management-token': token || '' },
+        body: JSON.stringify(preview),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Preview failed')
+      setPreviewResult(data)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Routing preview failed')
+    } finally {
+      setPreviewBusy(false)
+    }
+  }
+
   function applyUtmPreset(source: string, medium: string, campaign: string) {
     setUtmSource(source)
     setUtmMedium(medium)
@@ -428,7 +454,7 @@ export default function ManageLink() {
     return <AccessDenied shortCode={shortCode} />
   }
 
-  const liveRevision = revisions.find((item) => new Date(item.effectiveAt).getTime() <= Date.now())
+  const liveRevision = nowMs === null ? undefined : revisions.find((item) => new Date(item.effectiveAt).getTime() <= nowMs)
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 pb-20">
@@ -991,6 +1017,47 @@ export default function ManageLink() {
           </div>
         </section>
 
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="font-semibold text-white">Routing Simulator</h2>
+              <p className="mt-1 text-xs text-slate-400">Test an audience before publishing a campaign. This never records a click or changes traffic.</p>
+            </div>
+            <span className="rounded-full bg-violet-500/10 px-3 py-1 text-[11px] font-semibold text-violet-300">SAFE PREVIEW</span>
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3 lg:grid-cols-7">
+            <input className="input" value={preview.country} onChange={(e) => setPreview({ ...preview, country: e.target.value })} placeholder="US" aria-label="Country" />
+            <select className="input" value={preview.deviceType} onChange={(e) => setPreview({ ...preview, deviceType: e.target.value })} aria-label="Device">
+              <option value="desktop">Desktop</option><option value="mobile">Mobile</option><option value="tablet">Tablet</option><option value="bot">Bot</option>
+            </select>
+            <select className="input" value={preview.os} onChange={(e) => setPreview({ ...preview, os: e.target.value })} aria-label="Operating system">
+              <option value="windows">Windows</option><option value="ios">iOS</option><option value="android">Android</option><option value="macos">macOS</option><option value="linux">Linux</option><option value="chromeos">ChromeOS</option>
+            </select>
+            <input className="input" value={preview.language} onChange={(e) => setPreview({ ...preview, language: e.target.value })} placeholder="en" aria-label="Language" />
+            <select className="input" value={preview.trafficType} onChange={(e) => setPreview({ ...preview, trafficType: e.target.value })} aria-label="Traffic class">
+              <option value="human">Human</option><option value="ai_agent">AI agent</option><option value="bot">Bot</option>
+            </select>
+            <input className="input" value={preview.aiAgent} onChange={(e) => setPreview({ ...preview, aiAgent: e.target.value })} placeholder="AI agent (optional)" aria-label="AI agent" />
+            <button disabled={previewBusy} onClick={() => void previewRouting()} className="rounded-xl bg-violet-500 px-4 py-2 text-xs font-semibold text-white hover:bg-violet-400 disabled:opacity-50">
+              {previewBusy ? 'Evaluating…' : 'Evaluate'}
+            </button>
+          </div>
+          {previewResult && (
+            <div className="mt-4 rounded-xl border border-slate-800 bg-slate-950 p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">Decision</div>
+                  <div className="mt-1 text-sm font-semibold text-white">{previewResult.matchedRule ? `Rule: ${previewResult.matchedRule.name}` : 'Fallback destination'}</div>
+                </div>
+                <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${previewResult.fallback ? 'bg-slate-800 text-slate-400' : 'bg-emerald-500/10 text-emerald-300'}`}>
+                  {previewResult.fallback ? 'NO RULE MATCH' : 'RULE MATCH'}
+                </span>
+              </div>
+              <div className="mt-3 truncate font-mono text-xs text-blue-300">{previewResult.destination}</div>
+            </div>
+          )}
+        </section>
+
         {/* Webhooks & Retargeting Pixels */}
         <section className="grid gap-8 lg:grid-cols-2">
           {/* Webhook Configuration */}
@@ -1246,7 +1313,7 @@ export default function ManageLink() {
                   await request('', { method: 'DELETE' })
                   toast.success('Link deleted')
                   setTimeout(() => {
-                    window.location.href = '/'
+                    router.push('/')
                   }, 1000)
                 } catch (e) {
                   toast.error(e instanceof Error ? e.message : 'Delete failed')
@@ -1258,7 +1325,7 @@ export default function ManageLink() {
             </button>
           </div>
         </section>
-      </main>
+      <RuleConflictGraph shortCode={shortCode} /></main>
 
       <style jsx global>{`
         .input {

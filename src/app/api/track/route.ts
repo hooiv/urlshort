@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyAttributionToken } from '@/lib/attribution'
 import { rateLimit } from '@/lib/rate-limit'
+import { enforceUsage } from '@/lib/tenant-usage'
+import { getPrivacyPolicy, sanitizeAnalyticsMetadata, hashWithWorkspace } from '@/lib/privacy-ingestion'
 
 /**
  * CORS for the public conversion endpoint. The attribution token travels in the
@@ -53,11 +55,13 @@ export async function POST(request: NextRequest) {
     if (!goal) return NextResponse.json({ error: 'Unknown conversion goal' }, { status: 404, headers: corsHeaders(origin) })
     const click = await prisma.clickEvent.findFirst({ where: { id: payload.clickEventId, urlId: payload.urlId } })
     if (!click) return NextResponse.json({ error: 'Attribution click not found' }, { status: 404, headers: corsHeaders(origin) })
-    const duplicate = await prisma.conversionEvent.findFirst({ where: { goalId: goal.id, visitorIdHash: payload.visitorIdHash, createdAt: { gte: new Date(Date.now() - DEDUP_WINDOW_MS) } }, select: { id: true } })
+    const owner = await prisma.url.findUnique({ where: { id: payload.urlId }, select: { workspaceId: true } })
+    let storedVisitorId: string | null = payload.visitorIdHash; if (owner?.workspaceId) { const policy = await getPrivacyPolicy(owner.workspaceId); if (policy.aggregateOnly || !policy.hashVisitor) storedVisitorId = null; else if (policy.hashVisitor) storedVisitorId = hashWithWorkspace(payload.visitorIdHash, owner.workspaceId); const usage = await enforceUsage(request, owner.workspaceId, 'conversions'); if (!usage.allowed) return NextResponse.json({ error: 'Conversion quota exceeded' }, { status: 429, headers: corsHeaders(origin) }); const safe = await sanitizeAnalyticsMetadata(owner.workspaceId, metadata && typeof metadata === 'object' ? metadata as Record<string,unknown> : {}); safeMetadata = Object.keys(safe).length ? JSON.stringify(safe) : null }
+    const duplicate = await prisma.conversionEvent.findFirst({ where: { goalId: goal.id, visitorIdHash: storedVisitorId, createdAt: { gte: new Date(Date.now() - DEDUP_WINDOW_MS) } }, select: { id: true } })
     if (duplicate) return NextResponse.json({ accepted: true, duplicate: true }, { status: 202, headers: corsHeaders(origin) })
     const now = new Date()
     const conversion = await prisma.$transaction(async (tx) => {
-      const created = await tx.conversionEvent.create({ data: { urlId: payload.urlId, goalId: goal.id, clickEventId: click.id, ruleId: click.ruleId, visitorIdHash: payload.visitorIdHash, valueCents, currency, metadata: safeMetadata } })
+      const created = await tx.conversionEvent.create({ data: { urlId: payload.urlId, goalId: goal.id, clickEventId: click.id, ruleId: click.ruleId, visitorIdHash: storedVisitorId, valueCents, currency, metadata: safeMetadata } })
       await tx.conversionDaily.upsert({ where: { goalId_dateKey: { goalId: goal.id, dateKey: dateKey(now) } }, create: { goalId: goal.id, dateKey: dateKey(now), conversions: 1, valueCents: valueCents ?? 0 }, update: { conversions: { increment: 1 }, valueCents: { increment: valueCents ?? 0 } } })
       return created
     })

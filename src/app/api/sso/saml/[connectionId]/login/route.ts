@@ -1,0 +1,3 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { samlFor, createSamlRelayState } from '@/lib/saml'
+export async function GET(request:NextRequest,{params}:{params:Promise<{connectionId:string}>}){const {connectionId}=await params;const saml=await samlFor(connectionId);const raw=request.nextUrl.searchParams.get('returnTo')||'/dashboard';const returnTo=/^\/(?!\/)/.test(raw)?raw:'/dashboard';const relay=await createSamlRelayState(connectionId,returnTo);const url=await saml.getAuthorizeUrlAsync(relay,request.headers.get('host')||undefined,{});const response=NextResponse.redirect(url,302);response.cookies.set('ql_saml_relay',relay,{httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production',maxAge:300,path:'/'});return response}

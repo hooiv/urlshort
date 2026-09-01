@@ -1,4 +1,6 @@
+import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
 import { NextRequest, NextResponse } from 'next/server'
+import type { TrafficType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { recordAudit } from '@/lib/audit'
 import { getManageableUrl } from '@/lib/authorization'
@@ -66,7 +68,7 @@ function parseRule(input: RuleInput) {
     enabled: input.enabled === undefined ? true : Boolean(input.enabled),
     countryCodes: normalizeCountryCodes(input.countryCodes),
     deviceType: deviceType as 'mobile' | 'tablet' | 'desktop' | 'bot' | null,
-    trafficType: input.trafficType === '' || input.trafficType == null ? null : String(input.trafficType),
+    trafficType: input.trafficType === '' || input.trafficType == null ? null : String(input.trafficType) as TrafficType,
     aiAgent: normalizeList(input.aiAgent, AI_AGENTS, 'AI agent'),
     os: normalizeList(input.os, OS_TYPES, 'Operating system'),
     languageCodes: normalizeList(input.languageCodes, LANGUAGE_TYPES, 'Language'),
@@ -101,6 +103,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
     const risk = assessDestination(rule.destinationUrl)
     const created = await prisma.linkRule.create({ data: { ...rule, urlId: result.id, riskStatus: risk.status, riskReason: risk.reason, riskCheckedAt: new Date() } })
     await invalidateLink(result.shortCode, result.id)
+    if (result.workspaceId) await publishWorkspaceRoutingConfig(result.workspaceId)
     await recordAudit(request, { action: 'routing_rule.create', urlId: result.id, resourceType: 'link_rule', resourceId: created.id, after: { ...rule, riskStatus: risk.status, riskReason: risk.reason } })
     return NextResponse.json(created, { status: 201 })
   } catch (error) {

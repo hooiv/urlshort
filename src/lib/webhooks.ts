@@ -1,6 +1,8 @@
 import { prisma } from './prisma';
 import crypto from 'crypto';
+import { randomUUID } from 'node:crypto';
 import { assertDestinationSafeForStorage } from './destination-health';
+import { reserveUsageInTransaction } from './tenant-usage';
 
 export const WEBHOOK_MAX_RETRIES = 5;
 
@@ -42,14 +44,22 @@ export async function enqueueWebhook(
   event: string,
   payload: Record<string, unknown>
 ) {
-  const delivery = await prisma.webhookDelivery.create({
-    data: {
-      endpointId,
-      event,
-      payload: JSON.stringify(payload),
-      status: 'pending',
-      nextAttemptAt: new Date(),
-    },
+  const delivery = await prisma.$transaction(async tx => {
+    const endpointOwner = await tx.webhookEndpoint.findUnique({ where: { id: endpointId }, select: { workspaceId: true } })
+    if (!endpointOwner) throw new Error('Webhook endpoint not found')
+    if (endpointOwner.workspaceId) {
+      const quota = await reserveUsageInTransaction(tx, endpointOwner.workspaceId, 'webhook_deliveries')
+      if (!quota.allowed) throw new Error('Webhook delivery quota exceeded')
+    }
+    return tx.webhookDelivery.create({
+      data: {
+        endpointId,
+        event,
+        payload: JSON.stringify(payload),
+        status: 'pending',
+        nextAttemptAt: new Date(),
+      },
+    })
   });
 
   // Ideally this would be pushed to a message broker (SQS/Kafka) or triggered asynchronously
@@ -95,10 +105,9 @@ export async function processWebhookDelivery(deliveryId: string): Promise<Webhoo
   // Atomic claim: only the worker that flips `attempts` from its read value
   // may deliver. Concurrent cron invocations (multi-instance deploys, manual
   // retries) observe count === 0 and skip instead of double-posting.
-  const claimed = await prisma.webhookDelivery.updateMany({
-    where: { id: delivery.id, attempts: delivery.attempts },
-    data: { attempts: currentAttempt },
-  });
+  const leaseToken = randomUUID();
+  const leaseUntil = new Date(Date.now() + 30_000);
+  const claimed = await prisma.webhookDelivery.updateMany({ where: { id: delivery.id, attempts: delivery.attempts, OR: [{ leaseUntil: null }, { leaseUntil: { lte: new Date() } }] }, data: { attempts: currentAttempt, leaseToken, leaseUntil } });
   if (claimed.count === 0) return skipped;
 
   let status: 'success' | 'failed' | 'pending' = 'pending';
@@ -128,9 +137,9 @@ export async function processWebhookDelivery(deliveryId: string): Promise<Webhoo
     } else {
       status = currentAttempt >= WEBHOOK_MAX_RETRIES ? 'failed' : 'pending';
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     status = currentAttempt >= WEBHOOK_MAX_RETRIES ? 'failed' : 'pending';
-    responseBody = error.message;
+    responseBody = error instanceof Error ? error.message : 'Webhook delivery failed';
   }
   const latencyMs = Date.now() - startedAt;
 
@@ -140,16 +149,21 @@ export async function processWebhookDelivery(deliveryId: string): Promise<Webhoo
     nextAttemptAt = new Date(Date.now() + webhookBackoffMs(currentAttempt));
   }
 
-  await prisma.webhookDelivery.update({
-    where: { id: delivery.id },
+  // A worker may outlive its lease (for example during a stalled network
+  // request). Never let that stale worker overwrite a newer worker's result.
+  const finalized = await prisma.webhookDelivery.updateMany({
+    where: { id: delivery.id, leaseToken },
     data: {
       status,
       responseCode,
       responseBody: responseBody ? responseBody.substring(0, 1000) : null,
       lastAttemptAt: new Date(),
       nextAttemptAt,
+      leaseToken: null,
+      leaseUntil: null,
     },
   });
+  if (finalized.count !== 1) return skipped;
 
   return { attempted: true, status, responseCode, latencyMs };
 }
@@ -159,9 +173,7 @@ export async function processDeadLetterQueue() {
   const pending = await prisma.webhookDelivery.findMany({
     where: {
       status: 'pending',
-      nextAttemptAt: {
-        lte: new Date(),
-      },
+      OR: [{ nextAttemptAt: { lte: new Date() } }, { leaseUntil: { lte: new Date() } }],
     },
     take: 100,
     orderBy: { nextAttemptAt: 'asc' },

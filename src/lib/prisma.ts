@@ -12,10 +12,11 @@ const globalForPrisma = globalThis as unknown as {
  * - `pool_timeout` fails fast instead of queueing requests indefinitely.
  */
 function createClient(): PrismaClient {
+  const testDatabaseUrl = process.env.NODE_ENV === 'test' ? process.env.SOAK_DATABASE_URL : undefined
   return new PrismaClient({
     datasources: {
       db: {
-        url: process.env.DATABASE_URL,
+        url: testDatabaseUrl || process.env.DATABASE_URL,
       },
     },
     log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],

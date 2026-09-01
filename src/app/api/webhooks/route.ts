@@ -97,7 +97,6 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         url: normalizedUrl,
         secret,
-        secretPrefix: secret.slice(0, 8),
         events: normalizeEvents(events),
       },
     });

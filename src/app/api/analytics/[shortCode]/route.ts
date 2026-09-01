@@ -51,22 +51,6 @@ function hourKey(date: Date): string {
   return d.toISOString().slice(0, 13) + ':00'
 }
 
-function extractUtmParams(referer: string | null | undefined): Record<string, string> {
-  if (!referer) return {}
-  try {
-    const url = new URL(referer)
-    const result: Record<string, string> = {}
-    for (const [k, v] of url.searchParams.entries()) {
-      if (k.startsWith('utm_') && v) {
-        result[k] = v.trim().slice(0, 100)
-      }
-    }
-    return result
-  } catch {
-    return {}
-  }
-}
-
 export async function GET(request: NextRequest, context: { params: Promise<{ shortCode: string }> }) {
   try {
     const limit = await rateLimit(request, { name: 'analytics', limit: 120, windowMs: 60_000 })
@@ -160,6 +144,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
           os: true,
           browser: true,
           language: true,
+          utmSource: true,
+          utmMedium: true,
+          utmCampaign: true,
+          utmTerm: true,
+          utmContent: true,
           ruleId: true,
         },
         orderBy: { createdAt: 'asc' },
@@ -291,8 +280,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
         clicksByHour[hk] = (clicksByHour[hk] || 0) + 1
       }
 
-      // Parse UTM parameters if present in referer
-      const utms = extractUtmParams(event.referer)
+      // UTM parameters belong to the incoming short-link request, not the
+      // external HTTP Referer. Read the canonical fields captured on the click.
+      const utms = {
+        utm_source: event.utmSource,
+        utm_medium: event.utmMedium,
+        utm_campaign: event.utmCampaign,
+      }
       if (utms.utm_source) {
         const key = utms.utm_source
         if (!utmSources[key]) utmSources[key] = { clicks: 0, conversions: 0, valueCents: 0 }

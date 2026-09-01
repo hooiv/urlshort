@@ -37,7 +37,7 @@ function markUnhealthy(client: RedisClient | null | undefined): void {
 }
 
 export function isRedisConfigured(): boolean {
-  return Boolean(process.env.REDIS_URL)
+  return Boolean(process.env.REDIS_URL || (process.env.NODE_ENV === 'test' && process.env.SOAK_REDIS_URL))
 }
 
 /**
@@ -45,7 +45,7 @@ export function isRedisConfigured(): boolean {
  * be reached. Never throws.
  */
 export async function getRedis(): Promise<RedisClient | null> {
-  const url = process.env.REDIS_URL
+  const url = process.env.REDIS_URL || (process.env.NODE_ENV === 'test' ? process.env.SOAK_REDIS_URL : undefined)
   if (!url) return null
 
   const existing = globalForRedis.__qlRedis
@@ -112,4 +112,12 @@ export async function withRedis<T>(
     markUnhealthy(client)
     return fallback
   }
+}
+
+export function __resetRedisForTests(): void {
+  const client = globalForRedis.__qlRedis
+  try { client?.disconnect() } catch { /* test cleanup */ }
+  globalForRedis.__qlRedis = null
+  globalForRedis.__qlRedisDisabledUntil = undefined
+  globalForRedis.__qlRedisConnecting = undefined
 }

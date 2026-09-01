@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getLinkByCode } from '@/lib/link-cache'
-import crypto from 'node:crypto'
 import { createHmac } from 'node:crypto'
 import { verifyGatePassword } from '@/lib/password-gate'
 import { rateLimit } from '@/lib/rate-limit'

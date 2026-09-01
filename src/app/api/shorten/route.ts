@@ -10,10 +10,13 @@ import { assessDestination } from '@/lib/link-safety'
 import { assertDestinationSafeForStorage } from '@/lib/destination-health'
 import { rateLimit } from '@/lib/rate-limit'
 import { hashGatePassword } from '@/lib/password-gate'
+import { getIdempotentResponse, storeIdempotentResponse } from '@/lib/idempotency'
+import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
 
 const CUSTOM_CODE = /^[A-Za-z0-9_-]{3,64}$/
 const CODE_COLLISION_RETRIES = 5
 const MAX_TAGS = 10
+const MAX_SPLIT_VARIANTS = 20
 
 /** Normalize a tag list: lowercase, dedupe, strip empties, cap length/count. */
 function normalizeTags(input: unknown): string[] {
@@ -44,6 +47,7 @@ export async function POST(request: NextRequest) {
     const description = typeof body.description === 'string' ? body.description.trim().slice(0, 1000) : null
     const ogImage = typeof body.ogImage === 'string' ? body.ogImage.trim() : null
     const tags = normalizeTags(body.tags)
+    const rawSplitRules = Array.isArray(body.splitRules) ? body.splitRules.slice(0, MAX_SPLIT_VARIANTS) : []
 
     if (!rawUrl) return NextResponse.json({ error: 'URL is required' }, { status: 400 })
 
@@ -69,6 +73,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    const splitRules: Array<{ destinationUrl: string; weight: number }> = []
+    for (const raw of rawSplitRules) {
+      if (!raw || typeof raw !== 'object') return NextResponse.json({ error: 'Invalid A/B variant' }, { status: 400 })
+      const item = raw as { url?: unknown; weight?: unknown }
+      const destinationUrl = normalizeUrl(String(item.url ?? ''))
+      const weight = Number(item.weight ?? 100)
+      if (!Number.isInteger(weight) || weight < 0 || weight > 1000) {
+        return NextResponse.json({ error: 'A/B variant weight must be an integer from 0 to 1000' }, { status: 400 })
+      }
+      try {
+        await assertDestinationSafeForStorage(destinationUrl)
+      } catch (error) {
+        return NextResponse.json({ error: error instanceof Error ? error.message : 'A/B variant destination is not allowed' }, { status: 400 })
+      }
+      splitRules.push({ destinationUrl, weight })
+    }
+
     const managementToken = createManagementToken()
     const user = await getCurrentUser(request)
     const risk = assessDestination(normalizedUrl)
@@ -81,6 +102,8 @@ export async function POST(request: NextRequest) {
       : null
     if (requestedWorkspaceId && !membership) return NextResponse.json({ error: 'You are not a member of that workspace' }, { status: 403 })
     if (requestedWorkspaceId && membership && !EDIT_ROLES.includes(membership.role)) return NextResponse.json({ error: 'Editor permission is required to create links in this workspace' }, { status: 403 })
+    const idempotency = membership?.workspaceId ? await getIdempotentResponse(request, membership.workspaceId, body) : null
+    if (idempotency?.existing) return new NextResponse(idempotency.existing.responseJson, { status: idempotency.existing.responseStatus, headers: { 'Content-Type': 'application/json', 'Idempotent-Replay': 'true' } })
 
     // Create with retry on short-code collisions (check-then-insert races are
     // expected under concurrency; the unique constraint is the source of truth).
@@ -118,15 +141,17 @@ export async function POST(request: NextRequest) {
                 effectiveAt: new Date(),
               },
             },
-            ...(body.splitRules && Array.isArray(body.splitRules) && body.splitRules.length > 0
+            ...(splitRules.length > 0
               ? {
                   rules: {
-                    create: body.splitRules.map((r: any) => ({
-                      name: 'A/B Split',
-                      destinationUrl: r.url,
-                      weight: r.weight,
-                      priority: 50,
-                    }))
+                    create: splitRules.map((r) => {
+                      return {
+                        name: 'A/B Split',
+                        destinationUrl: r.destinationUrl,
+                        weight: r.weight,
+                        priority: 50,
+                      }
+                    })
                   }
                 }
               : {}
@@ -157,7 +182,9 @@ export async function POST(request: NextRequest) {
       clicks: created.clicks,
       createdAt: created.createdAt,
     }, { status: 201 })
+    if (idempotency) await storeIdempotentResponse({ workspaceId: membership!.workspaceId!, keyHash: idempotency.keyHash, requestHash: idempotency.requestHash, method: request.method, path: request.nextUrl.pathname, status: 201, body: { id: created.id, shortCode: created.shortCode, shortUrl: `${baseUrl}/${created.shortCode}`, managementUrl: buildManagementUrl(baseUrl, created.shortCode, managementToken), title: created.title, description: created.description, ogImage: created.ogImage, clicks: created.clicks, createdAt: created.createdAt } })
     await recordAudit(request, { action: 'link.create', urlId: created.id, resourceType: 'url', resourceId: created.id, after: { shortCode: created.shortCode, originalUrl: created.originalUrl, title: created.title } })
+    if (created.workspaceId) await publishWorkspaceRoutingConfig(created.workspaceId)
     return response
   } catch (error) {
     console.error('Error creating short URL:', error)

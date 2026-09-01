@@ -8,7 +8,7 @@
  * limiting.
  */
 
-import { getRedis, isRedisConfigured, withRedis } from '@/lib/redis'
+import { isRedisConfigured, withRedis } from '@/lib/redis'
 
 export type RateLimitResult = {
   allowed: boolean
@@ -108,40 +108,32 @@ class RedisBackend implements RateLimiterBackend {
     const windowStart = now - windowMs
     const redisKey = `ratelimit:${key}`
 
-    // Atomic-enough pipeline: prune expired hits, record this hit, read the
-    // resulting state. One round-trip.
+    // A MULTI pipeline is not sufficient here: concurrent transactions can
+    // all observe the same post-add count and then each remove their own hit,
+    // causing a burst to be entirely rejected. Keep prune/add/count/rollback
+    // in one Redis Lua invocation so the limit decision is linearizable.
     const member = `${now}-${Math.random().toString(36).slice(2)}`
-    const results = await redis
-      .multi()
-      .zremrangebyscore(redisKey, 0, windowStart)
-      .zadd(redisKey, now, member)
-      .zcard(redisKey)
-      .pexpire(redisKey, windowMs)
-      .exec()
-    if (!results) throw new Error('Redis transaction returned no results')
-
-    // Collect any command-level errors instead of trusting indexes blindly.
-    for (const [err] of results) {
-      if (err) throw err
-    }
-    const hitsCount = Number(results[2][1])
-
-    if (hitsCount > limit) {
-      // Over limit: roll back the just-added hit so rejected requests don't
-      // consume budget.
-      await redis.zrem(redisKey, member)
-      // Oldest surviving hit defines when a slot frees up.
-      const oldest = await redis.zrange(redisKey, 0, 0)
-      let retryAfterSeconds = 1
-      if (oldest.length > 0) {
-        const oldestAt = parseFloat(String(oldest[0]).split('-')[0])
-        if (!Number.isNaN(oldestAt)) {
-          retryAfterSeconds = Math.max(1, Math.ceil((oldestAt + windowMs - now) / 1000))
-        }
-      }
+    const result = await redis.eval(`
+      redis.call('zremrangebyscore', KEYS[1], 0, ARGV[1])
+      redis.call('zadd', KEYS[1], ARGV[2], ARGV[3])
+      local count = redis.call('zcard', KEYS[1])
+      redis.call('pexpire', KEYS[1], ARGV[4])
+      if count > tonumber(ARGV[5]) then
+        redis.call('zrem', KEYS[1], ARGV[3])
+        local oldest = redis.call('zrange', KEYS[1], 0, 0, 'WITHSCORES')
+        return {0, count - 1, oldest[2] or 0}
+      end
+      return {1, count, 0}
+    `, 1, redisKey, windowStart, now, member, windowMs, limit) as [number, number, number]
+    const allowed = Number(result[0]) === 1
+    const hitsCount = Number(result[1])
+    if (!allowed) {
+      const oldestAt = Number(result[2])
+      const retryAfterSeconds = Number.isFinite(oldestAt) && oldestAt > 0
+        ? Math.max(1, Math.ceil((oldestAt + windowMs - now) / 1000))
+        : 1
       return { allowed: false, remaining: 0, retryAfterSeconds, limit }
     }
-
     return { allowed: true, remaining: limit - hitsCount, retryAfterSeconds: 0, limit }
   }
 }

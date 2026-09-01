@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import Image from 'next/image';
 import { Metadata } from 'next';
+import Link from 'next/link';
 
 type Props = {
   params: Promise<{ handle: string }>;
@@ -110,9 +111,9 @@ export default async function PublicBioPage({ params }: Props) {
 
         {/* Branding Footer */}
         <div className="pt-12 pb-4 text-center">
-          <a href="/" className="text-xs font-semibold opacity-50 hover:opacity-100 transition-opacity">
+          <Link href="/" className="text-xs font-semibold opacity-50 hover:opacity-100 transition-opacity">
             Powered by QuickLink
-          </a>
+          </Link>
         </div>
       </div>
     </div>

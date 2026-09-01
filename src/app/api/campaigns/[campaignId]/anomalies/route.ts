@@ -1,0 +1,5 @@
+import { NextRequest,NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { getCurrentUser } from '@/lib/auth'
+import { getDefaultWorkspace } from '@/lib/workspaces'
+export async function GET(request:NextRequest,{params}:{params:Promise<{campaignId:string}>}){const {campaignId}=await params;const u=await getCurrentUser(request);if(!u)return NextResponse.json({error:'Unauthorized'},{status:401});const w=await getDefaultWorkspace(u.id);if(!w)return NextResponse.json({error:'Workspace required'},{status:403});const c=await prisma.campaign.findFirst({where:{id:campaignId,workspaceId:w.id}});if(!c)return NextResponse.json({error:'Not found'},{status:404});return NextResponse.json(await prisma.campaignAnomaly.findMany({where:{campaignId},orderBy:{createdAt:'desc'},take:100}))}

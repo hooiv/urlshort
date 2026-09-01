@@ -1,3 +1,4 @@
+import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { recordAudit } from '@/lib/audit'
@@ -42,6 +43,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
     }
     const revision = await prisma.destinationRevision.create({ data: { urlId: auth.url.id, destinationUrl, effectiveAt, reason } })
     await invalidateLink(auth.url.shortCode, auth.url.id)
+    if (auth.url.workspaceId) await publishWorkspaceRoutingConfig(auth.url.workspaceId)
     await recordAudit(request, { action: 'destination_release.create', urlId: auth.url.id, resourceType: 'destination_revision', resourceId: revision.id, after: { destinationUrl, effectiveAt, reason } })
     return NextResponse.json(revision, { status: 201 })
   } catch (error) {

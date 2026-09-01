@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { hasValidManagementToken } from '@/lib/management'
 import { probeDestination, normalizeHealthTarget } from '@/lib/destination-health'
 import { rateLimit } from '@/lib/rate-limit'
+import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
 
 const FAILURE_THRESHOLD = 3
 const SUCCESS_THRESHOLD = 2
@@ -35,6 +36,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
     if (body.autoFailoverEnabled !== undefined) {
       const enabled = Boolean(body.autoFailoverEnabled)
       const updated = await prisma.url.update({ where: { id: auth.url.id }, data: { autoFailoverEnabled: enabled } })
+      if (auth.url.workspaceId) await publishWorkspaceRoutingConfig(auth.url.workspaceId)
       return NextResponse.json({ autoFailoverEnabled: updated.autoFailoverEnabled })
     }
     return NextResponse.json({ error: 'No supported health setting was supplied' }, { status: 400 })
@@ -72,6 +74,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
       const safeTarget = await normalizeHealthTarget(targetUrl)
       const result = await probeDestination(safeTarget)
       const status = await updateFallbackHealth(auth.url.id, revision?.id ?? null, safeTarget, result)
+      if (auth.url.workspaceId) await publishWorkspaceRoutingConfig(auth.url.workspaceId)
       return NextResponse.json({ target: 'fallback', status, result })
     }
     const rule = await prisma.linkRule.findFirst({ where: { id: target, urlId: auth.url.id } })
@@ -85,6 +88,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
       prisma.linkRule.update({ where: { id: rule.id }, data: { healthStatus: status, healthCheckedAt: new Date(), healthLatencyMs: result.latencyMs, healthStatusCode: result.statusCode, healthLastError: result.error, consecutiveFailures: failures, consecutiveSuccesses: successes } }),
       prisma.destinationHealthCheck.create({ data: { urlId: auth.url.id, ruleId: rule.id, targetUrl: safeTarget, status, statusCode: result.statusCode, latencyMs: result.latencyMs, error: result.error } }),
     ])
+    if (auth.url.workspaceId) await publishWorkspaceRoutingConfig(auth.url.workspaceId)
     return NextResponse.json({ target: rule.id, status, result })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Health check failed' }, { status: 400 })

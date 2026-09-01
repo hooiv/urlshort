@@ -1,0 +1,1 @@
+import {NextRequest} from 'next/server';import {samlFor} from '@/lib/saml';export async function GET(request:NextRequest,{params}:{params:Promise<{connectionId:string}>}){const {connectionId}=await params;const s=await samlFor(connectionId);return new Response(s.generateServiceProviderMetadata(null),{headers:{'Content-Type':'application/samlmetadata+xml'}})}

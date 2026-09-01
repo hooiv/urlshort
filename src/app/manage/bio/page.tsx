@@ -46,8 +46,8 @@ export default function BioProfilesPage() {
       const created = await res.json();
       setProfiles([created, ...profiles]);
       setNewHandle('');
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create profile');
     } finally {
       setCreating(false);
     }

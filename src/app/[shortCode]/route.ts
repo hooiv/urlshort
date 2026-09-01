@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { appendAttribution, createAttributionToken, hashVisitorId } from '@/lib/attribution'
-import { chooseSmartRule, getAiAgent, getBrowser, getCountry, getDeviceType, getLanguage, getOperatingSystem, getReferrerHost, getTrafficType, getVisitorId } from '@/lib/smart-routing'
+import { chooseSmartRule, getAiAgent, getBrowser, getCountry, getDeviceType, getLanguage, getOperatingSystem, getReferrerHost, getTrafficType, getTrafficConfidence, getVisitorId } from '@/lib/smart-routing'
 import { getBaseUrl } from '@/lib/utils'
-import { getLinkByCode, getLinkByDomainPath, getLatestRevision, invalidateLink } from '@/lib/link-cache'
+import { getLinkByCode, getLinkByDomainPath, getLatestRevision } from '@/lib/link-cache'
 import { clickQueue } from '@/lib/queue'
 import { dispatchWebhooksForUrl } from '@/lib/webhooks'
 import { assertDestinationSafeForStorage } from '@/lib/destination-health'
+import { chooseWeightedVariant } from '@/lib/campaigns'
+import { reserveUsageInTransaction } from '@/lib/tenant-usage'
 
 function utcDateKey(date: Date): string { return date.toISOString().slice(0, 10) }
 
@@ -35,6 +37,20 @@ function requestHost(request: NextRequest): string {
   // deployed behind a proxy that does not strip it.
   const candidate = request.nextUrl.hostname.toLowerCase().replace(/^www\./, '')
   return /^[a-z0-9.-]{1,253}$/.test(candidate) ? candidate : ''
+}
+
+function captureUtmParams(params: URLSearchParams): Record<string, string | null> {
+  const get = (key: string) => {
+    const value = params.get(key)?.trim()
+    return value ? value.slice(0, 200) : null
+  }
+  return {
+    utmSource: get('utm_source'),
+    utmMedium: get('utm_medium'),
+    utmCampaign: get('utm_campaign'),
+    utmTerm: get('utm_term'),
+    utmContent: get('utm_content'),
+  }
 }
 
 export async function GET(request: NextRequest, context: { params: Promise<{ shortCode: string }> }) {
@@ -90,29 +106,44 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     const country = getCountry(request)
     const referrerHost = getReferrerHost(request)
     const rule = chooseSmartRule(url.rules, { country, deviceType, referrerHost, now, os, language, trafficType, aiAgent }, url.shortCode, visitor.id)
+    const campaign = await prisma.campaign.findFirst({ where: { status: 'running', links: { some: { urlId: url.id } }, OR: [{ startAt: null }, { startAt: { lte: now } }], AND: [{ OR: [{ endAt: null }, { endAt: { gt: now } }] }] }, include: { variants: true }, orderBy: { updatedAt: 'desc' } })
+    const campaignVariant = rule ? null : campaign ? chooseWeightedVariant(campaign.variants, `${url.shortCode}:${visitor.id}:campaign:${campaign.version}`) : null
     const revision = rule ? null : await getLatestRevision(url.id)
     const dateKey = utcDateKey(now)
-    const destination = forwardQueryParams(rule?.destinationUrl || revision?.destinationUrl || url.originalUrl, request.nextUrl.searchParams)
+    const utm = captureUtmParams(request.nextUrl.searchParams)
+    const destination = forwardQueryParams(rule?.destinationUrl || campaignVariant?.destinationUrl || revision?.destinationUrl || url.originalUrl, request.nextUrl.searchParams)
 
-    // Enforce max-click links atomically on the redirect hot path. This is a
-    // reservation counter, separate from the asynchronously aggregated click
-    // total, so concurrent requests cannot race past the limit.
-    if (url.maxClicks !== null) {
-      const reservation = await prisma.url.updateMany({
-        where: {
-          id: url.id,
-          OR: [
-            { maxClicks: null },
-            { clicksReserved: { lt: url.maxClicks } },
-          ],
-        },
-        data: { clicksReserved: { increment: 1 } },
-      })
-      if (reservation.count !== 1) {
-        return url.expiredUrl
-          ? NextResponse.redirect(url.expiredUrl, 307)
-          : NextResponse.redirect(new URL('/expired', getBaseUrl()), 307)
+    // Admit the click before accepting the redirect. Tenant quotas and
+    // per-link max-click caps are both hard admission controls, so they must
+    // commit (or roll back) together; otherwise a rejected request could still
+    // consume one of the two budgets. The asynchronous queue receives a marker
+    // so it does not charge the same click a second time during accounting.
+    let usageReserved = false
+    const admitted = await prisma.$transaction(async tx => {
+      if (url.workspaceId) {
+        const usage = await reserveUsageInTransaction(tx, url.workspaceId, 'clicks')
+        if (!usage.allowed) return false
+        usageReserved = true
       }
+      if (url.maxClicks !== null) {
+        const reservation = await tx.url.updateMany({
+          where: {
+            id: url.id,
+            OR: [
+              { maxClicks: null },
+              { clicksReserved: { lt: url.maxClicks } },
+            ],
+          },
+          data: { clicksReserved: { increment: 1 } },
+        })
+        if (reservation.count !== 1) return false
+      }
+      return true
+    })
+    if (!admitted) {
+      return url.expiredUrl
+        ? NextResponse.redirect(url.expiredUrl, 307)
+        : NextResponse.redirect(new URL('/expired', getBaseUrl()), 307)
     }
 
     // Record the click in the background using `after` so the redirect is
@@ -120,6 +151,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     // to instantly embed it in the attribution token.
     const clickEventId = crypto.randomUUID()
     const referer = request.headers.get('referer')
+    const ip = request.headers.get('x-real-ip') || request.headers.get('x-client-ip')
 
     const attributionToken = createAttributionToken({ urlId: url.id, shortCode: url.shortCode, clickEventId: clickEventId ?? '', visitorIdHash, issuedAt: Date.now() })
     const finalDestination = appendAttribution(destination, attributionToken)
@@ -129,6 +161,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
         clickEventId,
         urlId: url!.id,
         ruleId: rule?.id,
+        campaignVariantId: campaignVariant?.id || null,
+        ip,
         userAgent,
         referer,
         referrerHost,
@@ -136,12 +170,15 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
         deviceType,
         trafficType,
         aiAgent,
+        trafficConfidence: getTrafficConfidence(userAgent),
         os,
         browser: getBrowser(userAgent),
         language,
+        ...utm,
         visitorIdHash,
         dateKey,
-        shortCode: url!.shortCode
+        shortCode: url!.shortCode,
+        usageReserved,
       }).catch(err => console.error('Queue push failed:', err))
 
       const clickWebhookData = {
