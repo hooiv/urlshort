@@ -1,0 +1,1 @@
+import { defineConfig } from "@playwright/test"; export default defineConfig({testDir:"./e2e",timeout:30000,use:{baseURL:process.env.BASE_URL||"http://127.0.0.1:3000",trace:"retain-on-failure",screenshot:"only-on-failure"},webServer:process.env.CI?{command:"npm run dev",url:"http://127.0.0.1:3000",reuseExistingServer:false,timeout:120000}:undefined});

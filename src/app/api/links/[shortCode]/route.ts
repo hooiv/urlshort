@@ -126,6 +126,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
         data.webhookUrl = null;
       } else {
         const parsed = normalizeSafeUrl(String(body.webhookUrl));
+        // The redirect path performs a server-side POST to this legacy
+        // endpoint. Validate its resolved address at write time so a caller
+        // cannot turn link clicks into SSRF after the URL is stored.
+        await assertDestinationSafeForStorage(parsed)
         data.webhookUrl = parsed;
       }
     }

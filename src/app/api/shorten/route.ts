@@ -12,6 +12,7 @@ import { rateLimit } from '@/lib/rate-limit'
 import { hashGatePassword } from '@/lib/password-gate'
 import { getIdempotentResponse, storeIdempotentResponse } from '@/lib/idempotency'
 import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
+import { dispatchWebhooksForUrl } from '@/lib/webhooks'
 
 const CUSTOM_CODE = /^[A-Za-z0-9_-]{3,64}$/
 const CODE_COLLISION_RETRIES = 5
@@ -185,6 +186,7 @@ export async function POST(request: NextRequest) {
     if (idempotency) await storeIdempotentResponse({ workspaceId: membership!.workspaceId!, keyHash: idempotency.keyHash, requestHash: idempotency.requestHash, method: request.method, path: request.nextUrl.pathname, status: 201, body: { id: created.id, shortCode: created.shortCode, shortUrl: `${baseUrl}/${created.shortCode}`, managementUrl: buildManagementUrl(baseUrl, created.shortCode, managementToken), title: created.title, description: created.description, ogImage: created.ogImage, clicks: created.clicks, createdAt: created.createdAt } })
     await recordAudit(request, { action: 'link.create', urlId: created.id, resourceType: 'url', resourceId: created.id, after: { shortCode: created.shortCode, originalUrl: created.originalUrl, title: created.title } })
     if (created.workspaceId) await publishWorkspaceRoutingConfig(created.workspaceId)
+    await dispatchWebhooksForUrl(created.id, 'link.created', { id: created.id, shortCode: created.shortCode, destinationUrl: created.originalUrl, occurredAt: new Date().toISOString() })
     return response
   } catch (error) {
     console.error('Error creating short URL:', error)

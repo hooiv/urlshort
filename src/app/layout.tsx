@@ -37,6 +37,9 @@ export const metadata: Metadata = {
 };
 
 import { CommandPalette } from '@/components/CommandPalette';
+import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { ConsentBanner } from '@/components/ConsentBanner';
 
 export default function RootLayout({
   children,
@@ -44,11 +47,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <div className="fixed right-4 top-4 z-40"><ThemeToggle /></div>
         <CommandPalette />
+        <ServiceWorkerRegister />
+        <ConsentBanner />
         {children}
       </body>
     </html>

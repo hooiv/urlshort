@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 const MAX_BODY_BYTES = 64 * 1024 // 64 KB — generous for all API payloads
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   if (request.method === 'POST' || request.method === 'PUT' || request.method === 'PATCH') {
     const contentLength = Number(request.headers.get('content-length') || '0')
     if (contentLength > MAX_BODY_BYTES) {

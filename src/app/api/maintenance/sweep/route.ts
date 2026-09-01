@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
     expiresAt: { lt: cutoff(30) },
   })
 
-  // Raw events beyond the retention window (aggregates live in *Daily tables).
+  // Expire links automatically at their configured deadline. The redirect path also\n  // enforces expiry synchronously; this sweep makes management state converge.\n  results.expiredLinks = await prisma.url.updateMany({ where: { expiresAt: { lte: now }, isActive: true }, data: { isActive: false } }).then(r => r.count)\n\n  // Raw events beyond the retention window (aggregates live in *Daily tables).
   const eventCutoff = cutoff(RETENTION_DAYS)
   results.oldClickEvents = await deleteInBatches(prisma.clickEvent, { createdAt: { lt: eventCutoff } })
   results.oldConversionEvents = await deleteInBatches(prisma.conversionEvent, { createdAt: { lt: eventCutoff } })

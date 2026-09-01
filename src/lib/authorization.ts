@@ -5,7 +5,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { hasValidManagementToken } from '@/lib/management'
 import { authenticateApiKey } from '@/lib/api-keys'
 import { EDIT_ROLES } from '@/lib/workspaces'
-export { EDIT_ROLES }
+export { EDIT_ROLES }\n\nfunction hasApiScopeForAction(scopes: string[], allowedRoles: WorkspaceRole[]): boolean {\n  if (scopes.includes('*')) return true\n  const write = !allowedRoles.includes('analyst') && !allowedRoles.includes('viewer')\n  return scopes.includes(write ? 'links:write' : 'links:read')\n}
 
 export const READ_ROLES: WorkspaceRole[] = ['owner', 'admin', 'editor', 'analyst', 'viewer']
 
@@ -49,3 +49,5 @@ export async function getManageableUrl(request: NextRequest, shortCode: string, 
   if (!(await canManageUrl(request, url, allowedRoles))) return { url: null, error: 'Insufficient permissions', status: 403 as const }
   return { url, error: null, status: 200 as const }
 }
+
+

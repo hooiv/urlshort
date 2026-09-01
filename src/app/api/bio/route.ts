@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
+import { requireWorkspaceRole, EDIT_ROLES } from '@/lib/workspaces';
 
 
 export async function GET(request: NextRequest) {
@@ -12,6 +13,11 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const workspaceId = searchParams.get('workspaceId');
+
+    if (workspaceId) {
+      const access = await requireWorkspaceRole(request, workspaceId, EDIT_ROLES);
+      if (access.error) return NextResponse.json({ error: access.error }, { status: access.status });
+    }
 
     const profiles = await prisma.bioProfile.findMany({
       where: {
@@ -52,6 +58,11 @@ export async function POST(request: NextRequest) {
 
     if (existing) {
       return NextResponse.json({ error: 'Handle already taken' }, { status: 409 });
+    }
+
+    if (workspaceId) {
+      const access = await requireWorkspaceRole(request, workspaceId, EDIT_ROLES);
+      if (access.error) return NextResponse.json({ error: access.error }, { status: access.status });
     }
 
     const profile = await prisma.bioProfile.create({

@@ -51,7 +51,7 @@ function responseError(r: NextRequest, body: unknown, status: number, sessionId?
   return new Response(JSON.stringify(body), { status, headers: h })
 }
 
-async function toolCall(x: { a: { scopes: string[] }; w: { id: string } }, name: string, args: Record<string, unknown>) {
+async function toolCall(x: { a: { userId: string; scopes: string[] }; w: { id: string } }, name: string, args: Record<string, unknown>) {
   if (process.env.MCP_CONFORMANCE_BYPASS === '1') return { ok: true, tool: name }
   if (name === 'campaign.list') {
     if (!hasApiScope(x.a as never, 'campaign:read') && !hasApiScope(x.a as never, 'mcp:read')) throw new Error('campaign:read scope required')
@@ -63,7 +63,7 @@ async function toolCall(x: { a: { scopes: string[] }; w: { id: string } }, name:
   }
   if (['campaign.start', 'campaign.autopilot'].includes(name)) {
     if (!hasApiScope(x.a as never, 'campaign:write') && !hasApiScope(x.a as never, 'mcp:write')) throw new Error('campaign:write scope required')
-    if (name === 'campaign.autopilot') return runCampaignAutopilot(String(args.campaignId))
+    if (name === 'campaign.autopilot') return runCampaignAutopilot(String(args.campaignId), x.a.userId, x.w.id)
     return prisma.campaign.updateMany({ where: { id: String(args.campaignId), workspaceId: x.w.id }, data: { status: 'running' } })
   }
   if (name === 'edge.publish') {

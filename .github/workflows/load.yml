@@ -1,0 +1,29 @@
+name: Load and capacity
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Deployed QuickLink URL
+        required: true
+        type: string
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: grafana/setup-k6-action@v1
+      - name: Smoke + percentile budget
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+        run: k6 run --summary-export=loadtest/summary.json loadtest/smoke.js
+      - name: Stress test
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+        run: k6 run --summary-export=loadtest/stress-summary.json loadtest/stress.js
+      - name: Capacity report
+        run: node loadtest/capacity-report.mjs loadtest/summary.json loadtest/stress-summary.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quicklink-load-results
+          path: loadtest/*summary.json

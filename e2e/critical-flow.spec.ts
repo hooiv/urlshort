@@ -1,0 +1,1 @@
+import { test, expect } from "@playwright/test"; test("public health endpoint is reachable", async ({request}) => { const response=await request.get(`${process.env.BASE_URL||"http://127.0.0.1:3000"}/api/status`); expect([200,503]).toContain(response.status()); const body=await response.json(); expect(body).toHaveProperty("status"); expect(body).toHaveProperty("checks"); });

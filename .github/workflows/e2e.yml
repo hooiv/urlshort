@@ -1,0 +1,31 @@
+name: E2E UI
+on:
+  pull_request:
+  workflow_dispatch:
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: {POSTGRES_PASSWORD: postgres, POSTGRES_DB: quicklink}
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d quicklink"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/quicklink
+      DIRECT_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/quicklink
+      QL_ATTRIBUTION_SECRET: ci-secret-at-least-32-characters-long
+      NEXT_PUBLIC_BASE_URL: http://127.0.0.1:3000
+      CRON_SECRET: ci-cron-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+      - run: npm ci
+      - run: npx prisma migrate deploy
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: npm run start &
+      - run: npx playwright test

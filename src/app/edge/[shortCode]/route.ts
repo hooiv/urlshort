@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-export const runtime='edge'
+export const runtime='nodejs'
 type Rule={enabled:boolean;healthStatus?:string|null;countryCodes?:string|null;deviceType?:string|null;trafficType?:string|null;aiAgent?:string|null;os?:string|null;languageCodes?:string|null;referrerDomain?:string|null;startAt?:string|null;endAt?:string|null;priority:number;weight:number;destinationUrl:string}
 type Variant={enabled:boolean;weight:number;destinationUrl:string}
 type Campaign={id:string;variants:Variant[]}

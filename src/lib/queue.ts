@@ -4,6 +4,7 @@ import { withRedis } from '@/lib/redis'
 import { invalidateLink } from '@/lib/link-cache'
 import { publishRealtime } from '@/lib/realtime'
 import { prepareClicks, dedupeClickIds } from '@/lib/click-ingestion'
+import { dispatchWebhooksForUrl } from '@/lib/webhooks'
 
 export type ClickData = {
   clickEventId: string
@@ -151,6 +152,13 @@ async function persistBatch(parsedItems: ClickData[]): Promise<void> {
     }
   })
   publishRealtime('click.batch', { count: uniqueItems.length, urlIds: [...perUrl.keys()] })
+  // Analytics webhooks are durable DB deliveries; dispatch is intentionally outside
+  // the click transaction so a slow consumer can never block redirect ingestion.
+  await Promise.allSettled(uniqueItems.map(item => dispatchWebhooksForUrl(item.urlId, 'link.clicked', {
+    id: item.clickEventId, urlId: item.urlId, shortCode: item.shortCode, ruleId: item.ruleId ?? null,
+    campaignVariantId: item.campaignVariantId ?? null, country: item.country ?? null,
+    occurredAt: new Date().toISOString(),
+  })))
 }
 
 class DirectClickQueue implements ClickQueue {

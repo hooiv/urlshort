@@ -4,7 +4,7 @@ import { replicateRoutingSnapshot } from '@/lib/routing-config'
 
 function authorized(request: NextRequest) {
   const secret = process.env.CRON_SECRET
-  return !secret || request.headers.get('authorization') === `Bearer ${secret}`
+  return Boolean(secret) && request.headers.get('authorization') === `Bearer ${secret}`
 }
 
 /** Retry only the newest unreplicated snapshot per workspace. Older snapshots

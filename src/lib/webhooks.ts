@@ -2,9 +2,9 @@ import { prisma } from './prisma';
 import crypto from 'crypto';
 import { randomUUID } from 'node:crypto';
 import { assertDestinationSafeForStorage } from './destination-health';
-import { reserveUsageInTransaction } from './tenant-usage';
+import { reserveUsageInTransaction } from './tenant-usage';\nimport { CircuitBreaker, Bulkhead } from './resilience';
 
-export const WEBHOOK_MAX_RETRIES = 5;
+export const WEBHOOK_MAX_RETRIES = 5;\nconst webhookCircuits = new Map<string, CircuitBreaker>();\nconst webhookBulkhead = new Bulkhead(20);\nfunction circuitFor(endpointId:string){let c=webhookCircuits.get(endpointId);if(!c){c=new CircuitBreaker(5,30_000);webhookCircuits.set(endpointId,c)}return c}
 
 /**
  * Exponential backoff between delivery attempts: 5m, 25m, ~2h, ~10h, ~52h.
@@ -77,7 +77,7 @@ export async function processWebhookDelivery(deliveryId: string): Promise<Webhoo
 
   if (!delivery || delivery.status === 'success' || !delivery.endpoint.isActive) return skipped;
 
-  const endpoint = delivery.endpoint;
+  const endpoint = delivery.endpoint;\n  const circuit = circuitFor(endpoint.id);\n  if (!circuit.canRequest()) return { ...skipped, status: 'pending' }; 
   // DNS can change between endpoint creation and delivery. Revalidate on every
   // attempt so a once-public hostname cannot later turn the webhook worker into
   // an SSRF primitive.
@@ -224,7 +224,7 @@ export function generateWebhookSignature(payload: string, secret: string): strin
   return crypto.createHmac('sha256', secret).update(payload).digest('hex');
 }
 
-export function verifyWebhookSignature(payload: string, secret: string, signature: string): boolean {
+export function __resetWebhookResilienceForTests(){webhookCircuits.clear()}\n\nexport function verifyWebhookSignature(payload: string, secret: string, signature: string): boolean {
   if (!payload || !secret || !signature) return false;
   try {
     const expected = generateWebhookSignature(payload, secret);
@@ -233,3 +233,4 @@ export function verifyWebhookSignature(payload: string, secret: string, signatur
     return false;
   }
 }
+

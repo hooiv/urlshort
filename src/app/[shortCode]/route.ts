@@ -8,7 +8,7 @@ import { clickQueue } from '@/lib/queue'
 import { dispatchWebhooksForUrl } from '@/lib/webhooks'
 import { assertDestinationSafeForStorage } from '@/lib/destination-health'
 import { chooseWeightedVariant } from '@/lib/campaigns'
-import { reserveUsageInTransaction } from '@/lib/tenant-usage'
+import { reserveUsageInTransaction } from '@/lib/tenant-usage'\nimport { resolveIpGeolocation } from '@/lib/ip-geolocation'
 
 function utcDateKey(date: Date): string { return date.toISOString().slice(0, 10) }
 
@@ -166,7 +166,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
         userAgent,
         referer,
         referrerHost,
-        country: country === 'XX' ? null : country,
+        country: country === 'XX' ? geo?.country ?? null : country,
         deviceType,
         trafficType,
         aiAgent,
@@ -180,34 +180,17 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
         shortCode: url!.shortCode,
         usageReserved,
       }).catch(err => console.error('Queue push failed:', err))
-
-      const clickWebhookData = {
+      dispatchWebhooksForUrl(url!.id, 'link.clicked', {
         shortCode: url!.shortCode,
         destination: finalDestination,
         clickEventId,
         timestamp: now.toISOString(),
         visitor: visitorIdHash,
-        country: country === 'XX' ? null : country,
+        country: country === 'XX' ? geo?.country ?? null : country,
         deviceType,
-        referrer: referrerHost
-      };
-
-      if (url!.webhookUrl) {
-        assertDestinationSafeForStorage(url!.webhookUrl)
-          .then(() => fetch(url!.webhookUrl!, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ event: 'link.clicked', data: clickWebhookData }),
-            signal: AbortSignal.timeout(5000),
-          }))
-          .catch(err => console.error('Legacy webhook dispatch failed:', err));
-      }
-
-      dispatchWebhooksForUrl(url!.id, 'link.clicked', clickWebhookData).catch((err) =>
-        console.error('Enterprise webhook dispatch failed:', err)
-      );
+        referrer: referrerHost,
+      }).catch(err => console.error('Enterprise webhook dispatch failed:', err))
     })
-
     const escapeHtml = (unsafe: string) => unsafe
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
@@ -344,3 +327,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     return NextResponse.redirect(new URL('/503', getBaseUrl()), 307)
   }
 }
+
+
+

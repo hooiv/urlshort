@@ -1,0 +1,3 @@
+import {describe,it,expect} from 'vitest'
+import {rolloutBucket,evaluateRollout} from './feature-flags'
+describe('feature flag rollout',()=>{it('is deterministic per tenant and flag',()=>{expect(rolloutBucket('flag','tenant')).toBe(rolloutBucket('flag','tenant'));expect(rolloutBucket('flag','tenant')).not.toBe(rolloutBucket('other','tenant'))});it('enforces boundaries',()=>{expect(evaluateRollout(false,100,'x','t')).false;expect(evaluateRollout(true,100,'x','t')).true;expect(evaluateRollout(true,0,'x','t')).false;const b=rolloutBucket('x','t');expect(evaluateRollout(true,b+1,'x','t')).true;expect(evaluateRollout(true,b,'x','t')).false})})

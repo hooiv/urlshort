@@ -1,0 +1,4 @@
+import { describe, expect, it } from 'vitest'
+import { errorBudgetStatus } from './observability'
+import { generateWebhookSignature, verifyWebhookSignature } from './webhooks'
+describe('production reliability primitives',()=>{it('calculates an honest error budget',()=>{const s={count:1000,errors:1,p50:2,p75:3,p95:10,p99:20,errorRate:.001};expect(errorBudgetStatus(s,.999).healthy).toBe(true);expect(errorBudgetStatus({...s,errors:20,errorRate:.02},.999).healthy).toBe(false)});it('verifies webhook signatures end to end with timing-safe comparison',()=>{const payload='{"id":"evt_123"}',secret='secret';const sig=generateWebhookSignature(payload,secret);expect(verifyWebhookSignature(payload,secret,sig)).toBe(true);expect(verifyWebhookSignature(payload+' ',secret,sig)).toBe(false);expect(verifyWebhookSignature(payload,secret,sig.slice(0,-1))).toBe(false)})})

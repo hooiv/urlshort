@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   const keys = await prisma.apiKey.findMany({
     where: { userId: user.id },
     orderBy: { createdAt: 'desc' },
-    select: { id: true, name: true, prefix: true, lastUsedAt: true, revokedAt: true, createdAt: true },
+    select: { id: true, name: true, prefix: true, scopes: true, lastUsedAt: true, revokedAt: true, createdAt: true },
   })
   return NextResponse.json(keys)
 }
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     if (!limit.allowed) return NextResponse.json({ error: 'Too many key operations' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
 
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
-    const name = typeof body.name === 'string' ? body.name.trim().slice(0, 80) : ''
+    const name = typeof body.name === 'string' ? body.name.trim().slice(0, 80) : ''\n    const allowedScopes = new Set(['links:read','links:write','analytics:read','campaigns:write','webhooks:write','*'])\n    const scopes = Array.isArray(body.scopes) ? body.scopes.filter((v): v is string => typeof v === 'string' && allowedScopes.has(v)) : ['*']\n    if (!scopes.length || scopes.length !== (Array.isArray(body.scopes) ? body.scopes.length : scopes.length)) return NextResponse.json({ error: 'Invalid API key scopes' }, { status: 400 })
     if (!name) return NextResponse.json({ error: 'Key name is required' }, { status: 400 })
 
     const activeCount = await prisma.apiKey.count({ where: { userId: user.id, revokedAt: null } })
@@ -35,8 +35,8 @@ export async function POST(request: NextRequest) {
 
     const { key, keyHash, prefix } = createApiKey()
     const created = await prisma.apiKey.create({
-      data: { userId: user.id, name, keyHash, prefix },
-      select: { id: true, name: true, prefix: true, createdAt: true },
+      data: { userId: user.id, name, keyHash, prefix, scopes: scopes.join(',') },
+      select: { id: true, name: true, prefix: true, scopes: true, createdAt: true },
     })
     await recordAudit(request, { action: 'api_key.create', resourceType: 'api_key', resourceId: created.id, actorUserId: user.id, after: { name, prefix } })
     // The raw key is shown exactly once — only its hash is stored.
@@ -58,3 +58,4 @@ export async function DELETE(request: NextRequest) {
   await recordAudit(request, { action: 'api_key.revoke', resourceType: 'api_key', resourceId: id, actorUserId: user.id })
   return NextResponse.json({ revoked: true })
 }
+

@@ -1,19 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-
-export async function GET(request: NextRequest) {
-  const user = await getCurrentUser(request)
-  if (!user) return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
-  const urlId = new URL(request.url).searchParams.get('urlId')
-  const events = await prisma.auditEvent.findMany({
-    where: {
-      actorUserId: user.id,
-      ...(urlId ? { urlId } : {}),
-    },
-    orderBy: { createdAt: 'desc' },
-    take: 100,
-    select: { id: true, action: true, actorType: true, resourceType: true, resourceId: true, beforeJson: true, afterJson: true, metadataJson: true, userAgent: true, createdAt: true, urlId: true },
-  })
-  return NextResponse.json(events)
-}
+export async function GET(request:NextRequest){const user=await getCurrentUser(request);if(!user)return NextResponse.json({error:'Authentication required'},{status:401});const p=request.nextUrl.searchParams;const search=(p.get('search')||'').trim().slice(0,200);const action=(p.get('action')||'').trim().slice(0,100);const cursor=p.get('cursor');const take=Math.min(Math.max(Number(p.get('limit')||50),1),200);const where={actorUserId:user.id,...(action?{action}:{}) ,...(search?{OR:[{action:{contains:search,mode:'insensitive' as const}},{resourceType:{contains:search,mode:'insensitive' as const}},{resourceId:{contains:search,mode:'insensitive' as const}},{metadataJson:{contains:search,mode:'insensitive' as const}}]}:{})};const events=await prisma.auditEvent.findMany({where,orderBy:[{createdAt:'desc'},{id:'desc'}],take:take+1,...(cursor?{cursor:{id:cursor},skip:1}:{}),select:{id:true,action:true,actorType:true,resourceType:true,resourceId:true,beforeJson:true,afterJson:true,metadataJson:true,userAgent:true,createdAt:true,urlId:true}});const next=events.length>take?events.pop()!.id:null;return NextResponse.json({items:events,nextCursor:next},{headers:{'Cache-Control':'private, max-age=10, stale-while-revalidate=30'}})}

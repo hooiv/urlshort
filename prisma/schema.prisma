@@ -275,6 +275,7 @@ model User {
   bioProfiles             BioProfile[]
   webhookEndpoints        WebhookEndpoint[]
   scimIdentities          ScimIdentity[]
+  deletionRequests        DataDeletionRequest[]
 
   @@map("users")
 }
@@ -369,6 +370,7 @@ model Workspace {
   scimIdentities         ScimIdentity[]
   deepLinkApps           DeepLinkApp[]
   idempotencyKeys        IdempotencyKey[]
+  featureFlags           FeatureFlag[]
 
   @@map("workspaces")
 }
@@ -905,18 +907,22 @@ model CampaignAnomaly {
 }
 
 model PrivacyPolicy {
-  id             String    @id @default(cuid())
-  workspaceId    String    @unique
-  region         String    @default("global")
-  retentionDays  Int       @default(90)
-  hashIp         Boolean   @default(true)
-  hashVisitor    Boolean   @default(true)
-  storeUserAgent Boolean   @default(false)
-  storeReferrer  Boolean   @default(true)
-  aggregateOnly  Boolean   @default(false)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  id                       String    @id @default(cuid())
+  workspaceId              String    @unique
+  region                   String    @default("global")
+  retentionDays            Int       @default(90)
+  hashIp                   Boolean   @default(true)
+  hashVisitor              Boolean   @default(true)
+  storeUserAgent           Boolean   @default(false)
+  storeReferrer            Boolean   @default(true)
+  aggregateOnly            Boolean   @default(false)
+  analyticsConsentRequired Boolean   @default(false)
+  dataResidency            String    @default("global")
+  auditRetentionDays       Int       @default(365)
+  deletionGraceDays        Int       @default(7)
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+  workspace                Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@map("privacy_policies")
 }
@@ -953,12 +959,12 @@ model UsageBucket {
 }
 
 model SamlRelayNonce {
-  id           String   @id @default(cuid())
-  nonce        String   @unique
+  id           String    @id @default(cuid())
+  nonce        String    @unique
   connectionId String
   expiresAt    DateTime
   consumedAt   DateTime?
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
 
   @@index([connectionId, expiresAt])
   @@index([consumedAt, expiresAt])
@@ -1083,4 +1089,35 @@ model IdempotencyKey {
   @@unique([workspaceId, keyHash])
   @@index([expiresAt])
   @@map("idempotency_keys")
+}
+
+model FeatureFlag {
+  id             String     @id @default(cuid())
+  workspaceId    String?
+  key            String
+  enabled        Boolean    @default(false)
+  rolloutPercent Int        @default(100)
+  configJson     String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  workspace      Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, key])
+  @@index([workspaceId, enabled])
+  @@map("feature_flags")
+}
+
+model DataDeletionRequest {
+  id           String    @id @default(cuid())
+  userId       String
+  status       String    @default("pending")
+  requestedAt  DateTime  @default(now())
+  scheduledFor DateTime
+  completedAt  DateTime?
+  reason       String?
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledFor])
+  @@index([userId, requestedAt])
+  @@map("data_deletion_requests")
 }

@@ -1,0 +1,3 @@
+'use client'
+import { useState } from 'react'
+export function ThemeToggle(){const [dark,setDark]=useState(()=>typeof window!=='undefined' && (localStorage.getItem('ql-theme')==='dark'||(!localStorage.getItem('ql-theme')&&window.matchMedia('(prefers-color-scheme: dark)').matches)));function toggle(){const next=!dark;document.documentElement.classList.toggle('dark',next);localStorage.setItem('ql-theme',next?'dark':'light');setDark(next)}return <button type="button" onClick={toggle} aria-label={dark?'Switch to light mode':'Switch to dark mode'} className="rounded-lg border border-slate-700 bg-slate-900/90 px-3 py-2 text-xs font-medium text-slate-100 shadow-sm hover:bg-slate-800">{dark?'☀ Light':'☾ Dark'}</button>}

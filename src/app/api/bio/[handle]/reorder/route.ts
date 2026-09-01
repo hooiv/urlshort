@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
+import { requireWorkspaceRole, EDIT_ROLES } from '@/lib/workspaces';
 
 export async function PUT(
   request: NextRequest,
@@ -28,8 +29,19 @@ export async function PUT(
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    if (profile.userId && profile.userId !== user.id) {
+    if (profile.userId) {
+      if (profile.userId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    } else if (profile.workspaceId) {
+      const access = await requireWorkspaceRole(request, profile.workspaceId, EDIT_ROLES);
+      if (access.error) return NextResponse.json({ error: access.error }, { status: access.status });
+    } else {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const blocks = await prisma.bioBlock.findMany({ where: { profileId: profile.id }, select: { id: true } });
+    const validIds = new Set(blocks.map((block) => block.id));
+    if (blockIds.length !== validIds.size || blockIds.some((id) => typeof id !== 'string' || !validIds.has(id)) || new Set(blockIds).size !== blockIds.length) {
+      return NextResponse.json({ error: 'blockIds must contain every block in this profile exactly once' }, { status: 400 });
     }
 
     // Update positions in a transaction

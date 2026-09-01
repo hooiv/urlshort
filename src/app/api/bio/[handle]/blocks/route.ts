@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
+import { requireWorkspaceRole, EDIT_ROLES } from '@/lib/workspaces';
 
 
 export async function POST(
@@ -30,8 +31,13 @@ export async function POST(
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    if (profile.userId && profile.userId !== user.id) {
-       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (profile.userId) {
+      if (profile.userId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    } else if (profile.workspaceId) {
+      const access = await requireWorkspaceRole(request, profile.workspaceId, EDIT_ROLES);
+      if (access.error) return NextResponse.json({ error: access.error }, { status: access.status });
+    } else {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const block = await prisma.bioBlock.create({

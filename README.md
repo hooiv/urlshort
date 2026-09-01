@@ -15,10 +15,11 @@ One permanent short link, many destinations. QuickLink routes visitors by countr
 - **QR codes** — per-link PNG/SVG generation with configurable size and colors.
 - **Trust & safety** — heuristic risk scoring at creation, public abuse reporting, operator safety console, blocked/expired interstitials.
 - **Audit log** — every auth and management action recorded with hashed IPs.
+- **Adaptive campaign control plane** — attach a statistically guarded experiment to a permanent short link, run an auditable Autopilot that shifts allocation only after evidence thresholds, and surface anomaly/decision history in one control center.
 
 ## Tech stack
 
-- Next.js 15 (App Router) · React 19 · TypeScript
+- Next.js 16 (App Router) · React 19 · TypeScript
 - Prisma ORM · PostgreSQL (Neon-ready, pooled + direct connections)
 - Tailwind CSS · lucide-react · react-hot-toast
 - bcryptjs sessions (opaque tokens, SHA-256 at rest) · nanoid · qrcode

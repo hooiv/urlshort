@@ -4,6 +4,7 @@ import { verifyAttributionToken } from '@/lib/attribution'
 import { rateLimit } from '@/lib/rate-limit'
 import { enforceUsage } from '@/lib/tenant-usage'
 import { getPrivacyPolicy, sanitizeAnalyticsMetadata, hashWithWorkspace } from '@/lib/privacy-ingestion'
+import { dispatchWebhooksForUrl } from '@/lib/webhooks'
 
 /**
  * CORS for the public conversion endpoint. The attribution token travels in the
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest) {
       await tx.conversionDaily.upsert({ where: { goalId_dateKey: { goalId: goal.id, dateKey: dateKey(now) } }, create: { goalId: goal.id, dateKey: dateKey(now), conversions: 1, valueCents: valueCents ?? 0 }, update: { conversions: { increment: 1 }, valueCents: { increment: valueCents ?? 0 } } })
       return created
     })
+    await dispatchWebhooksForUrl(payload.urlId, 'conversion.recorded', { id: conversion.id, urlId: payload.urlId, goalId: goal.id, valueCents, currency, occurredAt: now.toISOString() })
     return NextResponse.json({ accepted: true, id: conversion.id }, { status: 201, headers: corsHeaders(origin) })
   } catch (error) { console.error('Conversion tracking failed:', error); return NextResponse.json({ error: 'Unable to record conversion' }, { status: 500, headers: corsHeaders(origin) }) }
 }

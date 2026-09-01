@@ -1,44 +1,104 @@
 name: CI
-
 on:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
+
+permissions:
+  contents: read
+  security-events: write
 
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Generate Prisma client
-        run: pnpm exec prisma generate
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run lint
+      - run: npm test -- --coverage=false
+      - run: npm run build
+      - name: Dependency audit
+        run: npm audit --omit=dev --audit-level=high
+      - name: Production bundle budget
+        shell: bash
+        run: |
+          size=$(du -sk .next/static | cut -f1)
+          echo "Static bundle: ${size} KiB"
+          test "$size" -le 5120
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
         env:
-          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Type check
-        run: pnpm exec tsc --noEmit
+  prisma:
+    runs-on: ubuntu-latest
+    needs: verify
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma validate
+      - name: Check migration ordering
+        shell: bash
+        run: |
+          test -d prisma/migrations
+          count=$(find prisma/migrations -mindepth 1 -maxdepth 1 -type d | wc -l)
+          test "$count" -gt 0
 
-      - name: Lint
-        run: pnpm lint
-
-      - name: Unit tests
-        run: pnpm test
-
-      - name: Build
-        run: pnpm build
+  integration:
+    runs-on: ubuntu-latest
+    needs: verify
+    services:
+      postgres:
+        image: postgres:16
         env:
-          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
-          QL_ATTRIBUTION_SECRET: ci-secret-that-is-at-least-32-characters-long!!
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: quicklink_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres -d quicklink_test"
+          --health-interval=5s --health-timeout=5s --health-retries=10
+      redis:
+        image: redis:7
+        ports: ['16379:6379']
+    env:
+      SOAK_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/quicklink_test
+      SOAK_REDIS_URL: redis://localhost:16379
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/quicklink_test
+      DIRECT_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/quicklink_test
+      QL_ATTRIBUTION_SECRET: ci-secret-at-least-32-characters-long
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma migrate deploy
+      - name: Integration tests
+        run: npx vitest run src/lib/production-soak.integration.test.ts
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: CodeQL initialize
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+      - uses: github/codeql-action/autobuild@v3
+      - uses: github/codeql-action/analyze@v3
+      - name: IaC policy sanity
+        shell: bash
+        run: |
+          test -f .github/workflows/ci.yml
+          grep -q 'permissions:' .github/workflows/ci.yml

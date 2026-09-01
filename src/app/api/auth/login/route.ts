@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     const user = await prisma.user.findUnique({ where: { email } })
     if (!user || !(await verifyPassword(password, user.password))) return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 })
     const session = await createSession(user.id, request.headers.get('user-agent'))
-    const response = NextResponse.json({ user: { id: user.id, email: user.email, name: user.name } })
+    const mobile = request.headers.get('x-mobile-client') === '1'\n    const response = NextResponse.json({ user: { id: user.id, email: user.email, name: user.name }, ...(mobile ? { token: session.token, expiresAt: session.expiresAt } : {}) })
     setSessionCookie(response, session.token, session.expiresAt)
     await recordAudit(request, { action: 'auth.login', resourceType: 'user', resourceId: user.id, actorUserId: user.id, sessionId: session.id, metadata: { method: 'password' } })
     return response
@@ -37,3 +37,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not sign in' }, { status: 400 })
   }
 }
+

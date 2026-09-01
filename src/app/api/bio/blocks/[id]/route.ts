@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
+import { requireWorkspaceRole, EDIT_ROLES } from '@/lib/workspaces';
 
 
 export async function PUT(
@@ -25,8 +26,13 @@ export async function PUT(
       return NextResponse.json({ error: 'Block not found' }, { status: 404 });
     }
 
-    if (block.profile.userId && block.profile.userId !== user.id) {
-       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (block.profile.userId) {
+      if (block.profile.userId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    } else if (block.profile.workspaceId) {
+      const access = await requireWorkspaceRole(request, block.profile.workspaceId, EDIT_ROLES);
+      if (access.error) return NextResponse.json({ error: access.error }, { status: access.status });
+    } else {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const updated = await prisma.bioBlock.update({
@@ -68,8 +74,13 @@ export async function DELETE(
       return NextResponse.json({ error: 'Block not found' }, { status: 404 });
     }
 
-    if (block.profile.userId && block.profile.userId !== user.id) {
-       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (block.profile.userId) {
+      if (block.profile.userId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    } else if (block.profile.workspaceId) {
+      const access = await requireWorkspaceRole(request, block.profile.workspaceId, EDIT_ROLES);
+      if (access.error) return NextResponse.json({ error: access.error }, { status: access.status });
+    } else {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     await prisma.bioBlock.delete({

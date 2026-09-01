@@ -1,0 +1,6 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getCurrentUser } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import { recordAudit } from '@/lib/audit'
+export async function POST(request:NextRequest){const user=await getCurrentUser(request);if(!user)return NextResponse.json({error:'Authentication required'},{status:401});const existing=await prisma.dataDeletionRequest.findFirst({where:{userId:user.id,status:{in:['pending','processing']}}});if(existing)return NextResponse.json({id:existing.id,status:existing.status,scheduledFor:existing.scheduledFor});const grace=7;const row=await prisma.dataDeletionRequest.create({data:{userId:user.id,scheduledFor:new Date(Date.now()+grace*86400000),reason:'User requested account deletion'}});await recordAudit(request,{action:'account.deletion.requested',resourceType:'user',resourceId:user.id,metadata:{requestId:row.id,scheduledFor:row.scheduledFor.toISOString()}});return NextResponse.json({id:row.id,status:row.status,scheduledFor:row.scheduledFor},{status:202})}
+export async function DELETE(request:NextRequest){const user=await getCurrentUser(request);if(!user)return NextResponse.json({error:'Authentication required'},{status:401});await prisma.dataDeletionRequest.deleteMany({where:{userId:user.id,status:'pending'}});return NextResponse.json({cancelled:true})}

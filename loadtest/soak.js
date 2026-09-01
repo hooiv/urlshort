@@ -1,0 +1,1 @@
+import http from "k6/http"; export const options={vus:20,duration:"2h",thresholds:{http_req_failed:["rate<0.005"]}}; export default function loadTest(){http.get((__ENV.BASE_URL||"http://localhost:3000")+"/api/status")}

@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
+import { requireWorkspaceRole, EDIT_ROLES } from '@/lib/workspaces';
 
 
 export async function GET(
@@ -50,10 +51,13 @@ export async function PUT(
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    // Auth check
-    if (profile.userId && profile.userId !== user.id) {
-       // In a real app we'd also check workspace permissions
-       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (profile.userId) {
+      if (profile.userId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    } else if (profile.workspaceId) {
+      const access = await requireWorkspaceRole(request, profile.workspaceId, EDIT_ROLES);
+      if (access.error) return NextResponse.json({ error: access.error }, { status: access.status });
+    } else {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const updated = await prisma.bioProfile.update({
