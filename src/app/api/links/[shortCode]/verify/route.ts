@@ -1,14 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getLinkByCode } from '@/lib/link-cache'
-import { createHmac } from 'node:crypto'
-import { verifyGatePassword } from '@/lib/password-gate'
+import { createUnlockToken, verifyGatePassword } from '@/lib/password-gate'
 import { rateLimit } from '@/lib/rate-limit'
-
-function getSecret(): string { 
-  const secret = process.env.QL_ATTRIBUTION_SECRET; 
-  if (!secret || secret.length < 32) throw new Error('QL_ATTRIBUTION_SECRET must be at least 32 characters'); 
-  return secret;
-}
 
 export async function POST(request: NextRequest, context: { params: Promise<{ shortCode: string }> }) {
   const { shortCode } = await context.params
@@ -30,7 +23,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
     }
 
     // Generate token
-    const token = createHmac('sha256', getSecret()).update(`unlock:${shortCode}`).digest('hex')
+    const token = createUnlockToken(shortCode)
     
     const response = NextResponse.json({ success: true })
     response.cookies.set(`ql_unlocked_${shortCode}`, token, { 

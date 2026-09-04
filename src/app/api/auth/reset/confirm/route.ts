@@ -16,8 +16,8 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json()) as Record<string, unknown>
     const token = String(body.token ?? '')
-    const newPassword = validatePassword(String(body.password ?? ''))
     if (!token) return NextResponse.json({ error: 'Reset token is required' }, { status: 400 })
+    const newPassword = validatePassword(String(body.password ?? ''))
 
     const record = await prisma.passwordResetToken.findUnique({ where: { tokenHash: createHash('sha256').update(token).digest('hex') } })
     if (!record || record.usedAt || record.expiresAt <= new Date()) {
@@ -33,6 +33,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ reset: true })
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not reset password' }, { status: 400 })
+    const message = error instanceof Error ? error.message : ''
+    // Preserve password-policy messages (safe); hide infra details.
+    if (message.startsWith('Password must be')) {
+      return NextResponse.json({ error: message }, { status: 400 })
+    }
+    console.error('Password reset confirm failed:', error)
+    return NextResponse.json({ error: 'Could not reset password' }, { status: 500 })
   }
 }

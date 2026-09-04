@@ -31,14 +31,16 @@ function corsHeaders(origin: string | null): Record<string, string> {
 const DEDUP_WINDOW_MS = 24 * 60 * 60 * 1000
 
 function dateKey(date: Date): string { return date.toISOString().slice(0, 10) }
+export { dateKey }
 export async function OPTIONS(request: NextRequest) { return new NextResponse(null, { status: 204, headers: corsHeaders(request.headers.get('origin')) }) }
 export async function POST(request: NextRequest) {
   try {
     const limit = await rateLimit(request, { name: 'track', limit: 60, windowMs: 60_000 })
     if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { ...corsHeaders(request.headers.get('origin')), 'Retry-After': String(limit.retryAfterSeconds) } })
 
-    const body = (await request.json()) as Record<string, unknown>
+    const body = (await request.json().catch(() => null)) as Record<string, unknown> | null
     const origin = request.headers.get('origin')
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return NextResponse.json({ error: 'Invalid request body' }, { status: 400, headers: corsHeaders(origin) })
     const attributionToken = typeof body.attributionToken === 'string' ? body.attributionToken : ''
     const eventKey = typeof body.eventKey === 'string' ? body.eventKey.trim() : ''
     const valueCents = body.valueCents == null ? null : Number(body.valueCents)

@@ -50,6 +50,12 @@ export async function POST(request: NextRequest) {
     await recordAudit(request, { action: 'auth.register', resourceType: 'user', resourceId: user.id, actorUserId: user.id, sessionId: session.id, after: { email: user.email, name: user.name, workspaceId: workspace.id } })
     return response
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not create account' }, { status: 400 })
+    const message = error instanceof Error ? error.message : ''
+    // Preserve input-validation messages (safe); hide infra details.
+    if (message.startsWith('Enter a valid email') || message.startsWith('Password must be')) {
+      return NextResponse.json({ error: message }, { status: 400 })
+    }
+    console.error('Registration failed:', error)
+    return NextResponse.json({ error: 'Could not create account' }, { status: 500 })
   }
 }

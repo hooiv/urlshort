@@ -5,9 +5,11 @@ import { rateLimit } from '@/lib/rate-limit'
 
 const MAX_ROWS = 10_000
 
-function csvEscape(value: unknown): string {
+export function csvEscape(value: unknown): string {
   const text = value === null || value === undefined ? '' : String(value)
-  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text
+  // Prevent spreadsheet formula injection: prefix =, +, -, @, tab/CR payloads.
+  const safe = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text
+  return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe
 }
 
 /**

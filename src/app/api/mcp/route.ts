@@ -3,6 +3,7 @@ import { authenticateApiKey, hasApiScope } from '@/lib/api-keys'
 import { getDefaultWorkspace } from '@/lib/workspaces'
 import { prisma } from '@/lib/prisma'
 import { runCampaignAutopilot } from '@/lib/campaigns'
+import { rateLimit } from '@/lib/rate-limit'
 import {
   createMcpSession,
   deleteMcpSession,
@@ -51,6 +52,17 @@ function responseError(r: NextRequest, body: unknown, status: number, sessionId?
   return new Response(JSON.stringify(body), { status, headers: h })
 }
 
+export function assertToolCampaignId(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim() || value.length > 128) throw new Error('Invalid campaignId')
+  return value
+}
+
+export function sanitizeMcpToolError(e: unknown): { message: string; status: number } {
+  const message = e instanceof Error ? e.message : 'Tool failed'
+  if (message.includes('scope required') || message === 'Unknown tool' || message === 'Invalid campaignId') return { message, status: 403 }
+  return { message: 'Tool failed', status: 500 }
+}
+
 async function toolCall(x: { a: { userId: string; scopes: string[] }; w: { id: string } }, name: string, args: Record<string, unknown>) {
   if (process.env.MCP_CONFORMANCE_BYPASS === '1') return { ok: true, tool: name }
   if (name === 'campaign.list') {
@@ -59,12 +71,12 @@ async function toolCall(x: { a: { userId: string; scopes: string[] }; w: { id: s
   }
   if (name === 'campaign.get') {
     if (!hasApiScope(x.a as never, 'campaign:read') && !hasApiScope(x.a as never, 'mcp:read')) throw new Error('campaign:read scope required')
-    return prisma.campaign.findFirst({ where: { id: String(args.campaignId), workspaceId: x.w.id }, include: { variants: true, experiments: { include: { snapshots: true } }, decisions: true } })
+    return prisma.campaign.findFirst({ where: { id: assertToolCampaignId(args.campaignId), workspaceId: x.w.id }, include: { variants: true, experiments: { include: { snapshots: true } }, decisions: true } })
   }
   if (['campaign.start', 'campaign.autopilot'].includes(name)) {
     if (!hasApiScope(x.a as never, 'campaign:write') && !hasApiScope(x.a as never, 'mcp:write')) throw new Error('campaign:write scope required')
-    if (name === 'campaign.autopilot') return runCampaignAutopilot(String(args.campaignId), x.a.userId, x.w.id)
-    return prisma.campaign.updateMany({ where: { id: String(args.campaignId), workspaceId: x.w.id }, data: { status: 'running' } })
+    if (name === 'campaign.autopilot') return runCampaignAutopilot(assertToolCampaignId(args.campaignId), x.a.userId, x.w.id)
+    return prisma.campaign.updateMany({ where: { id: assertToolCampaignId(args.campaignId), workspaceId: x.w.id }, data: { status: 'running' } })
   }
   if (name === 'edge.publish') {
     if (!hasApiScope(x.a as never, 'edge:write') && !hasApiScope(x.a as never, 'mcp:write')) throw new Error('edge:write scope required')
@@ -118,13 +130,16 @@ async function modernPost(r: NextRequest, x: Awaited<ReturnType<typeof auth>>) {
     try {
       return response(r, q.id ?? null, { content: [{ type: 'text', text: JSON.stringify(await toolCall(x, q.params?.name || '', q.params?.arguments || {})) }] })
     } catch (e) {
-      return error(r, q.id ?? null, -32000, e instanceof Error ? e.message : 'Tool failed', 403)
+      const safe = sanitizeMcpToolError(e)
+      return error(r, q.id ?? null, -32000, safe.message, safe.status)
     }
   }
   return error(r, q.id ?? null, -32601, 'Method not found', 404)
 }
 
 export async function POST(r: NextRequest) {
+  const rl = await rateLimit(r, { name: 'mcp', limit: 120, windowMs: 60_000 })
+  if (!rl.allowed) return responseError(r, { jsonrpc: '2.0', id: null, error: { code: -32000, message: 'Rate limit exceeded' } }, 429)
   const protocol = r.headers.get('MCP-Protocol-Version')
   const hinted = await r.clone().json().catch(() => null) as { params?: { _meta?: Record<string, unknown> } } | null
   const hintedVersion = hinted?.params?._meta?.['io.modelcontextprotocol/protocolVersion']
@@ -149,7 +164,8 @@ export async function POST(r: NextRequest) {
   try {
     return response(r, q.id ?? null, { content: [{ type: 'text', text: JSON.stringify(await toolCall(x, q.params?.name || '', q.params?.arguments || {})) }] }, sid)
   } catch (e) {
-    return error(r, q.id ?? null, -32000, e instanceof Error ? e.message : 'Tool failed', 403, sid)
+    const safe = sanitizeMcpToolError(e)
+    return error(r, q.id ?? null, -32000, safe.message, safe.status, sid)
   }
 }
 
@@ -167,7 +183,12 @@ export async function GET(r: NextRequest) {
 
 export async function DELETE(r: NextRequest) {
   if (r.headers.get('MCP-Protocol-Version') === MCP_MODERN_PROTOCOL_VERSION) return new Response(null, { status: 405, headers: { Allow: 'POST' } })
+  const x = await auth(r)
+  if (!x) return new Response('Unauthorized', { status: 401 })
   const sid = r.headers.get('mcp-session-id')
-  if (sid) await deleteMcpSession(sid)
+  if (sid) {
+    const s = await getMcpSession(sid)
+    if (s && s.userId === x.a.userId && s.workspaceId === x.w.id) await deleteMcpSession(sid)
+  }
   return new Response(null, { status: 204 })
 }

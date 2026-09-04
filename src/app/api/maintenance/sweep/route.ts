@@ -20,31 +20,70 @@ import { rateLimit } from '@/lib/rate-limit'
 const RETENTION_DAYS = Number(process.env.EVENT_RETENTION_DAYS || 180)
 const BATCH_SIZE = 5_000
 
+function timingSafeMatches(candidate: string, expectedSecret: string): boolean {
+  if (!candidate || !expectedSecret) return false
+  const actual = Buffer.from(candidate, 'utf8')
+  const expected = Buffer.from(expectedSecret, 'utf8')
+  return actual.length === expected.length && timingSafeEqual(actual, expected)
+}
+
+export function isSweepAuthorized(
+  bearer: string,
+  sweepHeader: string,
+  cronHeader: string,
+  healthSecret: string | undefined,
+  cronSecret: string | undefined,
+): boolean {
+  if (healthSecret && (timingSafeMatches(sweepHeader, healthSecret) || timingSafeMatches(bearer, healthSecret))) return true
+  if (cronSecret && (timingSafeMatches(bearer, cronSecret) || timingSafeMatches(cronHeader, cronSecret))) return true
+  return false
+}
+
 function authorized(request: NextRequest): boolean {
-  const secret = process.env.HEALTH_SWEEP_SECRET
-  if (!secret) return false
-  // Custom header (self-hosted cron) or Vercel's `Authorization: Bearer $CRON_SECRET`.
   const bearer = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') || ''
-  const candidates = [request.headers.get('x-health-sweep-secret') || '', process.env.CRON_SECRET && bearer === process.env.CRON_SECRET ? bearer : '']
-  const expected = Buffer.from(secret, 'utf8')
-  return candidates.some((candidate) => {
-    if (!candidate) return false
-    const actual = Buffer.from(candidate, 'utf8')
-    return actual.length === expected.length && timingSafeEqual(actual, expected)
-  })
+  return isSweepAuthorized(
+    bearer,
+    request.headers.get('x-health-sweep-secret') || '',
+    request.headers.get('x-cron-secret') || '',
+    process.env.HEALTH_SWEEP_SECRET,
+    process.env.CRON_SECRET,
+  )
 }
 
 function cutoff(daysAgo: number): Date {
   return new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000)
 }
 
-async function deleteInBatches(delegate: { deleteMany: (args: { where: Record<string, unknown> }) => Promise<{ count: number }> }, where: Record<string, unknown>): Promise<number> {
+type BatchDelegate = {
+  findMany: (args: { where: Record<string, unknown>; select: { id: true }; take: number }) => Promise<Array<{ id: string }>>
+  deleteMany: (args: { where: Record<string, unknown> }) => Promise<{ count: number }>
+}
+
+async function deleteInBatches(delegate: BatchDelegate, where: Record<string, unknown>): Promise<number> {
   let total = 0
-  // Bounded loop: at most 20 batches per table per sweep to keep runtime short.
+  // Bounded loop: at most 20 batches of BATCH_SIZE per table per sweep to keep
+  // runtime short. Each batch selects up to BATCH_SIZE ids then deletes only
+  // those ids, so a single sweep can remove at most 20 * BATCH_SIZE rows per
+  // table and repeated sweeps converge idempotently.
   for (let batch = 0; batch < 20; batch += 1) {
-    const result = await delegate.deleteMany({ where })
+    const rows = await delegate.findMany({ where, select: { id: true }, take: BATCH_SIZE })
+    if (rows.length === 0) break
+    const result = await delegate.deleteMany({ where: { id: { in: rows.map((r) => r.id) } } })
     total += result.count
-    if (result.count < BATCH_SIZE) break
+    if (rows.length < BATCH_SIZE) break
+  }
+  return total
+}
+
+async function expireLinksInBatches(now: Date): Promise<number> {
+  const where = { expiresAt: { lte: now }, isActive: true }
+  let total = 0
+  for (let batch = 0; batch < 20; batch += 1) {
+    const rows = await prisma.url.findMany({ where, select: { id: true }, take: BATCH_SIZE })
+    if (rows.length === 0) break
+    const result = await prisma.url.updateMany({ where: { id: { in: rows.map((r) => r.id) } }, data: { isActive: false } })
+    total += result.count
+    if (rows.length < BATCH_SIZE) break
   }
   return total
 }
@@ -85,7 +124,11 @@ export async function POST(request: NextRequest) {
     expiresAt: { lt: cutoff(30) },
   })
 
-  // Expire links automatically at their configured deadline. The redirect path also\n  // enforces expiry synchronously; this sweep makes management state converge.\n  results.expiredLinks = await prisma.url.updateMany({ where: { expiresAt: { lte: now }, isActive: true }, data: { isActive: false } }).then(r => r.count)\n\n  // Raw events beyond the retention window (aggregates live in *Daily tables).
+  // Expire links automatically at their configured deadline. The redirect path also
+  // enforces expiry synchronously; this sweep makes management state converge.
+  results.expiredLinks = await expireLinksInBatches(now)
+
+  // Raw events beyond the retention window (aggregates live in *Daily tables).
   const eventCutoff = cutoff(RETENTION_DAYS)
   results.oldClickEvents = await deleteInBatches(prisma.clickEvent, { createdAt: { lt: eventCutoff } })
   results.oldConversionEvents = await deleteInBatches(prisma.conversionEvent, { createdAt: { lt: eventCutoff } })

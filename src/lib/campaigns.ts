@@ -3,6 +3,92 @@ import { prisma } from '@/lib/prisma'
 import { normalCdf } from '@/lib/stats'
 import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
 
+/**
+ * Cached running-campaign lookup for the redirect hot path.
+ *
+ * The redirect handler used to issue an uncached `campaign.findFirst` with a
+ * full `include: { variants: true }` on *every* visit — including visits that
+ * had already matched a smart-routing rule. Campaign membership changes
+ * rarely relative to click volume, so a short-TTL read cache with
+ * single-flight (concurrent misses for the same link share one query) and
+ * negative caching (links in no campaign cost one query per TTL window)
+ * removes that query from the hot path almost entirely. A 5-second staleness
+ * bound on weight/schedule edits is the standard trade-off (Dub, Vercel
+ * ISR) and is documented on the management UI contract.
+ */
+export type RunningCampaignVariant = {
+  id: string
+  destinationUrl: string
+  weight: number
+  enabled: boolean
+}
+
+export type RunningCampaign = {
+  id: string
+  version: number
+  variants: RunningCampaignVariant[]
+}
+
+const CAMPAIGN_CACHE_TTL_MS = 5_000
+
+const globalForCampaigns = globalThis as unknown as {
+  __qlCampaignCache?: Map<string, { value: RunningCampaign | null; expiresAt: number }>
+  __qlCampaignInflight?: Map<string, Promise<RunningCampaign | null>>
+}
+
+const campaignCache: Map<string, { value: RunningCampaign | null; expiresAt: number }> =
+  globalForCampaigns.__qlCampaignCache ?? new Map()
+const campaignInflight: Map<string, Promise<RunningCampaign | null>> =
+  globalForCampaigns.__qlCampaignInflight ?? new Map()
+if (process.env.NODE_ENV !== 'production') {
+  globalForCampaigns.__qlCampaignCache = campaignCache
+  globalForCampaigns.__qlCampaignInflight = campaignInflight
+}
+
+export async function getRunningCampaignForUrl(urlId: string, now: Date = new Date()): Promise<RunningCampaign | null> {
+  const hit = campaignCache.get(urlId)
+  if (hit && hit.expiresAt > Date.now()) return hit.value
+
+  const pending = campaignInflight.get(urlId)
+  if (pending) return pending
+
+  const flight: Promise<RunningCampaign | null> = (async () => {
+    const campaign = await prisma.campaign.findFirst({
+      where: {
+        status: 'running',
+        links: { some: { urlId } },
+        AND: [
+          { OR: [{ startAt: null }, { startAt: { lte: now } }] },
+          { OR: [{ endAt: null }, { endAt: { gt: now } }] },
+        ],
+      },
+      select: {
+        id: true,
+        version: true,
+        variants: {
+          select: { id: true, destinationUrl: true, weight: true, enabled: true },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+    })
+    const value: RunningCampaign | null = campaign
+      ? { id: campaign.id, version: campaign.version, variants: campaign.variants }
+      : null
+    campaignCache.set(urlId, { value, expiresAt: Date.now() + CAMPAIGN_CACHE_TTL_MS })
+    return value
+  })().finally(() => {
+    campaignInflight.delete(urlId)
+  })
+  campaignInflight.set(urlId, flight)
+  return flight
+}
+
+/** Test/dev hook: reset module-level campaign cache state. */
+export function __resetCampaignCacheForTests(): void {
+  campaignCache.clear()
+  campaignInflight.clear()
+}
+
 type Variant = { id:string; name?:string; weight:number; enabled:boolean; clicks:number; conversions:number; valueCents:bigint|number; valueSquaredCents?:unknown }
 export function chooseWeightedVariant<T extends {id:string;weight:number;enabled:boolean}>(variants:T[],seed:string):T|null{const active=variants.filter(v=>v.enabled&&v.weight>0);if(!active.length)return null;const total=active.reduce((n,v)=>n+v.weight,0);const bucket=createHash('sha256').update(seed).digest().readUInt32BE(0)%total;let cursor=0;for(const v of active){cursor+=v.weight;if(bucket<cursor)return v}return active[active.length-1]}
 function revenueMoments(v:Variant){const n=v.clicks;if(n<=1)return {mean:0,variance:0};const sum=Number(v.valueCents);const sq=Number(v.valueSquaredCents||0);const mean=sum/n;const variance=Math.max(0,(sq-(sum*sum/n))/(n-1));return {mean,variance}}

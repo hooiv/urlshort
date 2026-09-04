@@ -24,6 +24,89 @@
         "parameters": [{ "name": "campaignId", "in": "path", "required": true, "schema": { "type": "string" } }],
         "responses": { "200": { "description": "Campaign", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Campaign" } } } } }
       }
+    },
+    "/api/shorten": {
+      "post": {
+        "operationId": "shorten",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateShortLinkInput" } } } },
+        "responses": { "201": { "description": "Created short link", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ShortLink" } } } } }
+      },
+      "get": {
+        "operationId": "listLinks",
+        "parameters": [
+          { "name": "search", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "tag", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "cursor", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "take", "in": "query", "required": false, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "Link list", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ListLinksResponse" } } } } }
+      }
+    },
+    "/api/links/{shortCode}": {
+      "get": {
+        "operationId": "getLink",
+        "parameters": [{ "name": "shortCode", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Link detail", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ShortLinkDetail" } } } } }
+      },
+      "patch": {
+        "operationId": "updateLink",
+        "parameters": [{ "name": "shortCode", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UpdateLinkInput" } } } },
+        "responses": { "200": { "description": "Updated link", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ShortLinkDetail" } } } } }
+      },
+      "delete": {
+        "operationId": "deleteLink",
+        "parameters": [{ "name": "shortCode", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Deleted link", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeleteLinkResult" } } } } }
+      }
+    },
+    "/api/analytics/{shortCode}": {
+      "get": {
+        "operationId": "getAnalytics",
+        "parameters": [
+          { "name": "shortCode", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "range", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "from", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "to", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "country", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "device", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "referrer", "in": "query", "required": false, "schema": { "type": "string" } },
+          { "name": "ruleId", "in": "query", "required": false, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Link analytics", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AnalyticsResponse" } } } } }
+      }
+    },
+    "/api/webhooks": {
+      "get": {
+        "operationId": "listWebhooks",
+        "responses": { "200": { "description": "Webhook endpoints", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/WebhookEndpoint" } } } } } }
+      },
+      "post": {
+        "operationId": "createWebhook",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateWebhookInput" } } } },
+        "responses": { "201": { "description": "Created webhook endpoint", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WebhookEndpointWithSecret" } } } } }
+      }
+    },
+    "/api/webhooks/{id}": {
+      "delete": {
+        "operationId": "deleteWebhook",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "204": { "description": "Deleted" } }
+      }
+    },
+    "/api/webhooks/{id}/test": {
+      "post": {
+        "operationId": "testWebhook",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "Webhook test result", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/WebhookTestResult" } } } } }
+      }
+    },
+    "/api/unfurl": {
+      "post": {
+        "operationId": "unfurlUrl",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UnfurlInput" } } } },
+        "responses": { "200": { "description": "Page metadata", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UnfurlResult" } } } } }
+      }
     }
   },
   "components": {
@@ -69,6 +152,129 @@
           }, "required": ["name","destinationUrl","weight"] } }
         },
         "required": ["name","slug","variants"]
+      },
+      "ShortLink": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" }, "originalUrl": { "type": "string" }, "shortCode": { "type": "string" },
+          "shortUrl": { "type": "string" }, "managementUrl": { "type": ["string", "null"] },
+          "title": { "type": ["string", "null"] }, "description": { "type": ["string", "null"] },
+          "ogImage": { "type": ["string", "null"] }, "clicks": { "type": "integer" },
+          "createdAt": { "type": "string" }
+        },
+        "required": ["id","originalUrl","shortCode","shortUrl","clicks","createdAt"]
+      },
+      "ShortLinkDetail": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" }, "originalUrl": { "type": "string" }, "shortCode": { "type": "string" },
+          "title": { "type": ["string", "null"] }, "description": { "type": ["string", "null"] },
+          "ogImage": { "type": ["string", "null"] }, "tags": { "type": "array", "items": { "type": "string" } },
+          "clicks": { "type": "integer" }, "createdAt": { "type": "string" }, "updatedAt": { "type": "string" },
+          "expiresAt": { "type": ["string", "null"] }, "expiredUrl": { "type": ["string", "null"] },
+          "maxClicks": { "type": ["integer", "null"] }, "isActive": { "type": "boolean" },
+          "cloaked": { "type": "boolean" }, "webhookUrl": { "type": ["string", "null"] },
+          "metaPixelId": { "type": ["string", "null"] }, "googleTagId": { "type": ["string", "null"] },
+          "xPixelId": { "type": ["string", "null"] }, "riskStatus": { "type": "string" },
+          "healthStatus": { "type": "string" }
+        },
+        "required": ["id","originalUrl","shortCode"]
+      },
+      "CreateShortLinkInput": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string" }, "customCode": { "type": "string" }, "title": { "type": "string" },
+          "description": { "type": "string" }, "ogImage": { "type": "string" },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "password": { "type": "string" }, "expiresAt": { "type": "string" },
+          "expiredUrl": { "type": "string" }, "maxClicks": { "type": "integer" },
+          "workspaceId": { "type": "string" }, "cloaked": { "type": "boolean" }
+        },
+        "required": ["url"]
+      },
+      "UpdateLinkInput": {
+        "type": "object",
+        "properties": {
+          "title": { "type": ["string", "null"] }, "description": { "type": ["string", "null"] },
+          "ogImage": { "type": ["string", "null"] }, "isActive": { "type": "boolean" },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "expiresAt": { "type": ["string", "null"] }, "expiredUrl": { "type": ["string", "null"] },
+          "password": { "type": ["string", "null"] }, "destinationUrl": { "type": "string" },
+          "maxClicks": { "type": ["integer", "null"] }, "cloaked": { "type": "boolean" },
+          "webhookUrl": { "type": ["string", "null"] }
+        }
+      },
+      "ListLinksResponse": {
+        "type": "object",
+        "properties": {
+          "links": { "type": "array", "items": { "$ref": "#/components/schemas/ShortLinkDetail" } },
+          "nextCursor": { "type": ["string", "null"] }
+        },
+        "required": ["links"]
+      },
+      "DeleteLinkResult": {
+        "type": "object",
+        "properties": { "deleted": { "type": "boolean" }, "shortCode": { "type": "string" } },
+        "required": ["deleted","shortCode"]
+      },
+      "AnalyticsResponse": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "object" }, "window": { "type": "object" },
+          "filters": { "type": "object" }, "analytics": { "type": "object" }
+        },
+        "required": ["url","window","analytics"]
+      },
+      "WebhookEndpoint": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" }, "url": { "type": "string" }, "isActive": { "type": "boolean" },
+          "events": { "type": "array", "items": { "type": "string" } },
+          "createdAt": { "type": "string" }, "updatedAt": { "type": "string" },
+          "deliveriesCount": { "type": "integer" }, "secretHint": { "type": "string" }
+        },
+        "required": ["id","url","isActive","events","createdAt","updatedAt"]
+      },
+      "WebhookEndpointWithSecret": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" }, "url": { "type": "string" }, "isActive": { "type": "boolean" },
+          "events": { "type": "array", "items": { "type": "string" } },
+          "secret": { "type": "string" }, "createdAt": { "type": "string" }, "updatedAt": { "type": "string" }
+        },
+        "required": ["id","url","secret"]
+      },
+      "CreateWebhookInput": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string" },
+          "events": { "type": "array", "items": { "type": "string" } }
+        },
+        "required": ["url"]
+      },
+      "WebhookTestResult": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" }, "attempted": { "type": "boolean" },
+          "deliveryId": { "type": "string" }, "status": { "type": "string" },
+          "statusCode": { "type": ["integer", "null"] }, "latencyMs": { "type": ["integer", "null"] },
+          "responseSnippet": { "type": ["string", "null"] }
+        },
+        "required": ["success"]
+      },
+      "UnfurlInput": {
+        "type": "object",
+        "properties": { "url": { "type": "string" } },
+        "required": ["url"]
+      },
+      "UnfurlResult": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string" }, "title": { "type": ["string", "null"] },
+          "description": { "type": ["string", "null"] }, "image": { "type": ["string", "null"] },
+          "icon": { "type": ["string", "null"] }, "siteName": { "type": ["string", "null"] }
+        },
+        "required": ["url"]
       }
     }
   }

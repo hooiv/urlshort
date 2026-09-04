@@ -5,26 +5,13 @@ import { chooseSmartRule, getAiAgent, getBrowser, getCountry, getDeviceType, get
 import { getBaseUrl } from '@/lib/utils'
 import { getLinkByCode, getLinkByDomainPath, getLatestRevision } from '@/lib/link-cache'
 import { clickQueue } from '@/lib/queue'
-import { dispatchWebhooksForUrl } from '@/lib/webhooks'
-import { assertDestinationSafeForStorage } from '@/lib/destination-health'
-import { chooseWeightedVariant } from '@/lib/campaigns'
-import { reserveUsageInTransaction } from '@/lib/tenant-usage'\nimport { resolveIpGeolocation } from '@/lib/ip-geolocation'
+import { chooseWeightedVariant, getRunningCampaignForUrl } from '@/lib/campaigns'
+import { reserveUsageInTransaction } from '@/lib/tenant-usage'
+import { resolveIpGeolocation } from '@/lib/ip-geolocation'
+import { verifyUnlockToken } from '@/lib/password-gate'
+import { escapeHtml, forwardQueryParams, isBillableTraffic, jsString, resolveDestination } from '@/lib/redirect'
 
 function utcDateKey(date: Date): string { return date.toISOString().slice(0, 10) }
-
-/**
- * Merge incoming query params into the destination URL so campaign context
- * (utm_*, gclid, fbclid, …) survives the redirect. Params already present on
- * the destination win — the link owner's explicit values take precedence.
- */
-function forwardQueryParams(destination: string, incoming: URLSearchParams): string {
-  if (![...incoming.keys()].length) return destination
-  const url = new URL(destination)
-  for (const [key, value] of incoming) {
-    if (!url.searchParams.has(key)) url.searchParams.set(key, value)
-  }
-  return url.toString()
-}
 
 /**
  * Resolve the request host defensively. `x-forwarded-host` is client-spoofable,
@@ -53,37 +40,35 @@ function captureUtmParams(params: URLSearchParams): Record<string, string | null
   }
 }
 
+function setVisitorCookie(response: NextResponse, visitorId: string): void {
+  response.cookies.set('ql_visitor', visitorId, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 60 * 60 * 24 * 90, path: '/' })
+}
+
 export async function GET(request: NextRequest, context: { params: Promise<{ shortCode: string }> }) {
   try {
     const { shortCode } = await context.params
+    const baseUrl = getBaseUrl()
     if (!/^[A-Za-z0-9_-]{1,64}$/.test(shortCode)) {
-      return NextResponse.redirect(new URL('/404', getBaseUrl()), 307)
+      return NextResponse.redirect(new URL('/404', baseUrl), 307)
     }
 
     const host = requestHost(request)
-    const appHost = new URL(getBaseUrl()).hostname.toLowerCase().replace(/^www\./, '')
+    const appHost = new URL(baseUrl).hostname.toLowerCase().replace(/^www\./, '')
     let url = null
     if (host && host !== appHost) {
       url = await getLinkByDomainPath(host, `/${shortCode}`)
-      if (!url) return NextResponse.redirect(new URL('/404', getBaseUrl()), 307)
+      if (!url) return NextResponse.redirect(new URL('/404', baseUrl), 307)
     } else {
       url = await getLinkByCode(shortCode)
     }
 
-    if (!url || !url.isActive) return NextResponse.redirect(new URL('/404', getBaseUrl()), 307)
-    if (url.riskStatus === 'blocked') return NextResponse.redirect(new URL('/blocked', getBaseUrl()), 307)
+    if (!url || !url.isActive) return NextResponse.redirect(new URL('/404', baseUrl), 307)
+    if (url.riskStatus === 'blocked') return NextResponse.redirect(new URL('/blocked', baseUrl), 307)
 
     if (url.passwordHash) {
-      const { createHmac } = await import('node:crypto');
-      const secret = process.env.QL_ATTRIBUTION_SECRET;
-      const cookie = request.cookies.get(`ql_unlocked_${url.shortCode}`);
-      let authorized = false;
-      if (cookie && secret) {
-        const expected = createHmac('sha256', secret).update(`unlock:${url.shortCode}`).digest('hex');
-        if (cookie.value === expected) authorized = true;
-      }
-      if (!authorized) {
-        return NextResponse.redirect(new URL(`/protected/${url.shortCode}`, getBaseUrl()), 307);
+      const unlocked = verifyUnlockToken(url.shortCode, request.cookies.get(`ql_unlocked_${url.shortCode}`)?.value)
+      if (!unlocked) {
+        return NextResponse.redirect(new URL(`/protected/${url.shortCode}`, baseUrl), 307)
       }
     }
 
@@ -91,7 +76,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
       if (url.expiredUrl) {
         return NextResponse.redirect(url.expiredUrl, 307)
       }
-      return NextResponse.redirect(new URL('/expired', getBaseUrl()), 307)
+      return NextResponse.redirect(new URL('/expired', baseUrl), 307)
     }
 
     const now = new Date()
@@ -106,57 +91,108 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     const country = getCountry(request)
     const referrerHost = getReferrerHost(request)
     const rule = chooseSmartRule(url.rules, { country, deviceType, referrerHost, now, os, language, trafficType, aiAgent }, url.shortCode, visitor.id)
-    const campaign = await prisma.campaign.findFirst({ where: { status: 'running', links: { some: { urlId: url.id } }, OR: [{ startAt: null }, { startAt: { lte: now } }], AND: [{ OR: [{ endAt: null }, { endAt: { gt: now } }] }] }, include: { variants: true }, orderBy: { updatedAt: 'desc' } })
-    const campaignVariant = rule ? null : campaign ? chooseWeightedVariant(campaign.variants, `${url.shortCode}:${visitor.id}:campaign:${campaign.version}`) : null
-    const revision = rule ? null : await getLatestRevision(url.id)
+
+    // Campaign lookup is cached (5s TTL, single-flight) and skipped entirely
+    // when a smart-routing rule already decided the destination.
+    const campaign = rule ? null : await getRunningCampaignForUrl(url.id, now)
+    const campaignVariant = campaign ? chooseWeightedVariant(campaign.variants, `${url.shortCode}:${visitor.id}:campaign:${campaign.version}`) : null
+    const revision = rule || campaignVariant ? null : await getLatestRevision(url.id)
+
+    let destination: string
+    try {
+      destination = forwardQueryParams(
+        resolveDestination({
+          ruleUrl: rule?.destinationUrl,
+          campaignUrl: campaignVariant?.destinationUrl,
+          revisionUrl: revision?.destinationUrl,
+          fallbackUrl: url.originalUrl,
+        }),
+        request.nextUrl.searchParams
+      )
+    } catch {
+      // A corrupt destination is a broken link, not an infrastructure outage.
+      return NextResponse.redirect(new URL('/404', baseUrl), 307)
+    }
+
     const dateKey = utcDateKey(now)
     const utm = captureUtmParams(request.nextUrl.searchParams)
-    const destination = forwardQueryParams(rule?.destinationUrl || campaignVariant?.destinationUrl || revision?.destinationUrl || url.originalUrl, request.nextUrl.searchParams)
 
     // Admit the click before accepting the redirect. Tenant quotas and
     // per-link max-click caps are both hard admission controls, so they must
     // commit (or roll back) together; otherwise a rejected request could still
     // consume one of the two budgets. The asynchronous queue receives a marker
     // so it does not charge the same click a second time during accounting.
+    //
+    // Automated crawler traffic is never billable: bots are logged for
+    // analytics transparency but skip quota and max-clicks reservation so a
+    // shared link cannot die (or burn budget) before any human arrives.
+    // Links with no quota and no click cap skip the transaction entirely.
+    const billable = isBillableTraffic(trafficType)
+    const needsQuota = billable && url.workspaceId !== null
+    const needsCap = billable && url.maxClicks !== null
     let usageReserved = false
-    const admitted = await prisma.$transaction(async tx => {
-      if (url.workspaceId) {
-        const usage = await reserveUsageInTransaction(tx, url.workspaceId, 'clicks')
-        if (!usage.allowed) return false
-        usageReserved = true
+    if (needsQuota || needsCap) {
+      const admitted = await prisma.$transaction(async tx => {
+        if (needsQuota && url.workspaceId) {
+          const usage = await reserveUsageInTransaction(tx, url.workspaceId, 'clicks')
+          if (!usage.allowed) return false
+          usageReserved = true
+        }
+        if (needsCap && url.maxClicks !== null) {
+          const reservation = await tx.url.updateMany({
+            where: {
+              id: url.id,
+              OR: [
+                { maxClicks: null },
+                { clicksReserved: { lt: url.maxClicks } },
+              ],
+            },
+            data: { clicksReserved: { increment: 1 } },
+          })
+          if (reservation.count !== 1) return false
+        }
+        return true
+      })
+      if (!admitted) {
+        return url.expiredUrl
+          ? NextResponse.redirect(url.expiredUrl, 307)
+          : NextResponse.redirect(new URL('/expired', baseUrl), 307)
       }
-      if (url.maxClicks !== null) {
-        const reservation = await tx.url.updateMany({
-          where: {
-            id: url.id,
-            OR: [
-              { maxClicks: null },
-              { clicksReserved: { lt: url.maxClicks } },
-            ],
-          },
-          data: { clicksReserved: { increment: 1 } },
-        })
-        if (reservation.count !== 1) return false
-      }
-      return true
-    })
-    if (!admitted) {
-      return url.expiredUrl
-        ? NextResponse.redirect(url.expiredUrl, 307)
-        : NextResponse.redirect(new URL('/expired', getBaseUrl()), 307)
     }
 
     // Record the click in the background using `after` so the redirect is
     // completely non-blocking (0ms added latency). We generate the ID locally
     // to instantly embed it in the attribution token.
+    //
+    // Webhook fan-out happens exactly once, downstream in the durable click
+    // queue after the event is persisted — never here, so a slow consumer or
+    // a failed persist can neither delay the redirect nor double-deliver.
     const clickEventId = crypto.randomUUID()
     const referer = request.headers.get('referer')
     const ip = request.headers.get('x-real-ip') || request.headers.get('x-client-ip')
 
-    const attributionToken = createAttributionToken({ urlId: url.id, shortCode: url.shortCode, clickEventId: clickEventId ?? '', visitorIdHash, issuedAt: Date.now() })
-    const finalDestination = appendAttribution(destination, attributionToken)
+    // Crawlers never execute the destination page, so attributing them only
+    // pollutes the token stream — and a per-visitor token must never be
+    // served under a shared cache key. Bots get the canonical destination.
+    const isBot = trafficType === 'bot'
+    const attributionToken = isBot ? null : createAttributionToken({ urlId: url.id, shortCode: url.shortCode, clickEventId, visitorIdHash, issuedAt: Date.now() })
+    const finalDestination = attributionToken ? appendAttribution(destination, attributionToken) : destination
 
-    after(() => {
+    // Resolve the click's country. The CDN-provided country header is the
+    // fast path; when it is absent (XX) we fall back to an IP-geolocation
+    // lookup. This runs inside `after` so it never adds latency to the
+    // redirect itself.
+    const resolvedCountry = country === 'XX' ? null : country
+    after(async () => {
+      let geoCountry: string | null = resolvedCountry
+      if (geoCountry === null) {
+        try {
+          const geo = await resolveIpGeolocation(ip)
+          geoCountry = geo?.country ?? null
+        } catch {
+          geoCountry = null
+        }
+      }
       clickQueue.push({
         clickEventId,
         urlId: url!.id,
@@ -166,7 +202,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
         userAgent,
         referer,
         referrerHost,
-        country: country === 'XX' ? geo?.country ?? null : country,
+        country: geoCountry,
         deviceType,
         trafficType,
         aiAgent,
@@ -179,34 +215,20 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
         dateKey,
         shortCode: url!.shortCode,
         usageReserved,
+        nonBillable: !billable,
       }).catch(err => console.error('Queue push failed:', err))
-      dispatchWebhooksForUrl(url!.id, 'link.clicked', {
-        shortCode: url!.shortCode,
-        destination: finalDestination,
-        clickEventId,
-        timestamp: now.toISOString(),
-        visitor: visitorIdHash,
-        country: country === 'XX' ? geo?.country ?? null : country,
-        deviceType,
-        referrer: referrerHost,
-      }).catch(err => console.error('Enterprise webhook dispatch failed:', err))
     })
-    const escapeHtml = (unsafe: string) => unsafe
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
 
-    const escapedOgImage = url.ogImage ? escapeHtml(url.ogImage) : '';
-    const dynamicOgImage = `${getBaseUrl()}/api/links/${url.shortCode}/og`;
-    const finalOgImage = escapedOgImage || dynamicOgImage;
-    
+    const escapedOgImage = url.ogImage ? escapeHtml(url.ogImage) : ''
+    const dynamicOgImage = `${baseUrl}/api/links/${url.shortCode}/og`
+    const finalOgImage = escapedOgImage || dynamicOgImage
+
     if (deviceType === 'bot') {
       const escapedTitle = escapeHtml(url.title || 'Link')
       const escapedDescription = escapeHtml(url.description || '')
       const escapedUrl = escapeHtml(finalDestination)
-      
+      const scriptUrl = jsString(finalDestination)
+
       const html = `<!DOCTYPE html>
 <html>
   <head>
@@ -225,31 +247,28 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
   </head>
   <body>
     <p>Redirecting to <a href="${escapedUrl}">${escapedUrl}</a>...</p>
-    <script>window.location.replace("${escapedUrl}");</script>
+    <script>window.location.replace(${scriptUrl});</script>
   </body>
 </html>`
-      
+
       const response = new NextResponse(html, {
         status: 200,
         headers: {
           'Content-Type': 'text/html; charset=utf-8',
-          'Cache-Control': 'public, max-age=86400, stale-while-revalidate=3600',
+          // The markup embeds a per-request destination: it must never sit
+          // in a shared cache, or visitors would inherit each other's URLs.
+          'Cache-Control': 'private, no-store',
         },
       })
-      if (visitor.isNew) response.cookies.set('ql_visitor', visitor.id, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 60 * 60 * 24 * 90, path: '/' })
+      if (visitor.isNew) setVisitorCookie(response, visitor.id)
       return response
     }
 
     if (url.metaPixelId || url.googleTagId || url.xPixelId || url.cloaked) {
-      const escapeHtml = (unsafe: string) => unsafe
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-      const escapedUrl = escapeHtml(finalDestination);
-      const escapedTitle = escapeHtml(url.title || 'Link');
-      
+      const escapedUrl = escapeHtml(finalDestination)
+      const scriptUrl = jsString(finalDestination)
+      const escapedTitle = escapeHtml(url.title || 'Link')
+
       const html = `<!DOCTYPE html>
 <html>
   <head>
@@ -294,16 +313,16 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     ${!url.cloaked ? `<meta http-equiv="refresh" content="1; url=${escapedUrl}" />` : ''}
   </head>
   <body>
-    ${url.cloaked 
-      ? `<iframe src="${escapedUrl}" allow="fullscreen"></iframe>` 
+    ${url.cloaked
+      ? `<iframe src="${escapedUrl}" allow="fullscreen"></iframe>`
       : `<script>
           setTimeout(function() {
-            window.location.replace("${escapedUrl}");
+            window.location.replace(${scriptUrl});
           }, 500);
          </script>`
     }
   </body>
-</html>`;
+</html>`
 
       const response = new NextResponse(html, {
         status: 200,
@@ -312,13 +331,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
           'Cache-Control': 'private, no-store',
         },
       })
-      if (visitor.isNew) response.cookies.set('ql_visitor', visitor.id, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 60 * 60 * 24 * 90, path: '/' })
+      if (visitor.isNew) setVisitorCookie(response, visitor.id)
       return response
     }
 
     const response = NextResponse.redirect(finalDestination, 307)
     response.headers.set('Cache-Control', 'private, no-store')
-    if (visitor.isNew) response.cookies.set('ql_visitor', visitor.id, { httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production', maxAge: 60 * 60 * 24 * 90, path: '/' })
+    if (visitor.isNew) setVisitorCookie(response, visitor.id)
     return response
   } catch (error) {
     console.error('Error redirecting short link:', error)
@@ -327,6 +346,3 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     return NextResponse.redirect(new URL('/503', getBaseUrl()), 307)
   }
 }
-
-
-

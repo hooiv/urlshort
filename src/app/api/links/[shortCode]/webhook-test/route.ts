@@ -1,7 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { createHmac } from 'node:crypto'
 import { getManageableUrl, EDIT_ROLES } from '@/lib/authorization'
 import { assertDestinationSafeForStorage } from '@/lib/destination-health'
+import { rateLimit } from '@/lib/rate-limit'
+
+export const webhookTestSchema = z.object({
+  webhookUrl: z.string().trim().max(2048).optional(),
+})
+
+export function validateWebhookHttps(input: string): URL {
+  const parsed = new URL(input)
+  if (parsed.protocol !== 'https:') throw new Error('Webhook URL must use HTTPS')
+  return parsed
+}
 
 export async function POST(request: NextRequest, context: { params: Promise<{ shortCode: string }> }) {
   try {
@@ -10,16 +22,20 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
     if (!access.url) return NextResponse.json({ error: access.error }, { status: access.status })
     const link = access.url
 
-    const body = await request.json().catch(() => ({}))
-    const webhookUrl = (body.webhookUrl || link.webhookUrl || '').trim()
+    // Probes trigger outbound requests to third parties — throttle per link.
+    const limit = await rateLimit(request, { name: 'webhook-test', identifier: link.id, limit: 5, windowMs: 60_000 })
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many webhook tests. Try again shortly.' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
+
+    const parsedBody = webhookTestSchema.safeParse(await request.json().catch(() => ({})))
+    if (!parsedBody.success) return NextResponse.json({ error: 'Invalid webhook URL' }, { status: 400 })
+    const webhookUrl = (parsedBody.data.webhookUrl || link.webhookUrl || '').trim()
 
     if (!webhookUrl) {
       return NextResponse.json({ error: 'No webhook URL configured or provided' }, { status: 400 })
     }
 
     try {
-      const parsed = new URL(webhookUrl)
-      if (parsed.protocol !== 'https:') throw new Error('Webhook URL must use HTTPS')
+      const parsed = validateWebhookHttps(webhookUrl)
       await assertDestinationSafeForStorage(parsed.toString())
     } catch {
       return NextResponse.json({ error: 'Enter a valid webhook destination URL' }, { status: 400 })
@@ -59,6 +75,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
     try {
       const res = await fetch(webhookUrl, {
         method: 'POST',
+        // Do not follow redirects: the initial URL is SSRF-checked, but a
+        // 3xx to 169.254.169.254 / localhost would otherwise bypass the guard.
+        redirect: 'manual',
         headers: {
           'Content-Type': 'application/json',
           'User-Agent': 'QuickLink-Webhook-Dispatcher/1.0',

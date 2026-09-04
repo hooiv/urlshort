@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { recordAudit } from '@/lib/audit'
 import { getManageableUrl } from '@/lib/authorization'
 import { assessDestination } from '@/lib/link-safety'
+import { assertDestinationSafeForStorage } from '@/lib/destination-health'
 import {
   normalizeCountryCodes,
   normalizeReferrerDomain,
@@ -32,6 +33,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
     }
     if (body.destinationUrl !== undefined) {
       const destinationUrl = normalizeSafeUrl(String(body.destinationUrl))
+      // SSRF guard: parity with rule creation — updated destinations must be
+      // publicly routable before storage.
+      await assertDestinationSafeForStorage(destinationUrl)
       const risk = assessDestination(destinationUrl)
       patch.destinationUrl = destinationUrl
       patch.riskStatus = risk.status

@@ -1,9 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { createVerificationToken, edgeTarget, normalizeHost, normalizePath, verificationRecord, verifyDns } from '@/lib/domains'
 import { invalidateDomain } from '@/lib/link-cache'
 import { recordAudit } from '@/lib/audit'
 import { getManageableUrl } from '@/lib/authorization'
+import { rateLimit } from '@/lib/rate-limit'
+
+export const domainBodySchema = z.object({
+  host: z.string().max(253).optional(),
+  path: z.string().max(70).optional(),
+})
+
+async function parseDomainBody(request: NextRequest, shortCode: string) {
+  const parsed = domainBodySchema.safeParse(await request.json().catch(() => ({})))
+  if (!parsed.success) throw new Error(parsed.error.issues[0]?.message || 'Invalid domain')
+  return {
+    host: normalizeHost(String(parsed.data.host ?? '')),
+    path: normalizePath(String(parsed.data.path ?? `/${shortCode}`)),
+  }
+}
 
 async function getUrl(request: NextRequest, shortCode: string) {
   const result = await getManageableUrl(request, shortCode)
@@ -23,10 +39,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
   const { shortCode } = await context.params
   const result = await getUrl(request, shortCode)
   if (result instanceof NextResponse) return result
+  const limit = await rateLimit(request, { name: 'domains-bind', identifier: result.id, limit: 10, windowMs: 60_000 })
+  if (!limit.allowed) return NextResponse.json({ error: 'Too many domain requests. Try again shortly.' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
   try {
-    const body = (await request.json()) as Record<string, unknown>
-    const host = normalizeHost(String(body.host ?? ''))
-    const path = normalizePath(String(body.path ?? `/${shortCode}`))
+    const { host, path } = await parseDomainBody(request, shortCode)
     const existing = await prisma.brandedDomain.findUnique({ where: { host } })
     if (existing?.ownerUrlId && existing.ownerUrlId !== result.id) return NextResponse.json({ error: 'This domain is already owned by another link account' }, { status: 409 })
     const domain = existing || await prisma.brandedDomain.create({ data: { host, ownerUrlId: result.id, verificationToken: createVerificationToken() } })
@@ -48,9 +64,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
   const { shortCode } = await context.params
   const result = await getUrl(request, shortCode)
   if (result instanceof NextResponse) return result
-  const body = (await request.json()) as Record<string, unknown>
-  const host = normalizeHost(String(body.host ?? ''))
-  const path = normalizePath(String(body.path ?? `/${shortCode}`))
+  const limit = await rateLimit(request, { name: 'domains-verify', identifier: result.id, limit: 10, windowMs: 60_000 })
+  if (!limit.allowed) return NextResponse.json({ error: 'Too many domain requests. Try again shortly.' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
+  let host: string
+  let path: string
+  try {
+    ;({ host, path } = await parseDomainBody(request, shortCode))
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid domain' }, { status: 400 })
+  }
   const domain = await prisma.brandedDomain.findUnique({ where: { host } })
   if (!domain) return NextResponse.json({ error: 'Domain has not been registered for verification yet' }, { status: 404 })
   try {
@@ -70,9 +92,13 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   const { shortCode } = await context.params
   const result = await getUrl(request, shortCode)
   if (result instanceof NextResponse) return result
-  const body = (await request.json()) as Record<string, unknown>
-  const host = normalizeHost(String(body.host ?? ''))
-  const path = normalizePath(String(body.path ?? `/${shortCode}`))
+  let host: string
+  let path: string
+  try {
+    ;({ host, path } = await parseDomainBody(request, shortCode))
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid domain' }, { status: 400 })
+  }
   const domain = await prisma.brandedDomain.findUnique({ where: { host } })
   if (!domain) return NextResponse.json({ error: 'Domain not found' }, { status: 404 })
   await prisma.domainLink.deleteMany({ where: { domainId: domain.id, urlId: result.id, path } })

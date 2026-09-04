@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { unfurlUrl } from '@/lib/unfurl'
 import { rateLimit } from '@/lib/rate-limit'
+
+export const unfurlSchema = z.object({ url: z.string().trim().min(1, { message: 'URL is required' }).max(2048, { message: 'URL is too long' }) })
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,11 +16,11 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}))
-    const url = typeof body.url === 'string' ? body.url.trim() : ''
-
-    if (!url) {
-      return NextResponse.json({ error: 'URL is required' }, { status: 400 })
+    const parsed = unfurlSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.issues[0]?.message || 'URL is required' }, { status: 400 })
     }
+    const url = parsed.data.url
 
     const metadata = await unfurlUrl(url)
     return NextResponse.json(metadata)

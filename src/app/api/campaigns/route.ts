@@ -7,6 +7,7 @@ import { getIdempotentResponse, storeIdempotentResponse } from '@/lib/idempotenc
 import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
 import { requireWorkspaceRole, EDIT_ROLES, ANALYTICS_ROLES } from '@/lib/workspaces'
 import { assertDestinationSafeForStorage } from '@/lib/destination-health'
+import { rateLimit } from '@/lib/rate-limit'
 import { recordAudit } from '@/lib/audit'
 
 const variantSchema = z.object({ name: z.string().trim().min(1).max(120), destinationUrl: z.string().url().max(4096), isControl: z.boolean().optional(), weight: z.number().int().min(1).max(100) })
@@ -23,6 +24,24 @@ const createSchema = z.object({
   maxTrafficShiftPercent: z.number().int().min(1).max(50).default(20),
   variants: z.array(variantSchema).min(2).max(20),
 })
+export function areVariantWeightsValid(variants: Array<{ weight: number }>): boolean {
+  return variants.reduce((n, v) => n + v.weight, 0) === 100
+}
+
+export function hasSingleControl(variants: Array<{ isControl?: boolean }>): boolean {
+  return variants.filter((v) => v.isControl).length <= 1
+}
+
+export function toCampaignCreateError(e: unknown): { error: string; status: number } {
+  if (e instanceof z.ZodError) return { error: 'Invalid campaign', status: 400 }
+  if (e instanceof Error) {
+    if (/weights must total 100/i.test(e.message)) return { error: 'Variant weights must total 100', status: 400 }
+    if (/only one control/i.test(e.message)) return { error: 'Only one control variant is allowed', status: 400 }
+    if (/idempotency-key/i.test(e.message)) return { error: e.message, status: 400 }
+    if ((e as { code?: string }).code === 'P2002') return { error: 'Campaign slug already exists', status: 409 }
+  }
+  return { error: 'Unable to create campaign', status: 400 }
+}
 async function workspaceFor(request: NextRequest) { const user = await getCurrentUser(request); return user ? getDefaultWorkspace(user.id) : null }
 function serializeCampaign<T extends { variants?: Array<{ valueCents: bigint }>; [key: string]: unknown }>(campaign: T) {
   return JSON.parse(JSON.stringify(campaign, (_key, value) => typeof value === 'bigint' ? value.toString() : value)) as Omit<T, 'variants'> & { variants?: Array<Omit<NonNullable<T['variants']>[number], 'valueCents'> & { valueCents: string }> }
@@ -37,19 +56,22 @@ export async function GET(request: NextRequest) {
     where: { workspaceId: workspace.id },
     include: { variants: true, _count: { select: { links: true, experiments: true, anomalies: true } } },
     orderBy: { updatedAt: 'desc' },
+    take: 100,
   })
   return NextResponse.json(campaigns.map(serializeCampaign))
 }
 export async function POST(request: NextRequest) {
  const workspace = await workspaceFor(request); if (!workspace) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
  try {
+   const limit = await rateLimit(request, { name: 'campaigns-create', limit: 30, windowMs: 60_000 })
+   if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
    const role = await requireWorkspaceRole(request, workspace.id, EDIT_ROLES)
    if (role.error) return NextResponse.json({ error: role.error }, { status: role.status })
    const body = createSchema.parse(await request.json())
    const idem = await getIdempotentResponse(request, workspace.id, body)
    if (idem?.existing) return new NextResponse(idem.existing.responseJson,{status:idem.existing.responseStatus,headers:{'Content-Type':'application/json','Idempotent-Replay':'true'}})
-   if (body.variants.filter(v=>v.isControl).length>1) return NextResponse.json({error:'Only one control variant is allowed'},{status:400})
-   if (body.variants.reduce((n,v)=>n+v.weight,0)!==100) return NextResponse.json({error:'Variant weights must total 100'},{status:400})
+   if (!hasSingleControl(body.variants)) return NextResponse.json({error:'Only one control variant is allowed'},{status:400})
+   if (!areVariantWeightsValid(body.variants)) return NextResponse.json({error:'Variant weights must total 100'},{status:400})
 
    const primaryUrl = await prisma.url.findFirst({ where: { id: body.primaryUrlId, workspaceId: workspace.id, deletedAt: null }, select: { id: true, shortCode: true } })
    if (!primaryUrl) return NextResponse.json({ error: 'Choose a link from this workspace as the campaign entrypoint' }, { status: 400 })
@@ -68,5 +90,5 @@ export async function POST(request: NextRequest) {
    if(idem) await storeIdempotentResponse({workspaceId:workspace.id,keyHash:idem.keyHash,requestHash:idem.requestHash,method:request.method,path:request.nextUrl.pathname,status:201,body:responseBody})
    await recordAudit(request, { action: 'campaign.create', resourceType: 'campaign', resourceId: campaign.id, after: { name: campaign.name, slug: campaign.slug, primaryUrlId: primaryUrl.id, variantCount: campaign.variants.length } })
    return NextResponse.json(responseBody,{status:201})
- } catch(e){return NextResponse.json({error:e instanceof z.ZodError?'Invalid campaign':e instanceof Error?e.message:'Unable to create campaign'},{status:400})}
+ } catch(e){console.error('Campaign create failed:', e);const safe=toCampaignCreateError(e);return NextResponse.json({error:safe.error},{status:safe.status})}
 }

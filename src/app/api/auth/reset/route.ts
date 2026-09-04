@@ -21,7 +21,14 @@ export async function POST(request: NextRequest) {
     if (!limit.allowed) return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
 
     const body = (await request.json()) as Record<string, unknown>
-    const email = normalizeEmail(String(body.email ?? ''))
+    let email: string
+    try {
+      email = normalizeEmail(String(body.email ?? ''))
+    } catch {
+      // Invalid addresses still return success to avoid account enumeration
+      // via status-code oracle (invalid -> 500 vs valid -> 200).
+      return NextResponse.json({ sent: true })
+    }
 
     const user = await prisma.user.findUnique({ where: { email }, select: { id: true } })
     if (user) {

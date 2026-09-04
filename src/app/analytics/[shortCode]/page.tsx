@@ -1,7 +1,6 @@
-/* eslint-disable react-hooks/set-state-in-effect -- remote/session synchronization occurs after mount. */
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import {
@@ -17,164 +16,25 @@ import {
   MousePointerClick,
   QrCode,
   RefreshCw,
-  Sparkles,
   Smartphone,
+  Sparkles,
   Tag,
   Target,
   TrendingUp,
-  Trophy,
   X,
   Zap,
 } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
-import type { StatisticalResult } from '@/lib/stats'
-
-interface CountryStat {
-  code: string
-  name: string
-  flag: string
-  clicks: number
-  percentage: number
-}
-
-interface CityStat {
-  city: string
-  country: string
-  name: string
-  flag: string
-  clicks: number
-  percentage: number
-}
-
-interface DeviceStat {
-  device: string
-  clicks: number
-  percentage: number
-}
-
-interface TechStat {
-  os?: string
-  browser?: string
-  channel?: string
-  name?: string
-  clicks: number
-  percentage: number
-}
-
-interface ReferrerStat {
-  host: string
-  sourceName: string
-  channel: string
-  clicks: number
-  percentage: number
-}
-
-interface UtmStat {
-  name: string
-  clicks: number
-  conversions: number
-  conversionRate: number
-  valueCents: number
-}
-
-interface GoalStat {
-  id: string
-  name: string
-  eventKey: string
-  enabled: boolean
-  conversions: number
-  valueCents: number
-}
-
-interface RulePerformance {
-  id: string
-  name: string
-  destinationUrl: string
-  priority: number
-  weight: number
-  enabled: boolean
-  clicks: number
-  conversions: number
-  conversionRate: number
-  valueCents: number
-}
-
-interface RecentClick {
-  id: string
-  createdAt: string
-  country: string
-  countryName: string
-  flag: string
-  city: string | null
-  referrer: string
-  referrerSource: string
-  channel: string
-  deviceType: string
-  os: string
-  browser: string
-  ruleId: string | null
-}
-
-interface AnalyticsData {
-  url: {
-    id: string
-    originalUrl: string
-    shortCode: string
-    title: string | null
-    clicks: number
-    createdAt: string
-  }
-  window: {
-    from: string
-    to: string
-    range: string
-    isHourly: boolean
-  }
-  filters: {
-    country: string | null
-    device: string | null
-    referrer: string | null
-    ruleId: string | null
-  }
-  analytics: {
-    totalClicks: number
-    windowClicks: number
-    totalConversions: number
-    totalValueCents: number
-    conversionRate: number
-    averageOrderValueCents: number
-    revenuePerClickCents: number
-    clicksByDate: Record<string, number>
-    clicksByHour: Record<string, number>
-    conversionByDate: Record<string, number>
-    conversionByHour: Record<string, number>
-    revenueByDate: Record<string, number>
-    clicksByCountry: CountryStat[]
-    clicksByCity: CityStat[]
-    clicksByDevice: DeviceStat[]
-    clicksByOS: TechStat[]
-    clicksByBrowser: TechStat[]
-    clicksByChannel: TechStat[]
-    clicksByTrafficType: Array<{ trafficType: string; clicks: number; percentage: number }>
-    clicksByAiAgent: Array<{ aiAgent: string; clicks: number; percentage: number }>
-    clicksByReferrer: ReferrerStat[]
-    utmPerformance: {
-      sources: UtmStat[]
-      mediums: UtmStat[]
-      campaigns: UtmStat[]
-    }
-    goals: GoalStat[]
-    rulePerformance: RulePerformance[]
-    experimentAnalysis: {
-      controlId: string | null
-      results: StatisticalResult[]
-      leadingVariantId: string | null
-      hasSignificantWinner: boolean
-      summary: string
-    }
-    recentClicks: RecentClick[]
-  }
-}
+import { formatCurrency, formatNumber } from '@/lib/format'
+import BreakdownCard, { TechBar } from './components/BreakdownCard'
+import ExperimentDecisionHub from './components/ExperimentDecisionHub'
+import KpiCard from './components/KpiCard'
+import QrStudioPanel from './components/QrStudioPanel'
+import TabButton from './components/TabButton'
+import TimeSeriesChart from './components/TimeSeriesChart'
+import UtmList from './components/UtmList'
+import type { ActiveTab, ChartMetric } from './components/types'
+import { useAnalyticsData } from './hooks/useAnalyticsData'
 
 const RANGES = [
   { key: '24h', label: '24 Hours' },
@@ -184,17 +44,12 @@ const RANGES = [
   { key: 'all', label: 'All Time' },
 ]
 
-type ActiveTab = 'overview' | 'geo' | 'channels' | 'tech' | 'agents' | 'utm' | 'goals' | 'experiments'
-
 export default function AnalyticsPage() {
   const { shortCode } = useParams<{ shortCode: string }>()
-  const [data, setData] = useState<AnalyticsData | null>(null)
-  const [error, setError] = useState<string | null>(null)
   const [range, setRange] = useState('30d')
-  const [loading, setLoading] = useState(true)
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [activeTab, setActiveTab] = useState<ActiveTab>('overview')
-  const [chartMetric, setChartMetric] = useState<'clicks' | 'conversions' | 'revenue' | 'both'>('both')
+  const [chartMetric, setChartMetric] = useState<ChartMetric>('both')
 
   // Filter state
   const [filterCountry, setFilterCountry] = useState<string | null>(null)
@@ -206,44 +61,14 @@ export default function AnalyticsPage() {
   const [qrDark, setQrDark] = useState('#0f172a')
   const [qrLight, setQrLight] = useState('#ffffff')
 
-  const fetchAnalytics = useCallback(async (isBackground = false) => {
-    if (!shortCode) return
-    if (!isBackground) setLoading(true)
-    try {
-      const params = new URLSearchParams({ range })
-      if (filterCountry) params.set('country', filterCountry)
-      if (filterDevice) params.set('device', filterDevice)
-      if (filterReferrer) params.set('referrer', filterReferrer)
-
-      const response = await fetch(`/api/analytics/${encodeURIComponent(shortCode)}?${params}`)
-      const payload = await response.json()
-      if (!response.ok) throw new Error(payload.error || 'Failed to load analytics')
-      setData(payload)
-      setError(null)
-    } catch (err) {
-      if (!isBackground) {
-        setError(err instanceof Error ? err.message : 'Failed to load analytics')
-      }
-    } finally {
-      if (!isBackground) setLoading(false)
-    }
-  }, [shortCode, range, filterCountry, filterDevice, filterReferrer])
-
-  useEffect(() => {
-    void fetchAnalytics(false)
-  }, [fetchAnalytics])
-
-  // Live event stream: analytics refreshes when the backend emits an event,
-  // rather than polling every 15 seconds.
-  useEffect(() => {
-    if (!autoRefresh || typeof EventSource === 'undefined') return
-    const source = new EventSource('/api/events/stream')
-    const onEvent = () => void fetchAnalytics(true)
-    source.addEventListener('click.batch', onEvent)
-    source.addEventListener('conversion.created', onEvent)
-    source.addEventListener('campaign.updated', onEvent)
-    return () => { source.removeEventListener('click.batch', onEvent); source.removeEventListener('conversion.created', onEvent); source.removeEventListener('campaign.updated', onEvent); source.close() }
-  }, [autoRefresh, fetchAnalytics])
+  const { data, error, loading, refetch: fetchAnalytics } = useAnalyticsData(
+    shortCode,
+    range,
+    filterCountry,
+    filterDevice,
+    filterReferrer,
+    autoRefresh
+  )
 
   async function copyToClipboard(text: string, label = 'Copied') {
     try {
@@ -407,94 +232,13 @@ export default function AnalyticsPage() {
 
       {/* QR Code Customizer Panel */}
       {showQr && (
-        <div className="border-b border-slate-800 bg-slate-900/60 transition-all">
-          <div className="mx-auto flex max-w-7xl flex-col gap-6 px-6 py-6 md:flex-row md:items-center">
-            <div className="shrink-0 rounded-2xl border border-slate-700 bg-white p-3 shadow-2xl">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={`/api/links/${encodeURIComponent(url.shortCode)}/qr?size=256&dark=${encodeURIComponent(
-                  qrDark
-                )}&light=${encodeURIComponent(qrLight)}`}
-                alt={`QR code for /${url.shortCode}`}
-                width={160}
-                height={160}
-                className="rounded-xl object-contain"
-              />
-            </div>
-            <div className="flex-1 space-y-4">
-              <div>
-                <h3 className="font-semibold text-white">Interactive QR Code Studio</h3>
-                <p className="text-xs text-slate-400">
-                  Generate print-ready vector SVGs and high-resolution PNGs with customized color palettes.
-                </p>
-              </div>
-
-              <div className="grid max-w-md grid-cols-2 gap-4">
-                <label className="block text-xs">
-                  <span className="mb-1.5 block text-slate-400">Foreground Color</span>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={qrDark}
-                      onChange={(e) => setQrDark(e.target.value)}
-                      className="h-8 w-8 cursor-pointer rounded border-0 bg-transparent p-0"
-                    />
-                    <input
-                      type="text"
-                      value={qrDark}
-                      onChange={(e) => setQrDark(e.target.value)}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1 text-xs font-mono text-slate-200 outline-none"
-                    />
-                  </div>
-                </label>
-                <label className="block text-xs">
-                  <span className="mb-1.5 block text-slate-400">Background Color</span>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={qrLight}
-                      onChange={(e) => setQrLight(e.target.value)}
-                      className="h-8 w-8 cursor-pointer rounded border-0 bg-transparent p-0"
-                    />
-                    <input
-                      type="text"
-                      value={qrLight}
-                      onChange={(e) => setQrLight(e.target.value)}
-                      className="w-full rounded-lg border border-slate-700 bg-slate-950 px-2.5 py-1 text-xs font-mono text-slate-200 outline-none"
-                    />
-                  </div>
-                </label>
-              </div>
-
-              <div className="flex flex-wrap gap-2.5 pt-1">
-                <a
-                  href={`/api/links/${encodeURIComponent(url.shortCode)}/qr?size=1024&format=png&dark=${encodeURIComponent(
-                    qrDark
-                  )}&light=${encodeURIComponent(qrLight)}`}
-                  download={`quicklink-${url.shortCode}-1024.png`}
-                  className="rounded-lg bg-blue-500 px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-400"
-                >
-                  Download HD PNG (1024px)
-                </a>
-                <a
-                  href={`/api/links/${encodeURIComponent(url.shortCode)}/qr?size=1024&format=svg&dark=${encodeURIComponent(
-                    qrDark
-                  )}&light=${encodeURIComponent(qrLight)}`}
-                  download={`quicklink-${url.shortCode}-vector.svg`}
-                  className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-1.5 text-xs font-medium text-slate-300 transition hover:border-slate-500 hover:text-white"
-                >
-                  Download Vector SVG
-                </a>
-                <Link
-                  href={`/manage/${url.shortCode}/qr`}
-                  className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-1.5 text-xs font-semibold text-blue-300 transition hover:bg-blue-500/20"
-                >
-                  Open Full Studio →
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
+        <QrStudioPanel
+          shortCode={url.shortCode}
+          dark={qrDark}
+          light={qrLight}
+          onDarkChange={setQrDark}
+          onLightChange={setQrLight}
+        />
       )}
 
       {/* Main Analytics Container */}
@@ -639,11 +383,12 @@ export default function AnalyticsPage() {
           </div>
 
           <div className="mt-6">
-            <InteractiveTimeSeriesChart
+            <TimeSeriesChart
               isHourly={winInfo.isHourly}
               clicksByDate={winInfo.isHourly ? analytics.clicksByHour : analytics.clicksByDate}
               conversionByDate={winInfo.isHourly ? analytics.conversionByHour : analytics.conversionByDate}
               revenueByDate={analytics.revenueByDate}
+              revenueByHour={analytics.revenueByHour}
               metric={chartMetric}
             />
           </div>
@@ -1034,487 +779,4 @@ export default function AnalyticsPage() {
       </main>
     </div>
   )
-}
-
-function KpiCard({ icon, label, value, subtext }: { icon: React.ReactNode; label: string; value: string; subtext: string }) {
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-5 shadow-lg shadow-black/20">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-slate-400">{label}</span>
-        {icon}
-      </div>
-      <div className="mt-3 text-3xl font-bold tracking-tight text-white">{value}</div>
-      <div className="mt-1 text-xs text-slate-500">{subtext}</div>
-    </div>
-  )
-}
-
-function TabButton({
-  active,
-  onClick,
-  icon,
-  label,
-  badge,
-}: {
-  active: boolean
-  onClick: () => void
-  icon: React.ReactNode
-  label: string
-  badge?: number
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center gap-2 border-b-2 px-4 py-3 text-xs font-semibold whitespace-nowrap transition ${
-        active
-          ? 'border-blue-500 text-blue-400'
-          : 'border-transparent text-slate-400 hover:border-slate-700 hover:text-slate-200'
-      }`}
-    >
-      {icon}
-      <span>{label}</span>
-      {typeof badge === 'number' && badge > 0 && (
-        <span className="rounded-full bg-slate-800 px-1.5 py-0.5 text-[10px] text-slate-400">{badge}</span>
-      )}
-    </button>
-  )
-}
-
-function BreakdownCard({
-  title,
-  icon,
-  items,
-}: {
-  title: string
-  icon: React.ReactNode
-  items: Array<{
-    id: string
-    label: string
-    sublabel?: string
-    count: number
-    percentage: number
-    onClick?: () => void
-  }>
-}) {
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          {icon}
-          <h3 className="font-semibold text-white">{title}</h3>
-        </div>
-      </div>
-      <div className="space-y-3">
-        {items.length ? (
-          items.map((item) => (
-            <div
-              key={item.id}
-              onClick={item.onClick}
-              className={`group flex items-center justify-between rounded-xl p-2 transition ${
-                item.onClick ? 'cursor-pointer hover:bg-slate-950/60' : ''
-              }`}
-            >
-              <div className="min-w-0 pr-2">
-                <div className="truncate text-sm font-medium text-slate-200 group-hover:text-blue-300">
-                  {item.label}
-                </div>
-                {item.sublabel && <div className="text-[11px] text-slate-500">{item.sublabel}</div>}
-              </div>
-              <div className="text-right shrink-0">
-                <div className="text-sm font-semibold text-slate-100">{formatNumber(item.count)}</div>
-                <div className="text-xs text-slate-500">{item.percentage}%</div>
-              </div>
-            </div>
-          ))
-        ) : (
-          <p className="text-xs text-slate-500">No data available.</p>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function TechBar({
-  label,
-  count,
-  percentage,
-  onClick,
-}: {
-  label: string
-  count: number
-  percentage: number
-  onClick?: () => void
-}) {
-  return (
-    <div
-      onClick={onClick}
-      className={`group rounded-xl border border-slate-800/80 bg-slate-950/60 p-3 ${
-        onClick ? 'cursor-pointer hover:border-blue-500/40' : ''
-      }`}
-    >
-      <div className="flex items-center justify-between mb-1.5 text-xs">
-        <span className="font-medium text-slate-200 group-hover:text-blue-300">{label}</span>
-        <span className="font-semibold text-slate-100">{formatNumber(count)}</span>
-      </div>
-      <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
-        <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min(100, percentage)}%` }} />
-      </div>
-    </div>
-  )
-}
-
-function UtmList({ title, items }: { title: string; items: UtmStat[] }) {
-  return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-      <h3 className="font-semibold text-white mb-4">{title}</h3>
-      <div className="space-y-3">
-        {items.length ? (
-          items.map((item) => (
-            <div key={item.name} className="rounded-xl border border-slate-800 bg-slate-950 p-3">
-              <div className="font-mono text-xs font-semibold text-blue-400 truncate">{item.name}</div>
-              <div className="mt-2 flex items-center justify-between text-xs">
-                <div>
-                  <span className="text-slate-400">Clicks: </span>
-                  <span className="font-semibold text-slate-200">{formatNumber(item.clicks)}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400">CVR: </span>
-                  <span className="font-semibold text-emerald-400">{(item.conversionRate * 100).toFixed(1)}%</span>
-                </div>
-              </div>
-            </div>
-          ))
-        ) : (
-          <p className="text-xs text-slate-500">No parameters captured.</p>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function ExperimentDecisionHub({
-  analysis,
-  onPromoteWinner,
-}: {
-  analysis: AnalyticsData['analytics']['experimentAnalysis']
-  onPromoteWinner: (ruleId: string) => Promise<void>
-}) {
-  return (
-    <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <Trophy className="h-5 w-5 text-amber-400" />
-            <h3 className="font-semibold text-lg text-white">A/B Testing & Statistical Inference</h3>
-          </div>
-          <p className="text-xs text-slate-400 mt-1">{analysis.summary}</p>
-        </div>
-      </div>
-
-      <div className="mt-6 space-y-4">
-        {analysis.results.map((res) => {
-          const isWinner = res.isSignificantWinner
-          const isControl = res.status === 'control'
-
-          return (
-            <div
-              key={res.variantId}
-              className={`rounded-xl border p-4 transition ${
-                isWinner
-                  ? 'border-emerald-500/50 bg-emerald-500/5'
-                  : isControl
-                  ? 'border-slate-700/60 bg-slate-950'
-                  : 'border-slate-800 bg-slate-950'
-              }`}
-            >
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-slate-200">{res.name}</span>
-                    {isControl && (
-                      <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
-                        CONTROL
-                      </span>
-                    )}
-                    {isWinner && (
-                      <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
-                        🏆 WINNER (95% CONFIDENCE)
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="mt-2 flex flex-wrap gap-4 text-xs text-slate-400">
-                    <div>
-                      <span>Clicks: </span>
-                      <strong className="text-slate-200">{formatNumber(res.clicks)}</strong>
-                    </div>
-                    <div>
-                      <span>Conversions: </span>
-                      <strong className="text-slate-200">{formatNumber(res.conversions)}</strong>
-                    </div>
-                    <div>
-                      <span>CVR: </span>
-                      <strong className="text-blue-300">{(res.conversionRate * 100).toFixed(2)}%</strong>
-                    </div>
-                    {!isControl && (
-                      <div>
-                        <span>Uplift: </span>
-                        <strong className={res.relativeUplift >= 0 ? 'text-emerald-400' : 'text-red-400'}>
-                          {res.relativeUplift >= 0 ? '+' : ''}
-                          {(res.relativeUplift * 100).toFixed(1)}%
-                        </strong>
-                      </div>
-                    )}
-                    {!isControl && (
-                      <div>
-                        <span>Chance to beat control: </span>
-                        <strong className="text-violet-300">
-                          {(res.bayesianProbabilityToBeatControl * 100).toFixed(0)}%
-                        </strong>
-                      </div>
-                    )}
-                  </div>
-
-                  <p className="mt-2 text-xs text-slate-500">{res.recommendation}</p>
-                </div>
-
-                {isWinner && (
-                  <button
-                    onClick={() => void onPromoteWinner(res.variantId)}
-                    className="shrink-0 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-semibold text-white shadow-lg shadow-emerald-500/20 hover:bg-emerald-400"
-                  >
-                    Promote to Default URL
-                  </button>
-                )}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </section>
-  )
-}
-
-function InteractiveTimeSeriesChart({
-  clicksByDate,
-  conversionByDate,
-  revenueByDate,
-  metric,
-  isHourly,
-}: {
-  clicksByDate: Record<string, number>
-  conversionByDate: Record<string, number>
-  revenueByDate: Record<string, number>
-  metric: 'clicks' | 'conversions' | 'revenue' | 'both'
-  isHourly: boolean
-}) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [hoverIndex, setHoverIndex] = useState<number | null>(null)
-
-  // Merge and sort all date keys
-  const keys = useMemo(() => {
-    const allKeys = new Set([
-      ...Object.keys(clicksByDate || {}),
-      ...Object.keys(conversionByDate || {}),
-      ...Object.keys(revenueByDate || {}),
-    ])
-    return Array.from(allKeys).sort()
-  }, [clicksByDate, conversionByDate, revenueByDate])
-
-  if (!keys.length) {
-    return <div className="py-16 text-center text-xs text-slate-500">No traffic recorded for this time window.</div>
-  }
-
-  const dataPoints = keys.map((key) => ({
-    key,
-    clicks: clicksByDate[key] || 0,
-    conversions: conversionByDate[key] || 0,
-    revenue: (revenueByDate[key] || 0) / 100,
-  }))
-
-  const maxClicks = Math.max(1, ...dataPoints.map((d) => d.clicks))
-  const maxConversions = Math.max(1, ...dataPoints.map((d) => d.conversions))
-
-  const width = 800
-  const height = 240
-  const paddingX = 40
-  const paddingY = 30
-  const chartW = width - paddingX * 2
-  const chartH = height - paddingY * 2
-
-  const getX = (index: number) => paddingX + (index / Math.max(1, dataPoints.length - 1)) * chartW
-  const getClickY = (val: number) => height - paddingY - (val / maxClicks) * chartH
-  const getConvY = (val: number) => height - paddingY - (val / maxConversions) * chartH
-
-  // Build SVG path
-  const clickPath = dataPoints.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getClickY(d.clicks)}`).join(' ')
-  const clickArea = `${clickPath} L ${getX(dataPoints.length - 1)} ${height - paddingY} L ${paddingX} ${
-    height - paddingY
-  } Z`
-
-  const convPath = dataPoints.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${getConvY(d.conversions)}`).join(' ')
-  const convArea = `${convPath} L ${getX(dataPoints.length - 1)} ${height - paddingY} L ${paddingX} ${
-    height - paddingY
-  } Z`
-
-  const activePoint = hoverIndex !== null ? dataPoints[hoverIndex] : dataPoints[dataPoints.length - 1]
-
-  return (
-    <div
-      ref={containerRef}
-      className="relative w-full overflow-hidden select-none"
-      onMouseMove={(e) => {
-        if (!containerRef.current) return
-        const rect = containerRef.current.getBoundingClientRect()
-        const mouseX = e.clientX - rect.left
-        const ratio = Math.max(0, Math.min(1, (mouseX - paddingX) / chartW))
-        const index = Math.round(ratio * (dataPoints.length - 1))
-        setHoverIndex(index)
-      }}
-      onMouseLeave={() => setHoverIndex(null)}
-    >
-      {/* Floating Tooltip Indicator */}
-      {activePoint && (
-        <div className="mb-2 flex flex-wrap items-center gap-4 text-xs">
-          <div className="font-mono text-slate-400">
-            {isHourly ? activePoint.key : new Date(activePoint.key).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-          </div>
-          {(metric === 'clicks' || metric === 'both') && (
-            <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-blue-500" />
-              <span className="text-slate-300">Clicks: </span>
-              <strong className="text-white">{formatNumber(activePoint.clicks)}</strong>
-            </div>
-          )}
-          {(metric === 'conversions' || metric === 'both') && (
-            <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-emerald-400" />
-              <span className="text-slate-300">Conversions: </span>
-              <strong className="text-white">{formatNumber(activePoint.conversions)}</strong>
-            </div>
-          )}
-          {metric === 'revenue' && (
-            <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-amber-400" />
-              <span className="text-slate-300">Revenue: </span>
-              <strong className="text-white">${activePoint.revenue.toFixed(2)}</strong>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* SVG Canvas */}
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto overflow-visible">
-        <defs>
-          <linearGradient id="clickGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.4" />
-            <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
-          </linearGradient>
-          <linearGradient id="convGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#10b981" stopOpacity="0.4" />
-            <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
-          </linearGradient>
-        </defs>
-
-        {/* Grid lines */}
-        <line x1={paddingX} y1={paddingY} x2={width - paddingX} y2={paddingY} stroke="#1e293b" strokeDasharray="3 3" />
-        <line
-          x1={paddingX}
-          y1={paddingY + chartH / 2}
-          x2={width - paddingX}
-          y2={paddingY + chartH / 2}
-          stroke="#1e293b"
-          strokeDasharray="3 3"
-        />
-        <line
-          x1={paddingX}
-          y1={height - paddingY}
-          x2={width - paddingX}
-          y2={height - paddingY}
-          stroke="#334155"
-        />
-
-        {/* Areas and Curves */}
-        {(metric === 'clicks' || metric === 'both') && (
-          <>
-            <path d={clickArea} fill="url(#clickGrad)" />
-            <path d={clickPath} fill="none" stroke="#3b82f6" strokeWidth="2.5" strokeLinecap="round" />
-          </>
-        )}
-
-        {(metric === 'conversions' || metric === 'both') && (
-          <>
-            <path d={convArea} fill="url(#convGrad)" />
-            <path d={convPath} fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" />
-          </>
-        )}
-
-        {/* Crosshair on Hover */}
-        {hoverIndex !== null && (
-          <>
-            <line
-              x1={getX(hoverIndex)}
-              y1={paddingY}
-              x2={getX(hoverIndex)}
-              y2={height - paddingY}
-              stroke="#64748b"
-              strokeWidth="1.5"
-              strokeDasharray="2 2"
-            />
-            {(metric === 'clicks' || metric === 'both') && (
-              <circle
-                cx={getX(hoverIndex)}
-                cy={getClickY(dataPoints[hoverIndex].clicks)}
-                r="4.5"
-                fill="#3b82f6"
-                stroke="#ffffff"
-                strokeWidth="2"
-              />
-            )}
-            {(metric === 'conversions' || metric === 'both') && (
-              <circle
-                cx={getX(hoverIndex)}
-                cy={getConvY(dataPoints[hoverIndex].conversions)}
-                r="4.5"
-                fill="#10b981"
-                stroke="#ffffff"
-                strokeWidth="2"
-              />
-            )}
-          </>
-        )}
-
-        {/* X-Axis Date Labels */}
-        {dataPoints.map((d, i) => {
-          if (i % Math.ceil(dataPoints.length / 6) !== 0 && i !== dataPoints.length - 1) return null
-          const label = isHourly ? d.key.slice(11, 16) : d.key.slice(5)
-          return (
-            <text
-              key={d.key}
-              x={getX(i)}
-              y={height - 10}
-              textAnchor="middle"
-              fill="#64748b"
-              fontSize="10"
-              fontFamily="monospace"
-            >
-              {label}
-            </text>
-          )
-        })}
-      </svg>
-    </div>
-  )
-}
-
-function formatNumber(num: number): string {
-  return new Intl.NumberFormat('en-US').format(num || 0)
-}
-
-function formatCurrency(cents: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format((cents || 0) / 100)
 }

@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { getManageableUrl, EDIT_ROLES } from '@/lib/authorization'
 import { recordAudit } from '@/lib/audit'
 import { invalidateLink } from '@/lib/link-cache'
 import { assertDestinationSafeForStorage } from '@/lib/destination-health'
+import { rateLimit } from '@/lib/rate-limit'
+
+export const promoteSchema = z.object({
+  ruleId: z.string().trim().min(1, { message: 'ruleId is required' }).max(100),
+})
 
 export async function POST(request: NextRequest, context: { params: Promise<{ shortCode: string }> }) {
   try {
@@ -12,12 +18,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
     if (!access.url) return NextResponse.json({ error: access.error }, { status: access.status })
     const link = access.url
 
-    const body = await request.json()
-    const ruleId = typeof body.ruleId === 'string' ? body.ruleId.trim() : ''
+    const probeLimit = await rateLimit(request, { name: 'promote', identifier: link.id, limit: 10, windowMs: 60_000 })
+    if (!probeLimit.allowed) return NextResponse.json({ error: 'Too many promotion requests. Try again shortly.' }, { status: 429, headers: { 'Retry-After': String(probeLimit.retryAfterSeconds) } })
 
-    if (!ruleId) {
-      return NextResponse.json({ error: 'ruleId is required' }, { status: 400 })
+    const parsedBody = promoteSchema.safeParse(await request.json().catch(() => ({})))
+    if (!parsedBody.success) {
+      return NextResponse.json({ error: parsedBody.error.issues[0]?.message || 'ruleId is required' }, { status: 400 })
     }
+    const ruleId = parsedBody.data.ruleId
 
     const rule = await prisma.linkRule.findUnique({
       where: { id: ruleId, urlId: link.id },
@@ -26,7 +34,14 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
       return NextResponse.json({ error: 'Routing rule not found for this link' }, { status: 404 })
     }
 
-    await assertDestinationSafeForStorage(rule.destinationUrl)
+    try {
+      await assertDestinationSafeForStorage(rule.destinationUrl)
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Promoted destination is not allowed' },
+        { status: 400 },
+      )
+    }
 
     const updated = await prisma.$transaction(async (tx) => {
       // Record new destination revision
@@ -64,9 +79,6 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
     })
   } catch (error) {
     console.error('Variant promotion failed:', error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to promote variant' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to promote variant' }, { status: 500 })
   }
 }

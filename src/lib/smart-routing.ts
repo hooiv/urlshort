@@ -186,9 +186,15 @@ export function countryToName(code: string): string {
   return COUNTRY_NAMES[code.toUpperCase()] || code.toUpperCase()
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export function getVisitorId(request: NextRequest): { id: string; isNew: boolean } {
   const existing = request.cookies.get('ql_visitor')?.value
-  return existing ? { id: existing, isNew: false } : { id: randomUUID(), isNew: true }
+  // The cookie is attacker-controlled. Only trust well-formed UUIDs; a
+  // malformed value would otherwise poison sticky A/B bucketing and the
+  // visitor hash used for attribution.
+  if (existing && UUID_PATTERN.test(existing)) return { id: existing, isNew: false }
+  return { id: randomUUID(), isNew: true }
 }
 
 function countryMatches(rule: SmartRule, country: string): boolean {

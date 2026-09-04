@@ -1,7 +1,13 @@
 import { NextResponse, NextRequest } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { requireWorkspaceRole, EDIT_ROLES } from '@/lib/workspaces';
+import { rateLimit } from '@/lib/rate-limit';
+
+export const reorderSchema = z.object({
+  blockIds: z.array(z.string().cuid()).min(1).max(100),
+});
 
 export async function PUT(
   request: NextRequest,
@@ -13,13 +19,16 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { handle } = await params;
-    const json = await request.json();
-    const { blockIds } = json;
+    const limit = await rateLimit(request, { name: 'bio-reorder', limit: 60, windowMs: 60_000 });
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
 
-    if (!Array.isArray(blockIds)) {
+    const { handle: rawHandle } = await params;
+    const handle = typeof rawHandle === 'string' ? rawHandle.trim().toLowerCase() : '';
+    const parsed = reorderSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success || !handle) {
       return NextResponse.json({ error: 'blockIds array is required' }, { status: 400 });
     }
+    const { blockIds } = parsed.data;
 
     const profile = await prisma.bioProfile.findUnique({
       where: { handle },

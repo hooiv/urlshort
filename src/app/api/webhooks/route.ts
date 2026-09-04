@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { assertDestinationSafeForStorage } from '@/lib/destination-health';
+import { rateLimit } from '@/lib/rate-limit';
 import crypto from 'crypto';
 
 /**
  * Events an endpoint may subscribe to. Keeping this a closed allowlist stops
  * arbitrary strings from being stored (and later silently matching nothing).
  */
-const ALLOWED_EVENTS = new Set([
+export const ALLOWED_EVENTS = new Set([
   'link.clicked',
   'link.created',
   'link.updated',
@@ -16,14 +18,29 @@ const ALLOWED_EVENTS = new Set([
   'diagnostic.test',
 ]);
 
-function normalizeEvents(input: unknown): string[] {
-  const raw = Array.isArray(input) ? input : typeof input === 'string' ? [input] : ['click'];
+const LEGACY_EVENT_ALIASES: Record<string, string> = {
+  click: 'link.clicked',
+};
+
+export function normalizeEvents(input: unknown): string[] {
+  const raw = Array.isArray(input) ? input : typeof input === 'string' ? [input] : ['link.clicked'];
   const events = raw
     .map((event) => String(event).trim())
     .filter((event): event is string => event.length > 0)
-    .map((event) => (ALLOWED_EVENTS.has(event) ? event : 'link.clicked'));
-  return [...new Set(events)];
+    .map((event) => LEGACY_EVENT_ALIASES[event] ?? event);
+  for (const event of events) {
+    if (!ALLOWED_EVENTS.has(event)) throw new Error(`Unsupported webhook event: ${event.slice(0, 64)}`);
+  }
+  const unique = [...new Set(events)];
+  if (unique.length === 0) throw new Error('At least one webhook event is required');
+  if (unique.length > 10) throw new Error('Too many webhook events (max 10)');
+  return unique;
 }
+
+export const webhookCreateSchema = z.object({
+  url: z.string().trim().min(1).max(2048),
+  events: z.array(z.string().trim().min(1).max(64)).min(1).max(10).optional(),
+});
 
 export async function GET(request: NextRequest) {
   try {
@@ -43,7 +60,8 @@ export async function GET(request: NextRequest) {
           select: { deliveries: true }
         }
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
+      take: 100,
     });
 
     // Secrets are signed against (HMAC), never returned after creation. We
@@ -69,11 +87,18 @@ export async function POST(request: NextRequest) {
     const user = await getCurrentUser(request);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const json = await request.json();
-    const { url, events } = json as Record<string, unknown>;
+    const limit = await rateLimit(request, { name: 'webhooks-create', limit: 30, windowMs: 60_000 });
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
 
-    if (typeof url !== 'string' || !url.trim()) {
-      return NextResponse.json({ error: 'URL is required' }, { status: 400 });
+    const parsed = webhookCreateSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) return NextResponse.json({ error: 'URL is required' }, { status: 400 });
+    const { url, events } = parsed.data;
+
+    let normalizedEvents: string[];
+    try {
+      normalizedEvents = normalizeEvents(events);
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid events' }, { status: 400 });
     }
 
     // SSRF guard, same policy as link destinations: HTTPS only, public DNS
@@ -97,7 +122,7 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         url: normalizedUrl,
         secret,
-        events: normalizeEvents(events),
+        events: normalizedEvents,
       },
     });
 

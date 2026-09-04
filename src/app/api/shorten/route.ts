@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { generateShortCode, getBaseUrl, isReservedCode, isValidUrl, normalizeUrl } from '@/lib/utils'
@@ -18,6 +19,33 @@ const CUSTOM_CODE = /^[A-Za-z0-9_-]{3,64}$/
 const CODE_COLLISION_RETRIES = 5
 const MAX_TAGS = 10
 const MAX_SPLIT_VARIANTS = 20
+
+export const shortenExtrasSchema = z.object({
+  password: z.string().min(1).max(128).optional().nullable(),
+  expiresAt: z.string().max(100).optional().nullable(),
+  expiredUrl: z.string().trim().max(2048).optional().nullable(),
+  maxClicks: z.union([z.string(), z.number()]).optional().nullable(),
+  ogImage: z.string().trim().max(2048).optional().nullable(),
+  metaPixelId: z.string().max(50).optional().nullable(),
+  googleTagId: z.string().max(50).optional().nullable(),
+  xPixelId: z.string().max(50).optional().nullable(),
+})
+
+export function parseShortenMaxClicks(input: unknown): number | null {
+  if (input === null || input === undefined || input === '') return null
+  const value = typeof input === 'number' ? input : Number(String(input).trim())
+  if (!Number.isInteger(value) || value < 0 || value > 1_000_000) {
+    throw new Error('Max clicks must be an integer from 0 to 1000000')
+  }
+  return value
+}
+
+export function parseShortenExpiresAt(input: unknown): Date | null {
+  if (input === null || input === undefined || input === '') return null
+  const parsed = new Date(String(input))
+  if (Number.isNaN(parsed.getTime())) throw new Error('Invalid expiration date')
+  return parsed
+}
 
 /** Normalize a tag list: lowercase, dedupe, strip empties, cap length/count. */
 function normalizeTags(input: unknown): string[] {
@@ -46,11 +74,51 @@ export async function POST(request: NextRequest) {
     const customCode = typeof body.customCode === 'string' ? body.customCode.trim() : ''
     const title = typeof body.title === 'string' ? body.title.trim().slice(0, 200) : null
     const description = typeof body.description === 'string' ? body.description.trim().slice(0, 1000) : null
-    const ogImage = typeof body.ogImage === 'string' ? body.ogImage.trim() : null
     const tags = normalizeTags(body.tags)
     const rawSplitRules = Array.isArray(body.splitRules) ? body.splitRules.slice(0, MAX_SPLIT_VARIANTS) : []
 
     if (!rawUrl) return NextResponse.json({ error: 'URL is required' }, { status: 400 })
+
+    const extras = shortenExtrasSchema.safeParse(body)
+    if (!extras.success) {
+      return NextResponse.json({ error: extras.error.issues[0]?.message || 'Invalid link options' }, { status: 400 })
+    }
+    let maxClicks: number | null = null
+    let expiresAt: Date | null = null
+    try {
+      maxClicks = parseShortenMaxClicks(extras.data.maxClicks)
+      expiresAt = parseShortenExpiresAt(extras.data.expiresAt)
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid link options' }, { status: 400 })
+    }
+    const rawPassword = typeof extras.data.password === 'string' ? extras.data.password : null
+    if (rawPassword !== null && rawPassword.length > 128) {
+      return NextResponse.json({ error: 'Password must be 128 characters or fewer' }, { status: 400 })
+    }
+    let ogImage: string | null = null
+    if (extras.data.ogImage) {
+      const candidate = extras.data.ogImage.trim()
+      if (candidate && !isValidUrl(candidate)) {
+        return NextResponse.json({ error: 'ogImage must be a valid HTTP or HTTPS URL' }, { status: 400 })
+      }
+      ogImage = candidate || null
+    }
+    let expiredUrl: string | null = null
+    if (extras.data.expiredUrl) {
+      const candidate = normalizeUrl(extras.data.expiredUrl.trim())
+      if (!isValidUrl(candidate)) {
+        return NextResponse.json({ error: 'Expired URL must be a valid HTTP or HTTPS URL' }, { status: 400 })
+      }
+      try {
+        await assertDestinationSafeForStorage(candidate)
+      } catch (error) {
+        return NextResponse.json(
+          { error: error instanceof Error ? error.message : 'Expired destination is not allowed' },
+          { status: 400 },
+        )
+      }
+      expiredUrl = candidate
+    }
 
     const normalizedUrl = normalizeUrl(rawUrl)
     if (!isValidUrl(normalizedUrl)) {
@@ -103,7 +171,12 @@ export async function POST(request: NextRequest) {
       : null
     if (requestedWorkspaceId && !membership) return NextResponse.json({ error: 'You are not a member of that workspace' }, { status: 403 })
     if (requestedWorkspaceId && membership && !EDIT_ROLES.includes(membership.role)) return NextResponse.json({ error: 'Editor permission is required to create links in this workspace' }, { status: 403 })
-    const idempotency = membership?.workspaceId ? await getIdempotentResponse(request, membership.workspaceId, body) : null
+    let idempotency: Awaited<ReturnType<typeof getIdempotentResponse>> = null
+    try {
+      idempotency = membership?.workspaceId ? await getIdempotentResponse(request, membership.workspaceId, body) : null
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid Idempotency-Key' }, { status: 400 })
+    }
     if (idempotency?.existing) return new NextResponse(idempotency.existing.responseJson, { status: idempotency.existing.responseStatus, headers: { 'Content-Type': 'application/json', 'Idempotent-Replay': 'true' } })
 
     // Create with retry on short-code collisions (check-then-insert races are
@@ -121,14 +194,14 @@ export async function POST(request: NextRequest) {
             description: description || null,
             ogImage: ogImage || null,
             tags,
-            passwordHash: body.password ? hashGatePassword(String(body.password)) : null,
-            expiresAt: body.expiresAt ? new Date(body.expiresAt) : null,
-            expiredUrl: body.expiredUrl || null,
-            maxClicks: body.maxClicks ? parseInt(body.maxClicks, 10) : null,
-            metaPixelId: body.metaPixelId || null,
-            googleTagId: body.googleTagId || null,
-            xPixelId: body.xPixelId || null,
-            cloaked: body.cloaked || false,
+            passwordHash: rawPassword ? hashGatePassword(rawPassword) : null,
+            expiresAt,
+            expiredUrl,
+            maxClicks,
+            metaPixelId: typeof extras.data.metaPixelId === 'string' && extras.data.metaPixelId.trim() ? extras.data.metaPixelId.trim() : null,
+            googleTagId: typeof extras.data.googleTagId === 'string' && extras.data.googleTagId.trim() ? extras.data.googleTagId.trim() : null,
+            xPixelId: typeof extras.data.xPixelId === 'string' && extras.data.xPixelId.trim() ? extras.data.xPixelId.trim() : null,
+            cloaked: body.cloaked === true,
             managementTokenHash: hashManagementToken(managementToken),
             userId: user?.id || null,
             workspaceId: membership?.workspaceId || null,

@@ -5,7 +5,6 @@ import { authenticateScim, parseScimPatchOperations } from '@/lib/scim'
 const USER_SCHEMA = 'urn:ietf:params:scim:schemas:core:2.0:User'
 const ERROR_SCHEMA = 'urn:ietf:params:scim:api:messages:2.0:Error'
 const H = { 'Content-Type': 'application/scim+json', 'Cache-Control': 'no-store' }
-function acceptsScimContentType(request: NextRequest) { const value=(request.headers.get('content-type')||'').split(';',1)[0].trim().toLowerCase(); return value==='application/scim+json' }
 function err(detail: string, status: number) { return NextResponse.json({ schemas: [ERROR_SCHEMA], detail, status: String(status) }, { status, headers: H }) }
 function out(i: { id: string; externalId: string; active: boolean }, user: { email: string; name: string | null }) {
   return { schemas: [USER_SCHEMA], id: i.id, externalId: i.externalId, userName: user.email, active: i.active, name: user.name ? { formatted: user.name } : undefined, meta: { resourceType: 'User' } }
@@ -14,7 +13,6 @@ function out(i: { id: string; externalId: string; active: boolean }, user: { ema
 export async function GET(request: NextRequest, { params }: { params: Promise<{ workspaceId: string; userId: string }> }) {
   const { workspaceId, userId } = await params
   if (!await authenticateScim(request, workspaceId)) return err('Unauthorized', 401)
-  if (!acceptsScimContentType(request)) return err('Content-Type must be application/scim+json', 415)
   const identity = await prisma.scimIdentity.findFirst({ where: { workspaceId, id: userId }, include: { user: { select: { email: true, name: true } } } })
   if (!identity) return err('Resource not found', 404)
   const user = await prisma.user.findUnique({ where: { id: identity.userId }, select: { email: true, name: true } })
@@ -76,7 +74,12 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   if (!await authenticateScim(request, workspaceId)) return err('Unauthorized', 401)
   const identity = await prisma.scimIdentity.findFirst({ where: { workspaceId, id: userId } })
   if (!identity) return err('Resource not found', 404)
-  await prisma.scimIdentity.update({ where: { id: identity.id }, data: { active: false } })
+  // Deprovision: deactivate the SCIM identity AND remove workspace access so a
+  // removed IdP user cannot keep using existing sessions or keys.
+  await prisma.$transaction([
+    prisma.scimIdentity.update({ where: { id: identity.id }, data: { active: false } }),
+    prisma.membership.deleteMany({ where: { workspaceId, userId: identity.userId } }),
+  ])
   return new Response(null, { status: 204 })
 }
 

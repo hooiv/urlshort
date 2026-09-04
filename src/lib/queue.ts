@@ -33,6 +33,12 @@ export type ClickData = {
   shortCode: string
   /** True when tenant click quota was reserved before the redirect was accepted. */
   usageReserved?: boolean
+  /**
+   * True for automated crawler/preview traffic. The event is still persisted
+   * and rolled up for analytics transparency, but it is excluded from tenant
+   * quota accounting so bots can never burn a customer's click budget.
+   */
+  nonBillable?: boolean
 }
 
 export interface ClickQueue {
@@ -106,12 +112,15 @@ async function persistBatch(parsedItems: ClickData[]): Promise<void> {
     ({ perUrl, perDay } = aggregateClicks(insertedItems))
 
     // 2. Bulk update URL totals; deactivate links that hit their click cap.
+    // Non-billable (bot/crawler) events are persisted and aggregated above
+    // but excluded from tenant quota accounting below — see ClickData.nonBillable.
+    const billableItems = insertedItems.filter((item) => !item.nonBillable)
     const workspaceCounts = new Map<string, number>()
-    const workspaceRows = await tx.url.findMany({ where: { id: { in: [...new Set(insertedItems.map(i => i.urlId))] } }, select: { id: true, workspaceId: true } })
+    const workspaceRows = await tx.url.findMany({ where: { id: { in: [...new Set(billableItems.map(i => i.urlId))] } }, select: { id: true, workspaceId: true } })
     const workspaceByUrl = new Map(workspaceRows.map(x => [x.id, x.workspaceId]))
-    for (const item of insertedItems) { const workspaceId = workspaceByUrl.get(item.urlId); if (workspaceId) workspaceCounts.set(workspaceId, (workspaceCounts.get(workspaceId) || 0) + 1) }
+    for (const item of billableItems) { const workspaceId = workspaceByUrl.get(item.urlId); if (workspaceId) workspaceCounts.set(workspaceId, (workspaceCounts.get(workspaceId) || 0) + 1) }
     const reservedCounts = new Map<string, number>()
-    for (const item of insertedItems) {
+    for (const item of billableItems) {
       if (!item.usageReserved) continue
       const workspaceId = workspaceByUrl.get(item.urlId)
       if (workspaceId) reservedCounts.set(workspaceId, (reservedCounts.get(workspaceId) || 0) + 1)

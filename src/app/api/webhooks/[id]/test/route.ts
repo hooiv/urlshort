@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { enqueueWebhook, processWebhookDelivery } from '@/lib/webhooks';
+import { rateLimit } from '@/lib/rate-limit';
 
 export async function POST(
   request: NextRequest,
@@ -10,6 +11,9 @@ export async function POST(
   try {
     const user = await getCurrentUser(request);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const limit = await rateLimit(request, { name: 'webhooks-test', limit: 10, windowMs: 60_000 });
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
 
     const { id } = await params;
 
@@ -51,11 +55,10 @@ export async function POST(
       status: result.status,
       statusCode: result.responseCode,
       latencyMs: result.latencyMs,
-      responseSnippet: refreshed?.responseBody,
+      responseSnippet: refreshed?.responseBody?.slice(0, 1000) ?? null,
     });
   } catch (error) {
     console.error('Webhook test error:', error);
-    const message = error instanceof Error ? error.message : 'Webhook test failed';
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'Webhook test failed' }, { status: 500 });
   }
 }

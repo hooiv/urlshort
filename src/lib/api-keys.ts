@@ -58,3 +58,10 @@ export function apiKeyMatches(supplied: string, storedHash: string): boolean {
 }
 
 export function hasApiScope(auth: ApiKeyAuth, scope: string): boolean { return auth.scopes.includes('*') || auth.scopes.includes(scope) }
+
+/**
+ * OR-semantics scope check: true when the key holds a wildcard or ANY of the
+ * listed scopes. Use this (not ad-hoc `&&`/`||` chains) wherever an operation
+ * accepts several equivalent scopes, e.g. `campaign:read` or `mcp:read`.
+ */
+export function hasAnyApiScope(auth: ApiKeyAuth, scopes: string[]): boolean { return scopes.some((scope) => hasApiScope(auth, scope)) }

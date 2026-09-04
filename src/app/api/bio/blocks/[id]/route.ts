@@ -1,7 +1,26 @@
 import { NextResponse, NextRequest } from 'next/server';
+import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { requireWorkspaceRole, EDIT_ROLES } from '@/lib/workspaces';
+import { rateLimit } from '@/lib/rate-limit';
+
+export const bioBlockUpdateSchema = z.object({
+  title: z.string().trim().max(160).nullish(),
+  url: z.string().trim().max(2048).nullish(),
+  content: z.string().trim().max(2000).nullish(),
+  metadataJson: z.string().max(10000).nullish(),
+  position: z.number().int().min(0).max(1000).nullish(),
+});
+
+export function isSafeBlockUpdateUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+  } catch {
+    return false;
+  }
+}
 
 
 export async function PUT(
@@ -14,8 +33,16 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const limit = await rateLimit(request, { name: 'bio-block-update', limit: 60, windowMs: 60_000 });
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+
     const { id } = await params;
-    const json = await request.json();
+    const parsed = bioBlockUpdateSchema.safeParse(await request.json().catch(() => null));
+    if (!parsed.success) return NextResponse.json({ error: 'Invalid block data' }, { status: 400 });
+    const json = parsed.data;
+    if (json.url && !isSafeBlockUpdateUrl(json.url)) {
+      return NextResponse.json({ error: 'Block URL must be a valid http(s) URL' }, { status: 400 });
+    }
 
     const block = await prisma.bioBlock.findUnique({
       where: { id },
@@ -38,11 +65,11 @@ export async function PUT(
     const updated = await prisma.bioBlock.update({
       where: { id },
       data: {
-        title: json.title,
-        url: json.url,
-        content: json.content,
-        metadataJson: json.metadataJson,
-        position: json.position, // for reordering
+        title: json.title ?? undefined,
+        url: json.url ?? undefined,
+        content: json.content ?? undefined,
+        metadataJson: json.metadataJson ?? undefined,
+        position: json.position ?? undefined,
       },
     });
 

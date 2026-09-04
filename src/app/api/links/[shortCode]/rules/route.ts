@@ -7,6 +7,7 @@ import { getManageableUrl } from '@/lib/authorization'
 import { assessDestination } from '@/lib/link-safety'
 import { assertDestinationSafeForStorage } from '@/lib/destination-health'
 import { invalidateLink } from '@/lib/link-cache'
+import { rateLimit } from '@/lib/rate-limit'
 import {
   normalizeCountryCodes,
   normalizeList,
@@ -93,6 +94,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
   const { shortCode } = await context.params
   const result = await getUrl(request, shortCode)
   if (result instanceof NextResponse) return result
+
+  const limit = await rateLimit(request, { name: 'rules-create', identifier: result.id, limit: 20, windowMs: 60_000 })
+  if (!limit.allowed) return NextResponse.json({ error: 'Too many rule requests. Try again shortly.' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
 
   try {
   const body = (await request.json()) as RuleInput

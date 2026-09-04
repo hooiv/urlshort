@@ -3,11 +3,19 @@ import { createHash } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { recordAudit } from '@/lib/audit'
+import { rateLimit } from '@/lib/rate-limit'
+
+export function isAcceptableInviteToken(token: unknown): token is string {
+  return typeof token === 'string' && token.length >= 1 && token.length <= 512
+}
 
 export async function POST(request: NextRequest, context: { params: Promise<{ token: string }> }) {
+  const limit = await rateLimit(request, { name: 'invite-accept', limit: 30, windowMs: 60_000 })
+  if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
   const user = await getCurrentUser(request)
   if (!user) return NextResponse.json({ error: 'Sign in before accepting an invitation' }, { status: 401 })
   const { token } = await context.params
+  if (!isAcceptableInviteToken(token)) return NextResponse.json({ error: 'Invitation is invalid or expired' }, { status: 410 })
   const tokenHash = createHash('sha256').update(token).digest('hex')
   const invite = await prisma.workspaceInvite.findUnique({ where: { tokenHash } })
   if (!invite || invite.acceptedAt || invite.revokedAt || invite.expiresAt <= new Date()) return NextResponse.json({ error: 'Invitation is invalid or expired' }, { status: 410 })

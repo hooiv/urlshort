@@ -28,11 +28,14 @@ export async function recordAudit(request: NextRequest, input: AuditInput): Prom
   try {
     const session = await getCurrentSession(request)
     const bearer = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
-    const delegated = request.headers.has('x-management-token') || Boolean(bearer)
+    // `qlk_…` Bearer tokens are API keys, not management tokens. Attributing
+    // them as `management_token` hides which credential actually acted.
+    const apiKeyBearer = bearer?.startsWith('qlk_') ?? false
+    const delegated = request.headers.has('x-management-token') || (Boolean(bearer) && !apiKeyBearer)
     await prisma.auditEvent.create({
       data: {
         action: input.action,
-        actorType: session || input.actorUserId ? 'user' : delegated ? 'management_token' : 'system',
+        actorType: session || input.actorUserId ? 'user' : apiKeyBearer ? 'api_key' : delegated ? 'management_token' : 'system',
         actorUserId: input.actorUserId ?? session?.user.id ?? null,
         sessionId: input.sessionId ?? session?.id ?? null,
         urlId: input.urlId ?? null,

@@ -28,6 +28,11 @@ function disabledRecently(): boolean {
   return typeof until === 'number' && Date.now() < until
 }
 
+/** True while a recent transport failure suppresses new Redis dials. */
+export function isRedisCoolingDown(): boolean {
+  return disabledRecently()
+}
+
 function markUnhealthy(client: RedisClient | null | undefined): void {
   globalForRedis.__qlRedisDisabledUntil = Date.now() + FAILURE_COOLDOWN_MS
   if (client) {
@@ -95,9 +100,31 @@ export async function getRedis(): Promise<RedisClient | null> {
   return connecting
 }
 
+const TRANSIENT_REDIS_CODES = new Set([
+  'ECONNREFUSED', 'ECONNRESET', 'EPIPE', 'ETIMEDOUT', 'EAI_AGAIN',
+  'ENOTFOUND', 'EHOSTUNREACH', 'ENETUNREACH',
+])
+
 /**
- * Run `fn` against Redis, returning its result; any transport error marks the
- * instance unhealthy (entering cooldown) and returns `fallback`.
+ * Only transport-level failures implicate the shared connection. A
+ * deterministic command error (bad arguments, Lua bug) leaves the
+ * connection healthy and must not force every consumer into fallback
+ * for the full cooldown — that would turn one bad call into a
+ * cluster-wide fail-open window for rate limiting.
+ */
+function isTransportError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const code = (error as { code?: unknown }).code
+  if (typeof code === 'string' && TRANSIENT_REDIS_CODES.has(code)) return true
+  const message = (error as { message?: unknown }).message
+  return typeof message === 'string' && /connection is closed|connection lost|command timed out|socket/i.test(message)
+}
+
+/**
+ * Run `fn` against Redis, returning its result; a transport error marks the
+ * instance unhealthy (entering cooldown) and returns `fallback`. A
+ * non-transport command error returns `fallback` without poisoning the
+ * shared client.
  */
 export async function withRedis<T>(
   fn: (client: RedisClient) => Promise<T>,
@@ -109,7 +136,7 @@ export async function withRedis<T>(
     return await fn(client)
   } catch (error) {
     console.error('Redis operation failed:', error)
-    markUnhealthy(client)
+    if (isTransportError(error)) markUnhealthy(client)
     return fallback
   }
 }

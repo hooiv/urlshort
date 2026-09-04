@@ -49,6 +49,12 @@ export async function POST(request: NextRequest) {
     await recordAudit(request, { action: 'auth.password_change', resourceType: 'user', resourceId: user.id, actorUserId: user.id })
     return NextResponse.json({ changed: true })
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not change password' }, { status: 400 })
+    const message = error instanceof Error ? error.message : ''
+    // Preserve password-policy messages (safe); hide infra details.
+    if (message.startsWith('Password must be')) {
+      return NextResponse.json({ error: message }, { status: 400 })
+    }
+    console.error('Password change failed:', error)
+    return NextResponse.json({ error: 'Could not change password' }, { status: 500 })
   }
 }

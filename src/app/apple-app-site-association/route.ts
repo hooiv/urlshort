@@ -1,35 +1,32 @@
-import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { buildAasaManifest } from './components/aasa-logic'
 
 export async function GET() {
   // In a real multi-tenant app, this might dynamically fetch the App IDs associated
-  // with a custom domain. For QuickLink's default domain, we serve a static manifest.
-  
-  const apps = await prisma.deepLinkApp.findMany({where:{enabled:true},select:{bundleId:true,appleTeamId:true,iosAssociatedDomainsJson:true}})
-  const details = apps.flatMap((app) => {
-    if (app.iosAssociatedDomainsJson) { try { const parsed=JSON.parse(app.iosAssociatedDomainsJson) as unknown; if(Array.isArray(parsed)) return parsed } catch {} }
-    if (!app.bundleId || !app.appleTeamId) return []
-    return [{appID:`${app.appleTeamId}.${app.bundleId}`,paths:['/*']}]
-  })
-  const appIds=details.map((d)=>typeof d==='object'&&d!==null&&'appID' in d?String((d as {appID?:unknown}).appID):'').filter(Boolean)
-  const aasa = {
-    applinks: {
-      apps: [],
-      details: details.length?details:[{appID:"TEAMID.com.quicklink.app",paths:["/m/*"]}]
-    },
-    webcredentials: {
-      apps: appIds.length?appIds:["TEAMID.com.quicklink.app"]
-    },
-    appclips: {
-      apps: ["TEAMID.com.quicklink.app.Clip"]
-    }
-  };
-
-  return NextResponse.json(aasa, {
-    headers: {
-      'Content-Type': 'application/json',
-      // AASA files often require no-cache or specific cache controls
-      'Cache-Control': 's-maxage=86400, stale-while-revalidate',
-    },
-  });
+  // with a custom domain. For QuickLink's default domain, we serve a static manifest
+  // when no enabled deep-link apps are configured.
+  try {
+    const apps = await prisma.deepLinkApp.findMany({
+      where: { enabled: true },
+      select: { bundleId: true, appleTeamId: true, iosAssociatedDomainsJson: true },
+    })
+    const aasa = buildAasaManifest(apps)
+    return NextResponse.json(aasa, {
+      headers: {
+        'Content-Type': 'application/json',
+        // AASA files often require no-cache or specific cache controls
+        'Cache-Control': 's-maxage=86400, stale-while-revalidate',
+      },
+    })
+  } catch {
+    // Never 500 the AASA endpoint (iOS treats failures as "no association"):
+    // serve the static fallback manifest instead.
+    return NextResponse.json(buildAasaManifest([]), {
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 's-maxage=86400, stale-while-revalidate',
+      },
+    })
+  }
 }

@@ -17,8 +17,9 @@
   "sideEffects": false,
   "scripts": {
     "generate": "node scripts/generate.mjs",
-    "build": "npm run generate && tsc -p tsconfig.json",
-    "verify": "node scripts/generate.mjs && git diff --exit-code -- src/generated.ts && node scripts/verify.mjs",\n    "test": "npm run build && node test.mjs"
+    "build": "npm run generate && node ../node_modules/typescript/bin/tsc -p tsconfig.json",
+    "verify": "node scripts/generate.mjs && git diff --exit-code -- src/generated.ts && node scripts/verify.mjs",
+    "test": "npm run build && node test.mjs"
   },
   "devDependencies": {
     "typescript": "^5"

@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { approvalDecision } from '@/lib/release-approval'
+import { rateLimit } from '@/lib/rate-limit'
+
+export const approveSchema = z.object({
+  approved: z.boolean(),
+  comment: z.string().trim().max(2000).optional(),
+})
 
 export async function POST(request:NextRequest,{params}:{params:Promise<{campaignId:string;releaseId:string}>}) {
   const {campaignId,releaseId}=await params
@@ -9,8 +16,11 @@ export async function POST(request:NextRequest,{params}:{params:Promise<{campaig
   if(!u)return NextResponse.json({error:'Unauthorized'},{status:401})
   const membership=await prisma.membership.findFirst({where:{userId:u.id,workspace:{campaigns:{some:{id:campaignId}}}}})
   if(!membership||!['owner','admin'].includes(membership.role))return NextResponse.json({error:'Only owners/admins can approve releases'},{status:403})
-  const body=await request.json().catch(()=>({})) as {approved?:boolean;comment?:string}
-  if(typeof body.approved!=='boolean')return NextResponse.json({error:'approved must be boolean'},{status:400})
+  const limit=await rateLimit(request,{name:'campaigns-release-approve',limit:30,windowMs:60_000})
+  if(!limit.allowed)return NextResponse.json({error:'Too many requests'},{status:429})
+  const parsed=approveSchema.safeParse(await request.json().catch(()=>null))
+  if(!parsed.success)return NextResponse.json({error:'approved must be boolean'},{status:400})
+  const body=parsed.data
   const approved = body.approved
   const release=await prisma.campaignRelease.findFirst({where:{id:releaseId,campaignId}})
   if(!release)return NextResponse.json({error:'Release not found'},{status:404})

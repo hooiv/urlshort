@@ -1,8 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { rateLimit } from '@/lib/rate-limit'
-import { generateShortCode, normalizeUrl, isValidUrl } from '@/lib/utils'
+import { generateShortCode, normalizeUrl, isValidUrl, isReservedCode } from '@/lib/utils'
+import { assertDestinationSafeForStorage } from '@/lib/destination-health'
+
+export const bulkCsvSchema = z.object({
+  csv: z.string().min(1, { message: 'Invalid CSV' }).max(500_000, { message: 'CSV payload is too large' }),
+})
+
+const BULK_ALIAS = /^[A-Za-z0-9_-]{3,64}$/
+
+export function normalizeBulkTags(input: string): string[] {
+  return [
+    ...new Set(
+      input
+        .split(';')
+        .map((t) => t.trim().toLowerCase().slice(0, 32))
+        .filter((t) => /^[a-z0-9][a-z0-9-_ ]{0,31}$/.test(t)),
+    ),
+  ].slice(0, 10)
+}
+
+export function resolveBulkShortCode(raw: string | undefined): string {
+  const candidate = (raw || '').trim()
+  if (candidate && BULK_ALIAS.test(candidate) && !isReservedCode(candidate)) return candidate
+  return generateShortCode()
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,8 +37,9 @@ export async function POST(request: NextRequest) {
     const limit = await rateLimit(request, { name: 'bulk-create', limit: 5, windowMs: 60_000 })
     if (!limit.allowed) return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
 
-    const { csv } = await request.json()
-    if (!csv || typeof csv !== 'string') return NextResponse.json({ error: 'Invalid CSV' }, { status: 400 })
+    const parsedBody = bulkCsvSchema.safeParse(await request.json().catch(() => ({})))
+    if (!parsedBody.success) return NextResponse.json({ error: parsedBody.error.issues[0]?.message || 'Invalid CSV' }, { status: 400 })
+    const { csv } = parsedBody.data
 
     const lines = csv.split('\n').map(l => l.trim()).filter(l => l.length > 0)
     if (lines.length < 2) return NextResponse.json({ error: 'CSV must contain a header and at least one row' }, { status: 400 })
@@ -39,12 +65,15 @@ export async function POST(request: NextRequest) {
       try {
         if (!isValidUrl(originalUrl)) continue
         parsedUrl = normalizeUrl(originalUrl)
+        // SSRF guard: parity with single-create — reject private/link-local targets.
+        await assertDestinationSafeForStorage(parsedUrl)
       } catch { continue }
 
-      const title = titleIdx !== -1 && row[titleIdx] ? row[titleIdx].slice(0, 200) : null
-      let shortCode = customAliasIdx !== -1 && row[customAliasIdx] ? row[customAliasIdx].slice(0, 64) : generateShortCode()
+      const title = titleIdx !== -1 && row[titleIdx] ? row[titleIdx].trim().slice(0, 200) : null
+      const requestedAlias = customAliasIdx !== -1 ? row[customAliasIdx] : undefined
+      let shortCode = resolveBulkShortCode(requestedAlias)
       const tagsStr = tagsIdx !== -1 && row[tagsIdx] ? row[tagsIdx] : ''
-      const tags = tagsStr ? tagsStr.split(';').map(t => t.trim()).filter(Boolean) : []
+      const tags = tagsStr ? normalizeBulkTags(tagsStr) : []
 
       // In a real app we'd handle custom alias collisions, but for this bulk importer we'll retry with random code if collision
       try {
@@ -59,19 +88,21 @@ export async function POST(request: NextRequest) {
         })
         createdLinks.push(link)
       } catch {
-        // Fallback to random if custom code taken
+        // Fallback to random if custom code taken; never throw per-row errors.
         if (customAliasIdx !== -1 && row[customAliasIdx]) {
            shortCode = generateShortCode()
-           const link = await prisma.url.create({
-            data: {
-              originalUrl: parsedUrl,
-              shortCode,
-              title,
-              tags,
-              userId: user.id
-            }
-          })
-          createdLinks.push(link)
+           try {
+             const link = await prisma.url.create({
+               data: {
+                 originalUrl: parsedUrl,
+                 shortCode,
+                 title,
+                 tags,
+                 userId: user.id
+               }
+             })
+             createdLinks.push(link)
+           } catch { continue }
         }
       }
     }

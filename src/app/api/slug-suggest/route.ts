@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { generateSlugSuggestions } from '@/lib/slug'
 import { rateLimit } from '@/lib/rate-limit'
+
+export const slugSuggestSchema = z.object({
+  title: z.string().max(200).optional().default(''),
+  url: z.string().max(2048).optional().default(''),
+})
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,8 +17,11 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}))
-    const title = typeof body.title === 'string' ? body.title : ''
-    const url = typeof body.url === 'string' ? body.url : ''
+    const parsed = slugSuggestSchema.safeParse(body)
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid suggestion request' }, { status: 400 })
+    }
+    const { title, url } = parsed.data
 
     const candidates = generateSlugSuggestions(title, url)
     if (candidates.length === 0) {

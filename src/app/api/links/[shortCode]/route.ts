@@ -12,6 +12,15 @@ type UrlRow = NonNullable<Awaited<ReturnType<typeof getManageableUrl>>['url']>
 
 const MAX_TAGS = 10
 
+export function parseMaxClicks(input: unknown): number | null {
+  if (input === null || input === '' || input === undefined) return null
+  const value = typeof input === 'number' ? input : Number(String(input).trim())
+  if (!Number.isInteger(value) || value < 0 || value > 1_000_000) {
+    throw new Error('Max clicks must be an integer from 0 to 1000000')
+  }
+  return value
+}
+
 function normalizeTags(input: unknown): string[] {
   if (!Array.isArray(input)) return []
   return [...new Set(input
@@ -100,6 +109,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
         data.expiredUrl = null
       } else {
         const parsed = normalizeSafeUrl(String(body.expiredUrl))
+        // SSRF guard: expired fallback is a redirect target, same as creation.
+        await assertDestinationSafeForStorage(parsed)
         data.expiredUrl = parsed
       }
     }
@@ -134,7 +145,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
       }
     }
     if (body.maxClicks !== undefined) {
-      data.maxClicks = body.maxClicks === null || body.maxClicks === '' ? null : Number(body.maxClicks);
+      data.maxClicks = parseMaxClicks(body.maxClicks)
     }
 
     // Changing the fallback destination creates a revision (append-only history).

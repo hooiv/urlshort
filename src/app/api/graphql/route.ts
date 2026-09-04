@@ -16,6 +16,13 @@ type Subscription { event(types: [String!]): Event! }
 `)
 function viewerUrlWhere(userId:string){return {OR:[{userId},{workspace:{members:{some:{userId}}}}]}}
 
+export function validatePersistQueryInput(query: unknown): string {
+  if (typeof query !== 'string' || !query.trim()) throw new Error('query must be a non-empty string')
+  if (query.length > 20_000) throw new Error('Query is too large')
+  assertGraphQLSafe(query)
+  return query
+}
+
 export async function POST(request: NextRequest) {
   const limit=await rateLimit(request,{name:'graphql',limit:120,windowMs:60_000})
   if(!limit.allowed)return NextResponse.json({errors:[{message:'Rate limit exceeded'}]},{status:429,headers:{'Retry-After':String(limit.retryAfterSeconds)}})
@@ -31,13 +38,15 @@ export async function POST(request: NextRequest) {
     me:()=>user.email,
     links:async({limit=25}:{limit?:number})=>prisma.url.findMany({where:viewerUrlWhere(user.id),take:Math.min(Math.max(limit,1),100),orderBy:{createdAt:'desc'},select:{id:true,shortCode:true,originalUrl:true,clicks:true,isActive:true}}),
     campaigns:async({limit=25}:{limit?:number})=>prisma.campaign.findMany({where:{workspace:{members:{some:{userId:user.id}}}},take:Math.min(Math.max(limit,1),100),orderBy:{createdAt:'desc'},select:{id:true,name:true,status:true,objective:true}}),
-    persistQuery:({query}:{query:string})=>registerPersistedQuery(query),
+    persistQuery:({query}:{query:string})=>registerPersistedQuery(validatePersistQueryInput(query)),
   }
   const result=await graphql({schema,source:query,rootValue:root,variableValues:body.variables,operationName:body.operationName})
   return NextResponse.json(result,{status:result.errors?400:200,headers:{'Cache-Control':'no-store'}})
 }
 
 export async function GET(request:NextRequest){
+  const limit=await rateLimit(request,{name:'graphql-sse',limit:60,windowMs:60_000})
+  if(!limit.allowed)return NextResponse.json({error:'Rate limit exceeded'},{status:429,headers:{'Retry-After':String(limit.retryAfterSeconds)}})
   const user=await getCurrentUser(request); if(!user)return new Response('Authentication required',{status:401})
   const query=request.nextUrl.searchParams.get('query')
   if(!query || !/\bsubscription\b/.test(query)) return NextResponse.json({error:'Use a GraphQL subscription operation'},{status:400})

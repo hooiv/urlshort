@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { getCurrentUser } from '@/lib/auth'
+import { requireWorkspaceRole, ANALYTICS_ROLES } from '@/lib/workspaces'
 import { rateLimit } from '@/lib/rate-limit'
 
 export async function GET(
@@ -12,7 +14,15 @@ export async function GET(
       return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
     }
 
-    const { handle } = await context.params
+    const { handle: rawHandle } = await context.params
+    const handle = typeof rawHandle === 'string' ? rawHandle.trim().toLowerCase() : ''
+    if (!handle || handle.length > 64) {
+      return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
+    }
+    const user = await getCurrentUser(request)
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
     const profile = await prisma.bioProfile.findUnique({
       where: { handle: handle.toLowerCase() },
       include: {
@@ -24,6 +34,15 @@ export async function GET(
 
     if (!profile) {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
+    }
+
+    if (profile.userId) {
+      if (profile.userId !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    } else if (profile.workspaceId) {
+      const access = await requireWorkspaceRole(request, profile.workspaceId, ANALYTICS_ROLES)
+      if (access.error) return NextResponse.json({ error: access.error }, { status: access.status })
+    } else {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     // Fetch AuditEvents for this profile

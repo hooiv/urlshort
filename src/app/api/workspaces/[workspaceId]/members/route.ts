@@ -24,8 +24,12 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ w
   if (!target) return NextResponse.json({ error: 'Member not found' }, { status: 404 })
   if (target.role === 'owner' && access.membership.role !== 'owner') return NextResponse.json({ error: 'Only the owner can change the owner role' }, { status: 403 })
   if (role === 'owner' && access.membership.role !== 'owner') return NextResponse.json({ error: 'Only the owner can transfer ownership' }, { status: 403 })
-  const updated = await prisma.membership.update({ where: { id: target.id }, data: { role: role as never } })
-  if (role === 'owner') await prisma.membership.update({ where: { id: access.membership.id }, data: { role: 'admin' } })
+  const updated = await prisma.$transaction(async (tx) => {
+    // Ownership transfer must be atomic: never leave two owners behind.
+    const next = await tx.membership.update({ where: { id: target.id }, data: { role: role as never } })
+    if (role === 'owner') await tx.membership.update({ where: { id: access.membership.id }, data: { role: 'admin' } })
+    return next
+  })
   await recordAudit(request, { action: 'workspace.member_role.update', resourceType: 'membership', resourceId: target.id, metadata: { workspaceId, userId, role }, urlId: null })
   return NextResponse.json({ id: updated.userId, role: updated.role })
 }

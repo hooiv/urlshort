@@ -62,7 +62,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json(resource(identity, user), { status: 201, headers: { ...headers(), Location: `${urlBase(request)}/${identity.id}` } })
   } catch (e: unknown) {
     if (e instanceof Error && 'code' in e && e.code === 'P2002') return error('A SCIM user with this externalId or userName already exists', 409)
-    throw e
+    console.error('SCIM user creation failed:', e)
+    return error('Could not create SCIM user', 500)
   }
 }
 

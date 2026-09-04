@@ -1,29 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod/v4'
 import type { DeviceType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { getManageableUrl, READ_ROLES } from '@/lib/authorization'
 import { rateLimit } from '@/lib/rate-limit'
-import {
-  countryToFlag,
-  countryToName,
-  getBrowser,
-  getOperatingSystem,
-  getTrafficSource,
-} from '@/lib/smart-routing'
+import { countryToFlag, countryToName, getTrafficSource } from '@/lib/smart-routing'
 import { analyzeExperiment, type VariantStats } from '@/lib/stats'
 
 const RANGE_DAYS: Record<string, number> = { '24h': 1, '7d': 7, '30d': 30, '90d': 90, all: 3650 }
 const MAX_RANGE_DAYS = 3650
 
-function parseWindow(request: NextRequest): { from: Date; to: Date; range: string; isHourly: boolean } {
-  const params = request.nextUrl.searchParams
-  const rangeParam = params.get('range')
-  const fromParam = params.get('from')
-  const toParam = params.get('to')
+const QueryParams = z.object({
+  range: z.string().optional().default('30d'),
+  from: z.string().optional(),
+  to: z.string().optional(),
+  country: z.string().optional(),
+  device: z.string().optional(),
+  referrer: z.string().optional(),
+  ruleId: z.string().optional(),
+})
 
-  if (fromParam || toParam) {
-    const to = toParam ? new Date(`${toParam}T23:59:59.999Z`) : new Date()
-    const from = fromParam ? new Date(`${fromParam}T00:00:00.000Z`) : new Date(to.getTime() - 30 * 86_400_000)
+function parseWindow(params: z.infer<typeof QueryParams>): { from: Date; to: Date; range: string; isHourly: boolean } {
+  if (params.from || params.to) {
+    const to = params.to ? new Date(`${params.to}T23:59:59.999Z`) : new Date()
+    const from = params.from ? new Date(`${params.from}T00:00:00.000Z`) : new Date(to.getTime() - 30 * 86_400_000)
     if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || from > to) {
       throw new Error('Invalid date range')
     }
@@ -34,7 +34,7 @@ function parseWindow(request: NextRequest): { from: Date; to: Date; range: strin
     return { from, to, range: 'custom', isHourly: diffHours <= 48 }
   }
 
-  const range = rangeParam || '30d'
+  const range = params.range
   const days = RANGE_DAYS[range] ?? RANGE_DAYS['30d']
   const to = new Date()
   const from = new Date(to.getTime() - days * 86_400_000)
@@ -43,12 +43,6 @@ function parseWindow(request: NextRequest): { from: Date; to: Date; range: strin
 
 function dateKey(date: Date): string {
   return date.toISOString().slice(0, 10)
-}
-
-function hourKey(date: Date): string {
-  const d = new Date(date)
-  d.setMinutes(0, 0, 0)
-  return d.toISOString().slice(0, 13) + ':00'
 }
 
 export async function GET(request: NextRequest, context: { params: Promise<{ shortCode: string }> }) {
@@ -78,9 +72,23 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     })
     if (!url) return NextResponse.json({ error: 'URL not found' }, { status: 404 })
 
+    const rawParams = {
+      range: request.nextUrl.searchParams.get('range') ?? '30d',
+      from: request.nextUrl.searchParams.get('from') ?? undefined,
+      to: request.nextUrl.searchParams.get('to') ?? undefined,
+      country: request.nextUrl.searchParams.get('country') ?? undefined,
+      device: request.nextUrl.searchParams.get('device') ?? undefined,
+      referrer: request.nextUrl.searchParams.get('referrer') ?? undefined,
+      ruleId: request.nextUrl.searchParams.get('ruleId') ?? undefined,
+    }
+    const parsed = QueryParams.safeParse(rawParams)
+    if (!parsed.success) {
+      return NextResponse.json({ error: 'Invalid query parameters' }, { status: 400 })
+    }
+
     let window: { from: Date; to: Date; range: string; isHourly: boolean }
     try {
-      window = parseWindow(request)
+      window = parseWindow(parsed.data)
     } catch (error) {
       return NextResponse.json(
         { error: error instanceof Error ? error.message : 'Invalid date range' },
@@ -93,11 +101,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     const fromKey = dateKey(from)
     const toKey = dateKey(to)
 
-    // Optional segment filters from query params
-    const filterCountry = request.nextUrl.searchParams.get('country') || undefined
-    const filterDevice = request.nextUrl.searchParams.get('device') || undefined
-    const filterReferrer = request.nextUrl.searchParams.get('referrer') || undefined
-    const filterRuleId = request.nextUrl.searchParams.get('ruleId') || undefined
+    const filterCountry = parsed.data.country
+    const filterDevice = parsed.data.device
+    const filterReferrer = parsed.data.referrer
+    const filterRuleId = parsed.data.ruleId
 
     const clickFilter = {
       urlId: url.id,
@@ -108,9 +115,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
       ...(filterRuleId ? { ruleId: filterRuleId } : {}),
     }
 
+    // All queries execute in parallel — no dependency between them.
     const [
       dailyClicks,
-      events,
       countries,
       cities,
       devices,
@@ -123,36 +130,20 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
       ruleClicks,
       ruleConversions,
       windowClickCount,
+      osBreakdown,
+      browserBreakdown,
+      trafficTypeBreakdown,
+      aiAgentBreakdown,
+      utmSourceClicks,
+      utmMediumClicks,
+      utmCampaignClicks,
+      hourlyClicks,
+      hourlyConversions,
+      utmConversions,
     ] = await Promise.all([
       prisma.clickDaily.findMany({
         where: { urlId: url.id, dateKey: { gte: fromKey, lte: toKey } },
         orderBy: { dateKey: 'asc' },
-      }),
-      prisma.clickEvent.findMany({
-        where: clickFilter,
-        select: {
-          id: true,
-          createdAt: true,
-          country: true,
-          city: true,
-          referrerHost: true,
-          referer: true,
-          userAgent: true,
-          deviceType: true,
-          trafficType: true,
-          aiAgent: true,
-          os: true,
-          browser: true,
-          language: true,
-          utmSource: true,
-          utmMedium: true,
-          utmCampaign: true,
-          utmTerm: true,
-          utmContent: true,
-          ruleId: true,
-        },
-        orderBy: { createdAt: 'asc' },
-        take: 5000,
       }),
       prisma.clickEvent.groupBy({
         by: ['country'],
@@ -178,7 +169,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
         where: clickFilter,
         _count: { _all: true },
         orderBy: { _count: { referrerHost: 'desc' } },
-        take: 30,
+        take: 50,
       }),
       prisma.clickEvent.findMany({
         where: { urlId: url.id },
@@ -190,9 +181,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
           country: true,
           city: true,
           referrerHost: true,
-          referer: true,
-          userAgent: true,
           deviceType: true,
+          os: true,
+          browser: true,
           ruleId: true,
         },
       }),
@@ -236,79 +227,198 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
         _sum: { valueCents: true },
       }),
       prisma.clickEvent.count({ where: clickFilter }),
+
+      // OS breakdown — uses pre-stored os column, no re-parsing needed.
+      prisma.clickEvent.groupBy({
+        by: ['os'],
+        where: clickFilter,
+        _count: { _all: true },
+        orderBy: { _count: { os: 'desc' } },
+      }),
+
+      // Browser breakdown — uses pre-stored browser column.
+      prisma.clickEvent.groupBy({
+        by: ['browser'],
+        where: clickFilter,
+        _count: { _all: true },
+        orderBy: { _count: { browser: 'desc' } },
+      }),
+
+      // Traffic type breakdown (human / ai_agent / bot).
+      prisma.clickEvent.groupBy({
+        by: ['trafficType'],
+        where: clickFilter,
+        _count: { _all: true },
+        orderBy: { _count: { trafficType: 'desc' } },
+      }),
+
+      // AI agent breakdown — exclude null entries.
+      prisma.clickEvent.groupBy({
+        by: ['aiAgent'],
+        where: { ...clickFilter, aiAgent: { not: null } },
+        _count: { _all: true },
+        orderBy: { _count: { aiAgent: 'desc' } },
+      }),
+
+      // UTM click counts — separate queries per dimension for clean aggregation.
+      prisma.clickEvent.groupBy({
+        by: ['utmSource'],
+        where: { ...clickFilter, utmSource: { not: null } },
+        _count: { _all: true },
+        orderBy: { _count: { utmSource: 'desc' } },
+        take: 30,
+      }),
+      prisma.clickEvent.groupBy({
+        by: ['utmMedium'],
+        where: { ...clickFilter, utmMedium: { not: null } },
+        _count: { _all: true },
+        orderBy: { _count: { utmMedium: 'desc' } },
+        take: 30,
+      }),
+      prisma.clickEvent.groupBy({
+        by: ['utmCampaign'],
+        where: { ...clickFilter, utmCampaign: { not: null } },
+        _count: { _all: true },
+        orderBy: { _count: { utmCampaign: 'desc' } },
+        take: 30,
+      }),
+
+      // Hourly click rollup — raw SQL for date_trunc grouping.
+      isHourly
+        ? prisma.$queryRaw<{ hour: string; count: number }[]>`
+            SELECT
+              to_char(date_trunc('hour', "createdAt"), 'YYYY-MM-DD"T"HH24:00:00') as hour,
+              COUNT(*)::int as count
+            FROM click_events
+            WHERE "urlId" = ${url.id}
+              AND "createdAt" >= ${from}
+              AND "createdAt" <= ${to}
+            GROUP BY date_trunc('hour', "createdAt")
+            ORDER BY hour
+          `
+        : Promise.resolve([]),
+
+      // Hourly conversion + revenue rollup — raw SQL for date_trunc grouping.
+      isHourly
+        ? prisma.$queryRaw<{ hour: string; conversions: number; valueCents: number }[]>`
+            SELECT
+              to_char(date_trunc('hour', "createdAt"), 'YYYY-MM-DD"T"HH24:00:00') as hour,
+              COUNT(*)::int as "conversions",
+              COALESCE(SUM("valueCents"), 0)::int as "valueCents"
+            FROM conversion_events
+            WHERE "urlId" = ${url.id}
+              AND "createdAt" >= ${from}
+              AND "createdAt" <= ${to}
+            GROUP BY date_trunc('hour', "createdAt")
+            ORDER BY hour
+          `
+        : Promise.resolve([]),
+
+      // UTM conversion data — join conversion_events with click_events to get
+      // the UTM parameters that were active at click time.
+      prisma.$queryRaw<Array<{
+        utmSource: string | null
+        utmMedium: string | null
+        utmCampaign: string | null
+        conversions: number
+        valueCents: number
+      }>>`
+        SELECT
+          ce."utmSource",
+          ce."utmMedium",
+          ce."utmCampaign",
+          COUNT(conv.id)::int as "conversions",
+          COALESCE(SUM(conv."valueCents"), 0)::int as "valueCents"
+        FROM conversion_events conv
+        JOIN click_events ce ON ce.id = conv."clickEventId"
+        WHERE conv."urlId" = ${url.id}
+          AND conv."createdAt" >= ${from}
+          AND conv."createdAt" <= ${to}
+        GROUP BY ce."utmSource", ce."utmMedium", ce."utmCampaign"
+      `,
     ])
 
-    // Time-series rollups
-    const clicksByDate: Record<string, number> = {}
-    const clicksByHour: Record<string, number> = {}
-    const conversionByDate: Record<string, number> = {}
-    const conversionByHour: Record<string, number> = {}
-    const revenueByDate: Record<string, number> = {}
-
-    for (const row of dailyClicks) {
-      clicksByDate[row.dateKey] = row.clicks
-    }
-
-    for (const row of dailyConversions) {
-      conversionByDate[row.dateKey] = (conversionByDate[row.dateKey] || 0) + row.conversions
-      revenueByDate[row.dateKey] = (revenueByDate[row.dateKey] || 0) + (row.valueCents || 0)
-    }
-
-    // Process granular events for OS, Browser, Channel, Hourly breakdowns, and UTM
-    const osMap: Record<string, number> = {}
-    const browserMap: Record<string, number> = {}
-    const channelMap: Record<string, number> = {}
-    const trafficTypeMap: Record<string, number> = {}
-    const aiAgentMap: Record<string, number> = {}
-    const utmSources: Record<string, { clicks: number; conversions: number; valueCents: number }> = {}
-    const utmMediums: Record<string, { clicks: number; conversions: number; valueCents: number }> = {}
-    const utmCampaigns: Record<string, { clicks: number; conversions: number; valueCents: number }> = {}
-
-    for (const event of events) {
-      const os = getOperatingSystem(event.userAgent)
-      const browser = getBrowser(event.userAgent)
-      const { channel } = getTrafficSource(event.referrerHost)
-
-      osMap[os] = (osMap[os] || 0) + 1
-      browserMap[browser] = (browserMap[browser] || 0) + 1
-      channelMap[channel] = (channelMap[channel] || 0) + 1
-      trafficTypeMap[event.trafficType] = (trafficTypeMap[event.trafficType] || 0) + 1
-      if (event.aiAgent) aiAgentMap[event.aiAgent] = (aiAgentMap[event.aiAgent] || 0) + 1
-
-      if (isHourly) {
-        const hk = hourKey(event.createdAt)
-        clicksByHour[hk] = (clicksByHour[hk] || 0) + 1
-      }
-
-      // UTM parameters belong to the incoming short-link request, not the
-      // external HTTP Referer. Read the canonical fields captured on the click.
-      const utms = {
-        utm_source: event.utmSource,
-        utm_medium: event.utmMedium,
-        utm_campaign: event.utmCampaign,
-      }
-      if (utms.utm_source) {
-        const key = utms.utm_source
-        if (!utmSources[key]) utmSources[key] = { clicks: 0, conversions: 0, valueCents: 0 }
-        utmSources[key].clicks += 1
-      }
-      if (utms.utm_medium) {
-        const key = utms.utm_medium
-        if (!utmMediums[key]) utmMediums[key] = { clicks: 0, conversions: 0, valueCents: 0 }
-        utmMediums[key].clicks += 1
-      }
-      if (utms.utm_campaign) {
-        const key = utms.utm_campaign
-        if (!utmCampaigns[key]) utmCampaigns[key] = { clicks: 0, conversions: 0, valueCents: 0 }
-        utmCampaigns[key].clicks += 1
-      }
-    }
+    // --- Data transformation (pure, no I/O) ---
 
     const windowClicks = windowClickCount
     const totalConversions = goalTotals.reduce((sum, row) => sum + row._count._all, 0)
     const totalValueCents = goalTotals.reduce((sum, row) => sum + (row._sum.valueCents ?? 0), 0)
 
-    // Formatted Country Breakdown
+    // Time-series rollups from pre-aggregated daily tables.
+    const clicksByDate: Record<string, number> = {}
+    for (const row of dailyClicks) {
+      clicksByDate[row.dateKey] = row.clicks
+    }
+
+    const clicksByHour: Record<string, number> = {}
+    for (const row of hourlyClicks) {
+      clicksByHour[row.hour] = row.count
+    }
+
+    const conversionByDate: Record<string, number> = {}
+    const revenueByDate: Record<string, number> = {}
+    for (const row of dailyConversions) {
+      conversionByDate[row.dateKey] = (conversionByDate[row.dateKey] || 0) + row.conversions
+      revenueByDate[row.dateKey] = (revenueByDate[row.dateKey] || 0) + (row.valueCents || 0)
+    }
+
+    // Conversion hourly rollup from the hourly conversion query above.
+    const conversionByHour: Record<string, number> = {}
+    const revenueByHour: Record<string, number> = {}
+    for (const row of hourlyConversions) {
+      conversionByHour[row.hour] = row.conversions
+      revenueByHour[row.hour] = row.valueCents
+    }
+
+    // Channel breakdown: derive from the referrer groupBy results.
+    const channelMap: Record<string, number> = {}
+    for (const ref of referrers) {
+      const { channel } = getTrafficSource(ref.referrerHost)
+      channelMap[channel] = (channelMap[channel] || 0) + ref._count._all
+    }
+
+    // OS, Browser, Traffic Type, AI Agent — direct from groupBy.
+    const clicksByOS = osBreakdown
+      .map((row) => ({
+        os: row.os || 'other',
+        clicks: row._count._all,
+        percentage: windowClicks ? Number(((row._count._all / windowClicks) * 100).toFixed(1)) : 0,
+      }))
+      .sort((a, b) => b.clicks - a.clicks)
+
+    const clicksByBrowser = browserBreakdown
+      .map((row) => ({
+        browser: row.browser || 'other',
+        clicks: row._count._all,
+        percentage: windowClicks ? Number(((row._count._all / windowClicks) * 100).toFixed(1)) : 0,
+      }))
+      .sort((a, b) => b.clicks - a.clicks)
+
+    const clicksByTrafficType = trafficTypeBreakdown
+      .map((row) => ({
+        trafficType: row.trafficType,
+        clicks: row._count._all,
+        percentage: windowClicks ? Number(((row._count._all / windowClicks) * 100).toFixed(1)) : 0,
+      }))
+      .sort((a, b) => b.clicks - a.clicks)
+
+    const clicksByAiAgent = aiAgentBreakdown
+      .map((row) => ({
+        aiAgent: row.aiAgent!,
+        clicks: row._count._all,
+        percentage: windowClicks ? Number(((row._count._all / windowClicks) * 100).toFixed(1)) : 0,
+      }))
+      .sort((a, b) => b.clicks - a.clicks)
+
+    const clicksByChannel = Object.entries(channelMap)
+      .map(([channel, clicks]) => ({
+        channel,
+        clicks,
+        percentage: windowClicks ? Number(((clicks / windowClicks) * 100).toFixed(1)) : 0,
+      }))
+      .sort((a, b) => b.clicks - a.clicks)
+
+    // Country breakdown.
     const clicksByCountry = countries.map((row) => {
       const code = row.country || 'XX'
       const count = row._count._all
@@ -321,7 +431,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
       }
     })
 
-    // Formatted City Breakdown
+    // City breakdown.
     const clicksByCity = cities.map((row) => {
       const city = row.city || 'Unknown'
       const code = row.country || 'XX'
@@ -336,7 +446,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
       }
     })
 
-    // Formatted Device Breakdown
+    // Device breakdown.
     const clicksByDevice = devices.map((row) => {
       const device = row.deviceType || 'unknown'
       const count = row._count._all
@@ -347,34 +457,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
       }
     })
 
-    // Formatted OS Breakdown
-    const clicksByOS = Object.entries(osMap)
-      .map(([os, count]) => ({
-        os,
-        clicks: count,
-        percentage: windowClicks ? Number(((count / windowClicks) * 100).toFixed(1)) : 0,
-      }))
-      .sort((a, b) => b.clicks - a.clicks)
-
-    // Formatted Browser Breakdown
-    const clicksByBrowser = Object.entries(browserMap)
-      .map(([browser, count]) => ({
-        browser,
-        clicks: count,
-        percentage: windowClicks ? Number(((count / windowClicks) * 100).toFixed(1)) : 0,
-      }))
-      .sort((a, b) => b.clicks - a.clicks)
-
-    // Formatted Channel Breakdown
-    const clicksByChannel = Object.entries(channelMap)
-      .map(([channel, count]) => ({
-        channel,
-        clicks: count,
-        percentage: windowClicks ? Number(((count / windowClicks) * 100).toFixed(1)) : 0,
-      }))
-      .sort((a, b) => b.clicks - a.clicks)
-
-    // Formatted Referrer Breakdown
+    // Referrer breakdown.
     const clicksByReferrer = referrers.map((row) => {
       const host = row.referrerHost || 'Direct'
       const { channel, sourceName } = getTrafficSource(row.referrerHost)
@@ -388,43 +471,63 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
       }
     })
 
-    // UTM Breakdown
-    const utmPerformance = {
-      sources: Object.entries(utmSources)
-        .map(([name, stat]) => ({
-          name,
-          clicks: stat.clicks,
-          conversions: stat.conversions,
-          conversionRate: stat.clicks ? stat.conversions / stat.clicks : 0,
-          valueCents: stat.valueCents,
-        }))
-        .sort((a, b) => b.clicks - a.clicks),
-      mediums: Object.entries(utmMediums)
-        .map(([name, stat]) => ({
-          name,
-          clicks: stat.clicks,
-          conversions: stat.conversions,
-          conversionRate: stat.clicks ? stat.conversions / stat.clicks : 0,
-          valueCents: stat.valueCents,
-        }))
-        .sort((a, b) => b.clicks - a.clicks),
-      campaigns: Object.entries(utmCampaigns)
-        .map(([name, stat]) => ({
-          name,
-          clicks: stat.clicks,
-          conversions: stat.conversions,
-          conversionRate: stat.clicks ? stat.conversions / stat.clicks : 0,
-          valueCents: stat.valueCents,
-        }))
-        .sort((a, b) => b.clicks - a.clicks),
+    // UTM performance — merge click counts with conversion data from the raw SQL join.
+    const utmConversionBySource = new Map<string, { conversions: number; valueCents: number }>()
+    const utmConversionByMedium = new Map<string, { conversions: number; valueCents: number }>()
+    const utmConversionByCampaign = new Map<string, { conversions: number; valueCents: number }>()
+
+    for (const row of utmConversions) {
+      if (row.utmSource) {
+        const existing = utmConversionBySource.get(row.utmSource) ?? { conversions: 0, valueCents: 0 }
+        existing.conversions += row.conversions
+        existing.valueCents += row.valueCents
+        utmConversionBySource.set(row.utmSource, existing)
+      }
+      if (row.utmMedium) {
+        const existing = utmConversionByMedium.get(row.utmMedium) ?? { conversions: 0, valueCents: 0 }
+        existing.conversions += row.conversions
+        existing.valueCents += row.valueCents
+        utmConversionByMedium.set(row.utmMedium, existing)
+      }
+      if (row.utmCampaign) {
+        const existing = utmConversionByCampaign.get(row.utmCampaign) ?? { conversions: 0, valueCents: 0 }
+        existing.conversions += row.conversions
+        existing.valueCents += row.valueCents
+        utmConversionByCampaign.set(row.utmCampaign, existing)
+      }
     }
 
-    // Goals mapping
+    function buildUtmList(
+      clickGroups: Array<{ utmSource?: string | null; utmMedium?: string | null; utmCampaign?: string | null; _count: { _all: number } }>,
+      getName: (row: typeof clickGroups[number]) => string,
+      convMap: Map<string, { conversions: number; valueCents: number }>,
+    ) {
+      return clickGroups.map((row) => {
+        const name = getName(row)
+        const clicks = row._count._all
+        const conv = convMap.get(name) ?? { conversions: 0, valueCents: 0 }
+        return {
+          name,
+          clicks,
+          conversions: conv.conversions,
+          conversionRate: clicks ? conv.conversions / clicks : 0,
+          valueCents: conv.valueCents,
+        }
+      })
+    }
+
+    const utmPerformance = {
+      sources: buildUtmList(utmSourceClicks, (r) => r.utmSource!, utmConversionBySource),
+      mediums: buildUtmList(utmMediumClicks, (r) => r.utmMedium!, utmConversionByMedium),
+      campaigns: buildUtmList(utmCampaignClicks, (r) => r.utmCampaign!, utmConversionByCampaign),
+    }
+
+    // Goals.
     const goalTotalsMap = new Map(
       goalTotals.map((row) => [row.goalId, { conversions: row._count._all, valueCents: row._sum.valueCents ?? 0 }])
     )
 
-    // Rule performance & A/B testing statistical engine
+    // Rule performance & A/B testing statistical engine.
     const clickMap = new Map(ruleClicks.map((row) => [row.ruleId as string, row._count._all]))
     const conversionMap = new Map(
       ruleConversions.map((row) => [
@@ -433,7 +536,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
       ])
     )
 
-    // Base fallback clicks (clicks without ruleId)
     const baseClicks = windowClicks - ruleClicks.reduce((sum, r) => sum + r._count._all, 0)
     const baseConversions = totalConversions - ruleConversions.reduce((sum, r) => sum + r._count._all, 0)
     const baseValueCents = totalValueCents - ruleConversions.reduce((sum, r) => sum + (r._sum.valueCents ?? 0), 0)
@@ -475,11 +577,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
       }
     })
 
-    // Enriched recent clicks
+    // Enriched recent clicks — lightweight, no user-agent re-parsing needed.
     const enrichedRecentClicks = recentClicks.map((click) => {
       const { channel, sourceName } = getTrafficSource(click.referrerHost)
-      const os = getOperatingSystem(click.userAgent)
-      const browser = getBrowser(click.userAgent)
       const code = click.country || 'XX'
       return {
         id: click.id,
@@ -492,8 +592,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
         referrerSource: sourceName,
         channel,
         deviceType: click.deviceType || 'unknown',
-        os,
-        browser,
+        os: click.os || 'other',
+        browser: click.browser || 'other',
         ruleId: click.ruleId,
       }
     })
@@ -525,18 +625,15 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
         conversionByDate,
         conversionByHour,
         revenueByDate,
+        revenueByHour,
         clicksByCountry,
         clicksByCity,
         clicksByDevice,
         clicksByOS,
         clicksByBrowser,
         clicksByChannel,
-        clicksByTrafficType: Object.entries(trafficTypeMap)
-          .map(([trafficType, clicks]) => ({ trafficType, clicks, percentage: windowClicks ? Number(((clicks / windowClicks) * 100).toFixed(1)) : 0 }))
-          .sort((a, b) => b.clicks - a.clicks),
-        clicksByAiAgent: Object.entries(aiAgentMap)
-          .map(([aiAgent, clicks]) => ({ aiAgent, clicks, percentage: windowClicks ? Number(((clicks / windowClicks) * 100).toFixed(1)) : 0 }))
-          .sort((a, b) => b.clicks - a.clicks),
+        clicksByTrafficType,
+        clicksByAiAgent,
         clicksByReferrer,
         utmPerformance,
         goals: goals.map((goal) => ({

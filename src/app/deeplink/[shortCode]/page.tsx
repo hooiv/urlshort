@@ -1,6 +1,23 @@
 import { notFound } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import { Metadata } from 'next'
-type Props={params:Promise<{shortCode:string}>}
-export async function generateMetadata({params}:Props):Promise<Metadata>{const {shortCode}=await params;const url=await prisma.url.findUnique({where:{shortCode},select:{title:true}});return {title:url?`Opening ${url.title||'App'}...`:'Not Found'}}
-export default async function DeferredDeepLinkPage({params}:Props){const {shortCode}=await params;const exists=await prisma.url.findUnique({where:{shortCode},select:{id:true}});if(!exists)notFound();const resolver=`/api/deep-links/resolve/${encodeURIComponent(shortCode)}`;return <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6"><section className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900 p-8 text-center"><h1 className="text-2xl font-semibold">Opening app…</h1><p className="mt-3 text-slate-400">Resolving the best native destination.</p><div className="mt-6 h-2 overflow-hidden rounded-full bg-slate-800"><div className="h-full w-1/2 animate-pulse rounded-full bg-blue-500" /></div><div id="fallback" className="mt-6 hidden space-y-3"><a id="open" className="block rounded-xl bg-blue-600 px-4 py-3 font-medium">Open app</a><a id="store" className="block rounded-xl bg-slate-800 px-4 py-3">Open store</a><a id="web" className="block rounded-xl border border-slate-700 px-4 py-3">Continue in browser</a></div><script dangerouslySetInnerHTML={{__html:`(async()=>{const fallback=document.getElementById('fallback'),open=document.getElementById('open'),store=document.getElementById('store'),web=document.getElementById('web');try{const r=await fetch(${JSON.stringify(resolver)},{cache:'no-store'});if(!r.ok)throw new Error('resolver');const x=await r.json();if(open)open.href=x.url||x.webUrl||'/';if(store)store.href=x.storeUrl||x.webUrl||'/';if(web)web.href=x.webUrl||'/';fallback?.classList.remove('hidden');if(x.action==='open'&&x.url){let backgrounded=false;const onBlur=()=>{backgrounded=true};window.addEventListener('blur',onBlur,{once:true});window.location.href=x.url;setTimeout(()=>{if(!backgrounded)fallback?.classList.remove('hidden')},1200)}else if(x.url){window.location.replace(x.url)}}catch(e){fallback?.classList.remove('hidden')}})()`}}/></section></main>}
+import type { Metadata } from 'next'
+import DeepLinkClient from '@/app/deeplink/[shortCode]/components/DeepLinkClient'
+
+type Props = { params: Promise<{ shortCode: string }> }
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { shortCode } = await params
+  const url = await prisma.url.findUnique({ where: { shortCode }, select: { title: true } })
+  return { title: url ? `Opening ${url.title || 'App'}...` : 'Not Found' }
+}
+
+export default async function DeferredDeepLinkPage({ params }: Props) {
+  const { shortCode } = await params
+  const exists = await prisma.url.findUnique({ where: { shortCode }, select: { id: true } })
+  if (!exists) notFound()
+  return (
+    <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
+      <DeepLinkClient shortCode={shortCode} />
+    </main>
+  )
+}

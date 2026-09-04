@@ -27,7 +27,10 @@ export async function POST(request: NextRequest) {
     if (!limit.allowed) return NextResponse.json({ error: 'Too many key operations' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
 
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
-    const name = typeof body.name === 'string' ? body.name.trim().slice(0, 80) : ''\n    const allowedScopes = new Set(['links:read','links:write','analytics:read','campaigns:write','webhooks:write','*'])\n    const scopes = Array.isArray(body.scopes) ? body.scopes.filter((v): v is string => typeof v === 'string' && allowedScopes.has(v)) : ['*']\n    if (!scopes.length || scopes.length !== (Array.isArray(body.scopes) ? body.scopes.length : scopes.length)) return NextResponse.json({ error: 'Invalid API key scopes' }, { status: 400 })
+    const name = typeof body.name === 'string' ? body.name.trim().slice(0, 80) : ''
+    const allowedScopes = new Set(['links:read','links:write','analytics:read','campaigns:write','webhooks:write','*'])
+    const scopes = Array.isArray(body.scopes) ? body.scopes.filter((v): v is string => typeof v === 'string' && allowedScopes.has(v)) : ['*']
+    if (!scopes.length || scopes.length !== (Array.isArray(body.scopes) ? body.scopes.length : scopes.length)) return NextResponse.json({ error: 'Invalid API key scopes' }, { status: 400 })
     if (!name) return NextResponse.json({ error: 'Key name is required' }, { status: 400 })
 
     const activeCount = await prisma.apiKey.count({ where: { userId: user.id, revokedAt: null } })

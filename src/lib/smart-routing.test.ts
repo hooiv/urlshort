@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { NextRequest } from 'next/server'
 import {
   chooseSmartRule,
   countryToFlag,
@@ -9,6 +10,7 @@ import {
   getOperatingSystem,
   getTrafficSource,
   getTrafficType,
+  getVisitorId,
   normalizeCountryCodes,
   normalizeReferrerDomain,
   normalizeSafeUrl,
@@ -265,5 +267,30 @@ describe('normalizeSafeUrl', () => {
     expect(() => normalizeSafeUrl('javascript:alert(1)')).toThrow()
     expect(() => normalizeSafeUrl('https://user:pass@example.com')).toThrow()
     expect(() => normalizeSafeUrl('not a url')).toThrow()
+  })
+})
+
+describe('getVisitorId', () => {
+  const stub = (value: string | undefined) =>
+    ({ cookies: { get: () => (value === undefined ? undefined : { value }) } }) as unknown as NextRequest
+
+  it('passes through well-formed visitor cookies', () => {
+    const id = '123e4567-e89b-12d3-a456-426614174000'
+    expect(getVisitorId(stub(id))).toEqual({ id, isNew: false })
+  })
+
+  it('regenerates attacker-controlled or malformed cookie values', () => {
+    for (const bad of ['attacker-controlled', '../../etc/passwd', '', '123e4567-e89b-12d3-a456', 'zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz']) {
+      const result = getVisitorId(stub(bad))
+      expect(result.isNew).toBe(true)
+      expect(result.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+      expect(result.id).not.toBe(bad)
+    }
+  })
+
+  it('mints a fresh id when no cookie is present', () => {
+    const result = getVisitorId(stub(undefined))
+    expect(result.isNew).toBe(true)
+    expect(result.id).toMatch(/^[0-9a-f-]{36}$/)
   })
 })
