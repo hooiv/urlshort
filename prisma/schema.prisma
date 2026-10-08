@@ -587,6 +587,10 @@ model WebhookEndpoint {
   secret      String
   isActive    Boolean  @default(true)
   events      String[] // Array of event names like "click", "conversion"
+  /// 'all' | 'tags' | 'links' - which of the owner's links fire this endpoint.
+  linkScope   String   @default("all")
+  tagFilter   String[] @default([])
+  urlIdFilter String[] @default([])
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -596,6 +600,8 @@ model WebhookEndpoint {
 
   @@index([workspaceId])
   @@index([userId])
+  @@index([workspaceId, isActive])
+  @@index([userId, isActive])
   @@map("webhook_endpoints")
 }
 

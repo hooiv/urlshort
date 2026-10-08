@@ -36,3 +36,17 @@ export function getWebhookUrlError(raw: string): string | null {
   if (!parsed.hostname) return 'Enter a valid URL with a hostname';
   return null;
 }
+
+/** Splits a comma/whitespace/newline separated list typed by the user. */
+export function parseFilterList(input: string): string[] {
+  return [...new Set(input.split(/[\s,]+/).map((part) => part.trim()).filter(Boolean))];
+}
+
+export function describeLinkScope(filter: { linkScope: string; tags: string[]; shortCodes: string[] }): string {
+  if (filter.linkScope === 'tags') return `Links tagged ${filter.tags.join(', ')}`;
+  if (filter.linkScope === 'links') {
+    const shown = filter.shortCodes.slice(0, 3).map((code) => `/${code}`).join(', ');
+    return filter.shortCodes.length > 3 ? `${shown} +${filter.shortCodes.length - 3} more` : shown;
+  }
+  return 'All links';
+}

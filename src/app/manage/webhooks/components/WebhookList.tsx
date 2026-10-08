@@ -1,6 +1,7 @@
 'use client';
 
-import { Activity, RefreshCw, Server, Trash2 } from 'lucide-react';
+import { Activity, Filter, RefreshCw, Server, Trash2 } from 'lucide-react';
+import { describeLinkScope } from './validateWebhook';
 import { formatNumber } from '@/lib/format';
 import type { Webhook } from './types';
 
@@ -47,6 +48,9 @@ export function WebhookList({
                 </span>
                 <span className="flex items-center gap-1">
                   <Activity className="w-3 h-3" /> {formatNumber(webhook.deliveries)} deliveries
+                </span>
+                <span className="flex items-center gap-1">
+                  <Filter className="w-3 h-3" /> {describeLinkScope(webhook)}
                 </span>
               </div>
             </div>

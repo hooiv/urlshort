@@ -5,6 +5,8 @@ import { getCurrentUser } from '@/lib/auth';
 import { assertDestinationSafeForStorage } from '@/lib/destination-health';
 import { rateLimit } from '@/lib/rate-limit';
 import crypto from 'crypto';
+import { parseLinkFilterInput } from '@/lib/webhook-filters';
+import { resolveOwnedLinkIds } from '@/lib/webhook-link-resolution';
 
 /**
  * Events an endpoint may subscribe to. Keeping this a closed allowlist stops
@@ -40,6 +42,9 @@ export function normalizeEvents(input: unknown): string[] {
 export const webhookCreateSchema = z.object({
   url: z.string().trim().min(1).max(2048),
   events: z.array(z.string().trim().min(1).max(64)).min(1).max(10).optional(),
+  linkScope: z.unknown().optional(),
+  tags: z.unknown().optional(),
+  shortCodes: z.unknown().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -54,6 +59,9 @@ export async function GET(request: NextRequest) {
         url: true,
         isActive: true,
         events: true,
+        linkScope: true,
+        tagFilter: true,
+        urlIdFilter: true,
         createdAt: true,
         updatedAt: true,
         _count: {
@@ -64,6 +72,14 @@ export async function GET(request: NextRequest) {
       take: 100,
     });
 
+    const filteredIds = [...new Set(endpoints.flatMap((endpoint) => endpoint.urlIdFilter))];
+    const shortCodeById = new Map(
+      filteredIds.length
+        ? (await prisma.url.findMany({ where: { id: { in: filteredIds } }, select: { id: true, shortCode: true } }))
+            .map((link) => [link.id, link.shortCode])
+        : [],
+    );
+
     // Secrets are signed against (HMAC), never returned after creation. We
     // expose only a short non-reversible-looking hint for UI identification.
     return NextResponse.json(endpoints.map((endpoint) => ({
@@ -71,6 +87,9 @@ export async function GET(request: NextRequest) {
       url: endpoint.url,
       isActive: endpoint.isActive,
       events: endpoint.events,
+      linkScope: endpoint.linkScope,
+      tags: endpoint.tagFilter,
+      shortCodes: endpoint.urlIdFilter.map((id) => shortCodeById.get(id)).filter((code): code is string => !!code),
       createdAt: endpoint.createdAt,
       updatedAt: endpoint.updatedAt,
       deliveriesCount: endpoint._count.deliveries,
@@ -93,6 +112,15 @@ export async function POST(request: NextRequest) {
     const parsed = webhookCreateSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'URL is required' }, { status: 400 });
     const { url, events } = parsed.data;
+
+    const filter = parseLinkFilterInput(parsed.data);
+    if (!filter.ok) return NextResponse.json({ error: filter.error }, { status: 400 });
+    let urlIdFilter: string[] = [];
+    if (filter.linkScope === 'links') {
+      const resolved = await resolveOwnedLinkIds(user.id, filter.shortCodes);
+      if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 400 });
+      urlIdFilter = resolved.ids;
+    }
 
     let normalizedEvents: string[];
     try {
@@ -123,6 +151,9 @@ export async function POST(request: NextRequest) {
         url: normalizedUrl,
         secret,
         events: normalizedEvents,
+        linkScope: filter.linkScope,
+        tagFilter: filter.tagFilter,
+        urlIdFilter,
       },
     });
 

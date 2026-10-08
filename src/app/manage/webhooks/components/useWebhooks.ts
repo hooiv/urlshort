@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { Webhook } from './types';
+import type { Webhook, WebhookLinkFilter, WebhookLinkScope } from './types';
 import { DEFAULT_WEBHOOK_EVENTS, getWebhookUrlError } from './validateWebhook';
 
 type RawWebhook = {
@@ -14,6 +14,9 @@ type RawWebhook = {
   secretHint?: string;
   secret?: string;
   _count?: { deliveries: number };
+  linkScope?: string;
+  tags?: string[];
+  shortCodes?: string[];
 };
 
 /**
@@ -38,6 +41,9 @@ function normalizeWebhook(raw: RawWebhook): Webhook {
     updatedAt: raw.updatedAt,
     deliveries,
     secretHint: raw.secretHint,
+    linkScope: raw.linkScope === 'tags' || raw.linkScope === 'links' ? (raw.linkScope as WebhookLinkScope) : 'all',
+    tags: Array.isArray(raw.tags) ? raw.tags : [],
+    shortCodes: Array.isArray(raw.shortCodes) ? raw.shortCodes : [],
   };
 }
 
@@ -74,7 +80,7 @@ export function useWebhooks() {
     return () => controller.abort();
   }, []);
 
-  const addWebhook = useCallback(async (url: string): Promise<boolean> => {
+  const addWebhook = useCallback(async (url: string, filter: WebhookLinkFilter): Promise<boolean> => {
     const validationError = getWebhookUrlError(url);
     if (validationError) {
       setError(validationError);
@@ -89,6 +95,9 @@ export function useWebhooks() {
         body: JSON.stringify({
           url: url.trim(),
           events: DEFAULT_WEBHOOK_EVENTS,
+          linkScope: filter.linkScope,
+          ...(filter.linkScope === 'tags' ? { tags: filter.tags } : {}),
+          ...(filter.linkScope === 'links' ? { shortCodes: filter.shortCodes } : {}),
         }),
       });
       const data: unknown = await res.json().catch(() => null);

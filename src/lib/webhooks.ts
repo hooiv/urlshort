@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { assertDestinationSafeForStorage } from './destination-health';
 import { reserveUsageInTransaction } from './tenant-usage';
 import { CircuitBreaker } from './resilience';
+import { endpointMatchesLink, signWebhookPayload } from './webhook-filters';
 
 export const WEBHOOK_MAX_RETRIES = 5;
 const webhookCircuits = new Map<string, CircuitBreaker>();
@@ -102,8 +103,11 @@ export async function processWebhookDelivery(deliveryId: string): Promise<Webhoo
   }
   const payloadStr = delivery.payload;
   
-  // Generate HMAC signature
+  // Legacy body-only signature is kept for existing consumers; the
+  // timestamped v1 signature lets receivers reject replayed deliveries.
   const signature = generateWebhookSignature(payloadStr, endpoint.secret);
+  const timestampSeconds = Math.floor(Date.now() / 1000);
+  const timestampedSignature = signWebhookPayload(payloadStr, endpoint.secret, timestampSeconds);
 
   const currentAttempt = delivery.attempts + 1;
 
@@ -126,6 +130,8 @@ export async function processWebhookDelivery(deliveryId: string): Promise<Webhoo
       headers: {
         'Content-Type': 'application/json',
         'X-QuickLink-Signature': signature,
+        'X-QuickLink-Signature-256': timestampedSignature,
+        'X-QuickLink-Timestamp': String(timestampSeconds),
         'X-QuickLink-Event': delivery.event,
         'X-QuickLink-Delivery': delivery.id,
       },
@@ -194,35 +200,105 @@ export async function processDeadLetterQueue() {
   };
 }
 
+export type WebhookFanoutItem = { urlId: string; payload: Record<string, unknown> }
+
+type FanoutEndpoint = {
+  id: string
+  workspaceId: string | null
+  userId: string | null
+  linkScope: string
+  tagFilter: string[]
+  urlIdFilter: string[]
+}
+
+type FanoutLink = { id: string; workspaceId: string | null; userId: string | null; tags: string[] }
+
+/**
+ * Pure matcher: which endpoint should receive which item. An endpoint is only
+ * eligible for a link owned by the same workspace or the same user (tenant
+ * isolation), and then only if its link filter accepts the link.
+ */
+export function planWebhookFanout(
+  items: WebhookFanoutItem[],
+  links: Map<string, FanoutLink>,
+  endpoints: FanoutEndpoint[],
+): { endpointId: string; workspaceId: string | null; payload: Record<string, unknown> }[] {
+  const planned: { endpointId: string; workspaceId: string | null; payload: Record<string, unknown> }[] = []
+  for (const item of items) {
+    const link = links.get(item.urlId)
+    if (!link) continue
+    for (const endpoint of endpoints) {
+      const sameTenant =
+        (endpoint.workspaceId !== null && endpoint.workspaceId === link.workspaceId) ||
+        (endpoint.userId !== null && endpoint.userId === link.userId)
+      if (!sameTenant || !endpointMatchesLink(endpoint, link)) continue
+      planned.push({ endpointId: endpoint.id, workspaceId: endpoint.workspaceId, payload: item.payload })
+    }
+  }
+  return planned
+}
+
+/**
+ * Fans one event out for many links with a constant number of queries
+ * (links, endpoints, one insert transaction) instead of three round-trips per
+ * item. A 1,000-click batch previously cost ~3,000 queries here.
+ */
+export async function dispatchWebhooksForUrls(event: string, items: WebhookFanoutItem[]): Promise<{ enqueued: number; droppedForQuota: number }> {
+  if (items.length === 0) return { enqueued: 0, droppedForQuota: 0 }
+  const urlIds = [...new Set(items.map(item => item.urlId))]
+  const links = await prisma.url.findMany({
+    where: { id: { in: urlIds } },
+    select: { id: true, workspaceId: true, userId: true, tags: true },
+  })
+  const linkMap = new Map(links.map(link => [link.id, link]))
+
+  const workspaceIds = [...new Set(links.map(l => l.workspaceId).filter((id): id is string => !!id))]
+  const userIds = [...new Set(links.map(l => l.userId).filter((id): id is string => !!id))]
+  // Security-critical: only ever query endpoints of the owners we just read.
+  // An empty owner set must short-circuit; `OR: []` would match nothing in
+  // Prisma, but being explicit keeps the intent obvious.
+  const ownerScope = [
+    ...(workspaceIds.length ? [{ workspaceId: { in: workspaceIds } }] : []),
+    ...(userIds.length ? [{ userId: { in: userIds } }] : []),
+  ]
+  if (ownerScope.length === 0) return { enqueued: 0, droppedForQuota: 0 }
+
+  const endpoints = await prisma.webhookEndpoint.findMany({
+    where: { isActive: true, events: { has: event }, OR: ownerScope },
+    select: { id: true, workspaceId: true, userId: true, linkScope: true, tagFilter: true, urlIdFilter: true },
+  })
+  if (endpoints.length === 0) return { enqueued: 0, droppedForQuota: 0 }
+
+  const planned = planWebhookFanout(items, linkMap, endpoints)
+  if (planned.length === 0) return { enqueued: 0, droppedForQuota: 0 }
+
+  const perWorkspace = new Map<string, number>()
+  for (const p of planned) if (p.workspaceId) perWorkspace.set(p.workspaceId, (perWorkspace.get(p.workspaceId) ?? 0) + 1)
+
+  return prisma.$transaction(async tx => {
+    const blocked = new Set<string>()
+    // Sorted to take tenant quota row locks in a stable order across workers (deadlock avoidance).
+    for (const workspaceId of [...perWorkspace.keys()].sort()) {
+      const quota = await reserveUsageInTransaction(tx, workspaceId, 'webhook_deliveries', BigInt(perWorkspace.get(workspaceId)!))
+      if (!quota.allowed) blocked.add(workspaceId)
+    }
+    const admitted = planned.filter(p => !p.workspaceId || !blocked.has(p.workspaceId))
+    if (admitted.length > 0) {
+      const now = new Date()
+      await tx.webhookDelivery.createMany({
+        data: admitted.map(p => ({ endpointId: p.endpointId, event, payload: JSON.stringify(p.payload), status: 'pending' as const, nextAttemptAt: now })),
+      })
+    }
+    return { enqueued: admitted.length, droppedForQuota: planned.length - admitted.length }
+  })
+}
+
 export async function dispatchWebhooksForUrl(
   urlId: string,
   event: string,
   payload: Record<string, unknown>
 ) {
-  const url = await prisma.url.findUnique({
-    where: { id: urlId },
-    select: { workspaceId: true, userId: true },
-  });
-  if (!url) return;
-
-  // Security-critical: scope strictly to the owning workspace/user. A naive
-  // `{ workspaceId: { not: null } }`-style filter here would fan this link's
-  // click payloads out to every other tenant's endpoints.
-  const scope = webhookEndpointScope(url);
-  if (!scope) return;
-
-  const endpoints = await prisma.webhookEndpoint.findMany({
-    where: {
-      isActive: true,
-      OR: scope,
-      events: {
-        has: event
-      }
-    },
-    select: { id: true },
-  });
-
-  await Promise.allSettled(endpoints.map((endpoint) => enqueueWebhook(endpoint.id, event, payload)));
+  await dispatchWebhooksForUrls(event, [{ urlId, payload }])
 }
 
 export function generateWebhookSignature(payload: string, secret: string): string {

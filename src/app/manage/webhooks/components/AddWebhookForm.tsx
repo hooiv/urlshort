@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { Activity, Check, Copy, Plus } from 'lucide-react';
+import type { WebhookLinkFilter, WebhookLinkScope } from './types';
+import { parseFilterList } from './validateWebhook';
 
 export function AddWebhookForm({
   adding,
@@ -14,16 +16,29 @@ export function AddWebhookForm({
   serverError: string | null;
   createdSecret: string | null;
   onClearSecret: () => void;
-  onAdd: (url: string) => Promise<boolean>;
+  onAdd: (url: string, filter: WebhookLinkFilter) => Promise<boolean>;
 }) {
   const [newUrl, setNewUrl] = useState('');
   const [copied, setCopied] = useState(false);
+  const [linkScope, setLinkScope] = useState<WebhookLinkScope>('all');
+  const [filterText, setFilterText] = useState('');
+
+  const filterValues = parseFilterList(filterText);
+  const filterIncomplete = linkScope !== 'all' && filterValues.length === 0;
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUrl) return;
-    const added = await onAdd(newUrl);
-    if (added) setNewUrl('');
+    if (!newUrl || filterIncomplete) return;
+    const added = await onAdd(newUrl, {
+      linkScope,
+      tags: linkScope === 'tags' ? filterValues : [],
+      shortCodes: linkScope === 'links' ? filterValues.map((code) => code.replace(/^\//, '')) : [],
+    });
+    if (added) {
+      setNewUrl('');
+      setFilterText('');
+      setLinkScope('all');
+    }
   };
 
   const copySecret = async () => {
@@ -40,7 +55,8 @@ export function AddWebhookForm({
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6">
       <h2 className="text-lg font-semibold mb-4">Add Endpoint</h2>
-      <form onSubmit={handleAdd} className="flex gap-4">
+      <form onSubmit={handleAdd} className="space-y-3">
+        <div className="flex gap-4">
         <input
           type="url"
           value={newUrl}
@@ -51,12 +67,38 @@ export function AddWebhookForm({
         />
         <button
           type="submit"
-          disabled={adding || !newUrl}
+          disabled={adding || !newUrl || filterIncomplete}
           className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-xl transition-colors disabled:opacity-50"
         >
           {adding ? <Activity className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
           Add Endpoint
         </button>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <label htmlFor="webhook-scope" className="text-sm text-slate-400 shrink-0">
+            Fire for
+          </label>
+          <select
+            id="webhook-scope"
+            value={linkScope}
+            onChange={(e) => setLinkScope(e.target.value as WebhookLinkScope)}
+            className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+          >
+            <option value="all">All links</option>
+            <option value="tags">Links with tags…</option>
+            <option value="links">Specific links…</option>
+          </select>
+          {linkScope !== 'all' && (
+            <input
+              type="text"
+              value={filterText}
+              onChange={(e) => setFilterText(e.target.value)}
+              placeholder={linkScope === 'tags' ? 'launch, newsletter' : 'spring-sale, /promo'}
+              aria-label={linkScope === 'tags' ? 'Tags, comma separated' : 'Short codes, comma separated'}
+              className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+            />
+          )}
+        </div>
       </form>
       {serverError && <p className="text-red-400 text-sm mt-3">{serverError}</p>}
       {createdSecret && (

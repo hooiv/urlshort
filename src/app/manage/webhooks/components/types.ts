@@ -8,4 +8,15 @@ export type Webhook = {
   /** Normalized delivery count (the API exposes `deliveriesCount`). */
   deliveries: number;
   secretHint?: string;
+  linkScope: WebhookLinkScope;
+  tags: string[];
+  shortCodes: string[];
+};
+
+export type WebhookLinkScope = 'all' | 'tags' | 'links';
+
+export type WebhookLinkFilter = {
+  linkScope: WebhookLinkScope;
+  tags: string[];
+  shortCodes: string[];
 };
