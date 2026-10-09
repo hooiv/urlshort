@@ -734,6 +734,10 @@ model WebhookDelivery {
   lastAttemptAt DateTime?
   leaseToken    String?
   leaseUntil    DateTime?
+  /// Duration of the last attempt, for the delivery log and latency stats.
+  latencyMs     Int?
+  /// Set on a manual redelivery: the delivery it re-sends.
+  replayOfId    String?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
@@ -741,6 +745,7 @@ model WebhookDelivery {
 
   @@index([status, nextAttemptAt])
   @@index([endpointId, createdAt])
+  @@index([endpointId, status, createdAt])
   @@map("webhook_deliveries")
 }
 

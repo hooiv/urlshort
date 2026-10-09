@@ -7,6 +7,25 @@ import { CircuitBreaker } from './resilience';
 import { endpointMatchesLink, signWebhookPayload } from './webhook-filters';
 
 export const WEBHOOK_MAX_RETRIES = 5;
+const RESPONSE_BODY_LIMIT = 1000;
+
+/** Reads at most `limit` characters of a response body, then cancels the stream. */
+export async function readCappedText(res: Response, limit: number): Promise<string> {
+  if (!res.body) return '';
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let text = '';
+  try {
+    while (text.length < limit) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      text += decoder.decode(value, { stream: true });
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+  return text.slice(0, limit);
+}
 const webhookCircuits = new Map<string, CircuitBreaker>();
 function circuitFor(endpointId:string){let c=webhookCircuits.get(endpointId);if(!c){c=new CircuitBreaker(5,30_000);webhookCircuits.set(endpointId,c)}return c}
 
@@ -46,7 +65,8 @@ export type WebhookDeliveryResult = {
 export async function enqueueWebhook(
   endpointId: string,
   event: string,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown> | string,
+  options: { replayOfId?: string } = {}
 ) {
   const delivery = await prisma.$transaction(async tx => {
     const endpointOwner = await tx.webhookEndpoint.findUnique({ where: { id: endpointId }, select: { workspaceId: true } })
@@ -59,9 +79,11 @@ export async function enqueueWebhook(
       data: {
         endpointId,
         event,
-        payload: JSON.stringify(payload),
+        // A replay passes the original string so the body is byte-identical.
+        payload: typeof payload === 'string' ? payload : JSON.stringify(payload),
         status: 'pending',
         nextAttemptAt: new Date(),
+        replayOfId: options.replayOfId ?? null,
       },
     })
   });
@@ -138,10 +160,15 @@ export async function processWebhookDelivery(deliveryId: string): Promise<Webhoo
       body: payloadStr,
       // 5 second timeout
       signal: AbortSignal.timeout(5000),
+      // Never follow redirects: the destination was only vetted for SSRF at
+      // its own address, and a 3xx could point at internal infrastructure.
+      redirect: 'manual',
     });
 
     responseCode = res.status;
-    responseBody = await res.text().catch(() => null);
+    // Bounded read: a receiver can't make the worker buffer an unbounded body.
+    responseBody = await readCappedText(res, RESPONSE_BODY_LIMIT).catch(() => null);
+    if (res.status >= 300 && res.status < 400) responseBody = `Redirect (${res.status}) not followed; point the webhook at the final URL`;
 
     if (res.ok) {
       status = 'success';
@@ -170,6 +197,7 @@ export async function processWebhookDelivery(deliveryId: string): Promise<Webhoo
       responseBody: responseBody ? responseBody.substring(0, 1000) : null,
       lastAttemptAt: new Date(),
       nextAttemptAt,
+      latencyMs,
       leaseToken: null,
       leaseUntil: null,
     },

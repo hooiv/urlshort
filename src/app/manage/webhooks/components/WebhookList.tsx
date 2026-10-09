@@ -1,6 +1,8 @@
 'use client';
 
-import { Activity, Filter, RefreshCw, Server, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { DeliveryLog } from './DeliveryLog';
+import { Activity, ListChecks, Filter, RefreshCw, Server, Trash2 } from 'lucide-react';
 import { describeLinkScope } from './validateWebhook';
 import { formatNumber } from '@/lib/format';
 import type { Webhook } from './types';
@@ -16,6 +18,7 @@ export function WebhookList({
   loadError: string | null;
   onDelete: (id: string) => void;
 }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
   return (
     <div className="space-y-4">
       {loading ? (
@@ -31,10 +34,8 @@ export function WebhookList({
         </div>
       ) : (
         webhooks.map((webhook) => (
-          <div
-            key={webhook.id}
-            className="flex items-center justify-between p-5 rounded-2xl border border-slate-800 bg-slate-900"
-          >
+          <div key={webhook.id} className="p-5 rounded-2xl border border-slate-800 bg-slate-900">
+          <div className="flex items-center justify-between">
             <div>
               <div className="flex items-center gap-3 mb-1">
                 <span
@@ -56,12 +57,21 @@ export function WebhookList({
             </div>
             <div className="flex items-center gap-3">
               <button
+                onClick={() => setExpanded((current) => (current === webhook.id ? null : webhook.id))}
+                aria-expanded={expanded === webhook.id}
+                className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm text-slate-300 hover:bg-slate-800 hover:text-white"
+              >
+                <ListChecks className="w-4 h-4" /> Deliveries
+              </button>
+              <button
                 onClick={() => void onDelete(webhook.id)}
                 className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-lg transition-colors"
               >
                 <Trash2 className="w-5 h-5" />
               </button>
             </div>
+          </div>
+          {expanded === webhook.id ? <DeliveryLog endpointId={webhook.id} isActive={webhook.isActive} /> : null}
           </div>
         ))
       )}

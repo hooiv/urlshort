@@ -90,4 +90,26 @@ describe('Webhooks Security & Signatures', () => {
       vi.clearAllMocks();
     }
   });
+
+  it('never follows redirects and records the attempt latency', async () => {
+    prismaMock.webhookDelivery.findUnique.mockResolvedValue({
+      id: 'delivery-r', attempts: 0, status: 'pending', event: 'link.clicked',
+      payload: samplePayload, endpoint: { id: 'ep-r', url: 'https://webhook.example.test/hook', secret, isActive: true },
+    });
+    prismaMock.webhookDelivery.updateMany.mockResolvedValue({ count: 1 });
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async () => new Response(null, { status: 302, headers: { location: 'http://169.254.169.254/latest' } }));
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    try {
+      const result = await processWebhookDelivery('delivery-r');
+      expect((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].redirect).toBe('manual');
+      expect(result.status).toBe('pending');
+      const finalize = prismaMock.webhookDelivery.updateMany.mock.calls.at(-1)![0];
+      expect(finalize.data.responseBody).toMatch(/Redirect \(302\) not followed/);
+      expect(typeof finalize.data.latencyMs).toBe('number');
+    } finally {
+      globalThis.fetch = originalFetch;
+      vi.clearAllMocks();
+    }
+  });
 });
