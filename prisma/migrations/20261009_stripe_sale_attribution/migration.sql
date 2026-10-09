@@ -25,6 +25,8 @@ CREATE TABLE "stripe_event_receipts" (
     "type" TEXT NOT NULL,
     "outcome" TEXT NOT NULL,
     "conversionId" TEXT,
+    "paymentIntentId" TEXT,
+    "refundedCents" INTEGER NOT NULL DEFAULT 0,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "stripe_event_receipts_pkey" PRIMARY KEY ("id")
@@ -48,6 +50,9 @@ CREATE INDEX "stripe_integrations_userId_idx" ON "stripe_integrations"("userId")
 
 -- CreateIndex
 CREATE INDEX "stripe_event_receipts_integrationId_createdAt_idx" ON "stripe_event_receipts"("integrationId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "stripe_event_receipts_integrationId_paymentIntentId_idx" ON "stripe_event_receipts"("integrationId", "paymentIntentId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "stripe_event_receipts_integrationId_stripeEventId_key" ON "stripe_event_receipts"("integrationId", "stripeEventId");

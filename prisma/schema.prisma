@@ -634,18 +634,23 @@ model StripeIntegration {
 
 /// One row per processed Stripe event: makes webhook retries idempotent.
 model StripeEventReceipt {
-  id            String   @id @default(cuid())
-  integrationId String
-  stripeEventId String
-  type          String
-  outcome       String
-  conversionId  String?
-  createdAt     DateTime @default(now())
+  id              String   @id @default(cuid())
+  integrationId   String
+  stripeEventId   String
+  type            String
+  outcome         String
+  conversionId    String?
+  /// Set on sale receipts so charge.refunded can find the conversion it reverses.
+  paymentIntentId String?
+  /// Cumulative amount already reversed from the sale (Stripe reports totals).
+  refundedCents   Int      @default(0)
+  createdAt       DateTime @default(now())
 
   integration StripeIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
 
   @@unique([integrationId, stripeEventId])
   @@index([integrationId, createdAt])
+  @@index([integrationId, paymentIntentId])
   @@map("stripe_event_receipts")
 }
 

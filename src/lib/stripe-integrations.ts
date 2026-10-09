@@ -31,7 +31,7 @@ export function presentIntegration(row: IntegrationRow) {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     webhookUrl: stripeWebhookUrl(row.id),
-    events: ['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'invoice.paid'],
+    events: ['checkout.session.completed', 'checkout.session.async_payment_succeeded', 'invoice.paid', 'charge.refunded'],
   }
 }
 

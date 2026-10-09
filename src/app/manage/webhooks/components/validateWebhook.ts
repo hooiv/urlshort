@@ -11,7 +11,7 @@ export const MAX_WEBHOOK_URL_LENGTH = 2048;
 
 /**
  * Default subscription, mapped onto the server's event allowlist
- * (`link.clicked`, `link.created`, `link.updated`, `conversion.recorded`,
+ * (`link.clicked`, `link.created`, `link.updated`, `conversion.recorded`, `conversion.refunded`,
  * `diagnostic.test`). Preserves the old form's "click + conversion" intent
  * with values the server actually stores.
  */

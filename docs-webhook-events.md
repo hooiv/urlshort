@@ -1,6 +1,6 @@
 # Webhook event contract
 Every event is an envelope: `id`, `type`, `version`, `createdAt`, and `data`.
-Stable types: `link.clicked` v1, `conversion.created` v1, `campaign.updated` v1, `campaign.decision` v1, `destination.anomaly` v1. Consumers must use `type` + `version`, ignore unknown fields, and deduplicate by envelope `id`. Delivery is at-least-once. Signatures are HMAC-SHA256 over the exact request body.
+Stable types: `link.clicked` v1, `conversion.created` v1, `conversion.refunded` v1 (`refundedCents`, `netValueCents`), `campaign.updated` v1, `campaign.decision` v1, `destination.anomaly` v1. Consumers must use `type` + `version`, ignore unknown fields, and deduplicate by envelope `id`. Delivery is at-least-once. Signatures are HMAC-SHA256 over the exact request body.
 ## Verifying deliveries (replay-safe)
 
 Every delivery carries:

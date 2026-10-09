@@ -114,6 +114,8 @@ export type SaleCandidate = {
   source: 'checkout' | 'invoice'
   /** Present on subscription checkouts: the first invoice is part of this sale. */
   coversInvoiceId: string | null
+  /** Lets a later charge.refunded find this sale. */
+  paymentIntentId: string | null
 }
 
 export function saleFromCheckoutSession(session: Record<string, unknown>): SaleCandidate | 'unpaid' {
@@ -129,6 +131,7 @@ export function saleFromCheckoutSession(session: Record<string, unknown>): SaleC
     currency: asString(session.currency),
     source: 'checkout',
     coversInvoiceId: idOf(session.invoice),
+    paymentIntentId: idOf(session.payment_intent),
   }
 }
 
@@ -147,6 +150,8 @@ export function saleFromInvoice(invoice: Record<string, unknown>): SaleCandidate
     currency: asString(invoice.currency),
     source: 'invoice',
     coversInvoiceId: null,
+    // Pre-2025 API versions only; newer invoices refund via the covering checkout or are skipped.
+    paymentIntentId: idOf(invoice.payment_intent),
   }
 }
 
@@ -176,6 +181,7 @@ export type StripeEventOutcome =
   | 'recurring_disabled'
   | 'quota_exceeded'
   | 'goal_disabled'
+  | 'refunded'
 
 type Attribution = { urlId: string; clickEventId: string | null; visitorIdHash: string | null; via: 'token' | 'customer' }
 
@@ -241,6 +247,8 @@ export async function processStripeEvent(
       }
       sale = saleFromInvoice(object)
       break
+    case 'charge.refunded':
+      return processRefund(integration, event)
     default:
       await writeReceipt(integration.id, event, 'ignored_event')
       return { outcome: 'ignored_event' }
@@ -308,7 +316,7 @@ export async function processStripeEvent(
     conversionId = await prisma.$transaction(async (tx) => {
       // Receipts first: a concurrent duplicate trips the unique index and the
       // whole transaction (quota, conversion, aggregates) rolls back with it.
-      await tx.stripeEventReceipt.create({ data: { integrationId: integration.id, stripeEventId: sale.saleKey, type: `sale.${sale.source}`, outcome: 'recorded' } })
+      const saleReceipt = await tx.stripeEventReceipt.create({ data: { integrationId: integration.id, stripeEventId: sale.saleKey, type: `sale.${sale.source}`, outcome: 'recorded', paymentIntentId: sale.paymentIntentId }, select: { id: true } })
       if (sale.coversInvoiceId) {
         await tx.stripeEventReceipt.create({ data: { integrationId: integration.id, stripeEventId: `invoice:${sale.coversInvoiceId}`, type: 'sale.invoice', outcome: 'covered_by_checkout' } })
       }
@@ -342,6 +350,7 @@ export async function processStripeEvent(
         create: { goalId: goal.id, dateKey: dateKey(now), conversions: 1, valueCents: value.valueCents ?? 0 },
         update: { conversions: { increment: 1 }, valueCents: { increment: value.valueCents ?? 0 } },
       })
+      await tx.stripeEventReceipt.update({ where: { id: saleReceipt.id }, data: { conversionId: conversion.id } })
       await tx.stripeEventReceipt.create({ data: { integrationId: integration.id, stripeEventId: event.id, type: event.type.slice(0, 120), outcome: 'recorded', conversionId: conversion.id } })
       if (attribution.via === 'token' && sale.customerId && integration.trackRecurring) {
         await tx.stripeCustomerAttribution.upsert({
@@ -381,4 +390,79 @@ export async function processStripeEvent(
     console.error('Stripe conversion webhook fan-out failed:', error)
   }
   return { outcome: 'recorded', conversionId }
+}
+
+class AlreadyApplied extends Error {}
+
+/**
+ * Reverses refunded revenue on the conversion the original sale created.
+ * Stripe reports the cumulative `amount_refunded`, so we store how much has
+ * already been reversed and apply only the difference: partial refunds,
+ * repeated refunds and redelivered events all converge on the right net value.
+ * The conversion itself stays counted; only its value drops.
+ */
+async function processRefund(integration: StripeIntegrationRecord, event: StripeEvent): Promise<{ outcome: StripeEventOutcome; conversionId?: string }> {
+  const charge = event.data.object
+  const paymentIntentId = idOf(charge.payment_intent)
+  const refundedTotal = typeof charge.amount_refunded === 'number' && Number.isInteger(charge.amount_refunded) ? charge.amount_refunded : null
+  const sale = paymentIntentId
+    ? await prisma.stripeEventReceipt.findFirst({
+        where: { integrationId: integration.id, paymentIntentId, conversionId: { not: null } },
+        select: { id: true, conversionId: true, refundedCents: true },
+      })
+    : null
+  if (!sale?.conversionId || refundedTotal === null) {
+    await writeReceipt(integration.id, event, 'no_attribution')
+    return { outcome: 'no_attribution' }
+  }
+  const conversionId = sale.conversionId
+  let reversal: { urlId: string; reversedCents: number; netValueCents: number; currency: string | null } | null
+  try {
+    reversal = await prisma.$transaction(async (tx) => {
+      const delta = refundedTotal - sale.refundedCents
+      if (delta <= 0) throw new AlreadyApplied()
+      // Optimistic guard: a concurrent refund event for the same charge loses here.
+      const claimed = await tx.stripeEventReceipt.updateMany({
+        where: { id: sale.id, refundedCents: sale.refundedCents },
+        data: { refundedCents: refundedTotal },
+      })
+      if (claimed.count !== 1) throw new AlreadyApplied()
+      await tx.stripeEventReceipt.create({ data: { integrationId: integration.id, stripeEventId: event.id, type: event.type.slice(0, 120), outcome: 'refunded', conversionId } })
+      const conversion = await tx.conversionEvent.findUnique({ where: { id: conversionId }, select: { urlId: true, goalId: true, valueCents: true, currency: true, createdAt: true } })
+      if (!conversion) return null
+      const current = conversion.valueCents ?? 0
+      const reversedCents = Math.min(current, delta)
+      if (reversedCents > 0) {
+        await tx.conversionEvent.update({ where: { id: conversionId }, data: { valueCents: current - reversedCents } })
+        // Revenue is reported on the day it was earned, so the reversal lands there too.
+        await tx.conversionDaily.updateMany({
+          where: { goalId: conversion.goalId, dateKey: dateKey(conversion.createdAt) },
+          data: { valueCents: { decrement: reversedCents } },
+        })
+      }
+      return { urlId: conversion.urlId, reversedCents, netValueCents: current - reversedCents, currency: conversion.currency }
+    })
+  } catch (error) {
+    if (error instanceof AlreadyApplied || isUniqueViolation(error)) {
+      await writeReceipt(integration.id, event, 'duplicate')
+      return { outcome: 'duplicate', conversionId }
+    }
+    throw error
+  }
+  if (reversal && reversal.reversedCents > 0) {
+    try {
+      await dispatchWebhooksForUrl(reversal.urlId, 'conversion.refunded', {
+        id: conversionId,
+        urlId: reversal.urlId,
+        refundedCents: reversal.reversedCents,
+        netValueCents: reversal.netValueCents,
+        currency: reversal.currency,
+        source: 'stripe',
+        occurredAt: new Date().toISOString(),
+      })
+    } catch (error) {
+      console.error('Stripe refund webhook fan-out failed:', error)
+    }
+  }
+  return { outcome: 'refunded', conversionId }
 }

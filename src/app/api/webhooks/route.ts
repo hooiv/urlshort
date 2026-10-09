@@ -17,6 +17,7 @@ export const ALLOWED_EVENTS = new Set([
   'link.created',
   'link.updated',
   'conversion.recorded',
+  'conversion.refunded',
   'diagnostic.test',
 ]);
 

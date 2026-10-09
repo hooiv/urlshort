@@ -2,14 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Prisma } from '@prisma/client'
 
 const prismaMock = vi.hoisted(() => ({
-  stripeEventReceipt: { findUnique: vi.fn(), create: vi.fn() },
+  stripeEventReceipt: { findUnique: vi.fn(), findFirst: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
   stripeCustomerAttribution: { findUnique: vi.fn(), upsert: vi.fn() },
   url: { findUnique: vi.fn() },
   membership: { findUnique: vi.fn() },
   clickEvent: { findFirst: vi.fn() },
   goal: { upsert: vi.fn() },
-  conversionEvent: { create: vi.fn() },
-  conversionDaily: { upsert: vi.fn() },
+  conversionEvent: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+  conversionDaily: { upsert: vi.fn(), updateMany: vi.fn() },
   $transaction: vi.fn(),
 }))
 const verifyMock = vi.hoisted(() => vi.fn())
@@ -77,8 +77,8 @@ describe('event parsing and extraction', () => {
     expect(saleFromCheckoutSession({ id: 'cs_1', payment_status: 'unpaid' })).toBe('unpaid')
     expect(saleFromCheckoutSession({
       id: 'cs_1', payment_status: 'paid', amount_total: 4900, currency: 'usd',
-      customer: { id: 'cus_1' }, invoice: 'in_1', metadata: { ql_attribution: ' v1.tok.sig ' },
-    })).toEqual({ saleKey: 'checkout:cs_1', token: 'v1.tok.sig', customerId: 'cus_1', amountCents: 4900, currency: 'usd', source: 'checkout', coversInvoiceId: 'in_1' })
+      customer: { id: 'cus_1' }, invoice: 'in_1', payment_intent: 'pi_1', metadata: { ql_attribution: ' v1.tok.sig ' },
+    })).toEqual({ saleKey: 'checkout:cs_1', token: 'v1.tok.sig', customerId: 'cus_1', amountCents: 4900, currency: 'usd', source: 'checkout', coversInvoiceId: 'in_1', paymentIntentId: 'pi_1' })
   })
 
   it('finds tokens on invoices across Stripe API versions', () => {
@@ -105,7 +105,9 @@ describe('processStripeEvent', () => {
     vi.clearAllMocks()
     prismaMock.$transaction.mockImplementation(async (fn: (tx: typeof prismaMock) => unknown) => fn(prismaMock))
     prismaMock.stripeEventReceipt.findUnique.mockResolvedValue(null)
-    prismaMock.stripeEventReceipt.create.mockResolvedValue({})
+    prismaMock.stripeEventReceipt.create.mockResolvedValue({ id: 'rcpt_sale' })
+    prismaMock.stripeEventReceipt.update.mockResolvedValue({})
+    prismaMock.stripeEventReceipt.updateMany.mockResolvedValue({ count: 1 })
     prismaMock.stripeCustomerAttribution.findUnique.mockResolvedValue(null)
     prismaMock.url.findUnique.mockResolvedValue({ id: 'url_1', userId: 'user_a', workspaceId: 'ws_1' })
     prismaMock.membership.findUnique.mockResolvedValue(null)
@@ -125,6 +127,7 @@ describe('processStripeEvent', () => {
     }))
     const receiptKeys = prismaMock.stripeEventReceipt.create.mock.calls.map(([arg]) => arg.data.stripeEventId)
     expect(receiptKeys).toEqual(['checkout:cs_1', 'invoice:in_first', 'evt_checkout'])
+    expect(prismaMock.stripeEventReceipt.update).toHaveBeenCalledWith({ where: { id: 'rcpt_sale' }, data: { conversionId: 'conv_1' } })
     expect(prismaMock.stripeCustomerAttribution.upsert).toHaveBeenCalledWith(expect.objectContaining({ create: expect.objectContaining({ stripeCustomerId: 'cus_1', urlId: 'url_1' }), update: {} }))
     expect(reserveMock).toHaveBeenCalledWith(prismaMock, 'ws_1', 'conversions', 1n)
     expect(dispatchMock).toHaveBeenCalledWith('url_1', 'conversion.recorded', expect.objectContaining({ source: 'stripe', valueCents: 4900 }))
@@ -210,5 +213,43 @@ describe('processStripeEvent', () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     expect((await processStripeEvent(integration, checkoutEvent())).outcome).toBe('recorded')
     spy.mockRestore()
+  })
+
+  describe('charge.refunded', () => {
+    const refund = (amountRefunded: number, id = 'evt_refund'): StripeEvent => ({ id, type: 'charge.refunded', data: { object: { id: 'ch_1', payment_intent: 'pi_1', amount_refunded: amountRefunded } } })
+
+    beforeEach(() => {
+      prismaMock.stripeEventReceipt.findFirst.mockResolvedValue({ id: 'rcpt_sale', conversionId: 'conv_1', refundedCents: 0 })
+      prismaMock.conversionEvent.findUnique.mockResolvedValue({ urlId: 'url_1', goalId: 'goal_1', valueCents: 4900, currency: 'USD', createdAt: new Date('2026-10-01T12:00:00Z') })
+    })
+
+    it('reverses a partial refund on the day the sale was earned', async () => {
+      expect(await processStripeEvent(integration, refund(1000))).toEqual({ outcome: 'refunded', conversionId: 'conv_1' })
+      expect(prismaMock.stripeEventReceipt.updateMany).toHaveBeenCalledWith({ where: { id: 'rcpt_sale', refundedCents: 0 }, data: { refundedCents: 1000 } })
+      expect(prismaMock.conversionEvent.update).toHaveBeenCalledWith({ where: { id: 'conv_1' }, data: { valueCents: 3900 } })
+      expect(prismaMock.conversionDaily.updateMany).toHaveBeenCalledWith({ where: { goalId: 'goal_1', dateKey: '2026-10-01' }, data: { valueCents: { decrement: 1000 } } })
+      expect(dispatchMock).toHaveBeenCalledWith('url_1', 'conversion.refunded', expect.objectContaining({ refundedCents: 1000, netValueCents: 3900 }))
+    })
+
+    it('applies only the new amount of a cumulative refund', async () => {
+      prismaMock.stripeEventReceipt.findFirst.mockResolvedValue({ id: 'rcpt_sale', conversionId: 'conv_1', refundedCents: 1000 })
+      prismaMock.conversionEvent.findUnique.mockResolvedValue({ urlId: 'url_1', goalId: 'goal_1', valueCents: 3900, currency: 'USD', createdAt: new Date('2026-10-01T12:00:00Z') })
+      await processStripeEvent(integration, refund(4900))
+      expect(prismaMock.conversionEvent.update).toHaveBeenCalledWith({ where: { id: 'conv_1' }, data: { valueCents: 0 } })
+    })
+
+    it('is a no-op when the refund total was already applied or lost a race', async () => {
+      prismaMock.stripeEventReceipt.findFirst.mockResolvedValue({ id: 'rcpt_sale', conversionId: 'conv_1', refundedCents: 4900 })
+      expect((await processStripeEvent(integration, refund(4900))).outcome).toBe('duplicate')
+      prismaMock.stripeEventReceipt.findFirst.mockResolvedValue({ id: 'rcpt_sale', conversionId: 'conv_1', refundedCents: 0 })
+      prismaMock.stripeEventReceipt.updateMany.mockResolvedValue({ count: 0 })
+      expect((await processStripeEvent(integration, refund(4900, 'evt_refund_2'))).outcome).toBe('duplicate')
+      expect(prismaMock.conversionEvent.update).not.toHaveBeenCalled()
+    })
+
+    it('ignores refunds for sales it never attributed', async () => {
+      prismaMock.stripeEventReceipt.findFirst.mockResolvedValue(null)
+      expect((await processStripeEvent(integration, refund(100))).outcome).toBe('no_attribution')
+    })
   })
 })

@@ -7,7 +7,8 @@ the short link click that drove it. No client-side conversion call is needed.
 
 1. **Manage → Revenue** (`/manage/integrations`): create an integration and copy its endpoint URL.
 2. Stripe Dashboard → Developers → Webhooks → *Add endpoint*: paste the URL and select
-   `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `invoice.paid`.
+   `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `invoice.paid`,
+   `charge.refunded`.
 3. Paste the endpoint's signing secret (`whsec_…`) into the integration. It activates immediately.
 4. Pass the attribution token into Checkout:
 
@@ -46,8 +47,15 @@ For subscriptions created without Checkout, put the token in `subscription_data.
 
 Each response carries `outcome` (`recorded`, `duplicate`, `no_attribution`, `invalid_token`,
 `foreign_link`, `unpaid`, `zero_amount`, `goal_disabled`, `recurring_disabled`,
-`covered_by_checkout`, `ignored_event`, `quota_exceeded`), visible in Stripe's delivery log.
+`covered_by_checkout`, `ignored_event`, `quota_exceeded`, `refunded`), visible in Stripe's delivery log.
 
-## Not yet
+## Refunds
 
-Refunds (`charge.refunded`) are not subtracted yet.
+`charge.refunded` reverses revenue on the conversion its payment intent created, on the
+day the sale was earned. Stripe reports a cumulative `amount_refunded`; QuickLink stores how
+much it has already reversed and applies only the difference, so partial refunds, repeat
+refunds and redeliveries converge on the correct net value. The conversion stays counted.
+A `conversion.refunded` webhook (`refundedCents`, `netValueCents`) is emitted.
+
+Limitation: refunds of subscription renewals are matched only on Stripe API versions whose
+invoices still carry `payment_intent`.
