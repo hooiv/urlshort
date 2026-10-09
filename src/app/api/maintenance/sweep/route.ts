@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { timingSafeEqual } from 'node:crypto'
 import { rateLimit } from '@/lib/rate-limit'
+import { invalidateLinks } from '@/lib/link-cache'
 
 /**
  * POST /api/maintenance/sweep — data retention cleanup for expired rows.
@@ -79,9 +80,10 @@ async function expireLinksInBatches(now: Date): Promise<number> {
   const where = { expiresAt: { lte: now }, isActive: true }
   let total = 0
   for (let batch = 0; batch < 20; batch += 1) {
-    const rows = await prisma.url.findMany({ where, select: { id: true }, take: BATCH_SIZE })
+    const rows = await prisma.url.findMany({ where, select: { id: true, shortCode: true }, take: BATCH_SIZE })
     if (rows.length === 0) break
     const result = await prisma.url.updateMany({ where: { id: { in: rows.map((r) => r.id) } }, data: { isActive: false } })
+    await invalidateLinks(rows)
     total += result.count
     if (rows.length < BATCH_SIZE) break
   }

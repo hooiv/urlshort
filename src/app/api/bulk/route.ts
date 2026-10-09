@@ -12,6 +12,7 @@ import { recordAudit } from '@/lib/audit'
 import { ProviderImportError, fetchProviderImport } from '@/lib/provider-import'
 import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
 import { dispatchWebhooksForUrls } from '@/lib/webhooks'
+import { invalidateLinks } from '@/lib/link-cache'
 import {
   MAX_IMPORT_BYTES,
   MAX_IMPORT_ROWS,
@@ -178,6 +179,8 @@ export async function POST(request: NextRequest) {
         return links
       })
       created.push(...inserted)
+      // Clear negative entries for codes probed before they were imported.
+      await invalidateLinks(inserted)
     }
 
     const createdByCode = new Map(created.map((link) => [link.shortCode, link]))

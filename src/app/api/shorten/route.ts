@@ -17,6 +17,7 @@ import { hashGatePassword } from '@/lib/password-gate'
 import { getIdempotentResponse, storeIdempotentResponse } from '@/lib/idempotency'
 import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
 import { dispatchWebhooksForUrl } from '@/lib/webhooks'
+import { invalidateLink } from '@/lib/link-cache'
 
 const CUSTOM_CODE = /^[A-Za-z0-9_-]{3,64}$/
 const CODE_COLLISION_RETRIES = 5
@@ -264,6 +265,9 @@ export async function POST(request: NextRequest) {
       }
     }
     if (!created) return NextResponse.json({ error: 'Could not allocate a short code' }, { status: 503 })
+    // A visitor (or the creator's own preview) may have hit this code before
+    // it existed; drop the negative entry so the first real click resolves.
+    await invalidateLink(created.shortCode, created.id)
 
     const baseUrl = getBaseUrl()
     const response = NextResponse.json({

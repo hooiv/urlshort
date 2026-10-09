@@ -4,6 +4,7 @@ import { hasValidManagementToken } from '@/lib/management'
 import { probeDestination, normalizeHealthTarget } from '@/lib/destination-health'
 import { rateLimit } from '@/lib/rate-limit'
 import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
+import { invalidateLink } from '@/lib/link-cache'
 
 const FAILURE_THRESHOLD = 3
 const SUCCESS_THRESHOLD = 2
@@ -88,6 +89,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
       prisma.linkRule.update({ where: { id: rule.id }, data: { healthStatus: status, healthCheckedAt: new Date(), healthLatencyMs: result.latencyMs, healthStatusCode: result.statusCode, healthLastError: result.error, consecutiveFailures: failures, consecutiveSuccesses: successes } }),
       prisma.destinationHealthCheck.create({ data: { urlId: auth.url.id, ruleId: rule.id, targetUrl: safeTarget, status, statusCode: result.statusCode, latencyMs: result.latencyMs, error: result.error } }),
     ])
+    // Routing skips rules marked down, so a health transition changes where
+    // the link resolves; unchanged health needs no eviction.
+    if (status !== rule.healthStatus) await invalidateLink(auth.url.shortCode, auth.url.id)
     if (auth.url.workspaceId) await publishWorkspaceRoutingConfig(auth.url.workspaceId)
     return NextResponse.json({ target: rule.id, status, result })
   } catch (error) {
