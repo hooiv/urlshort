@@ -38,3 +38,26 @@ describe('assessDestination', () => {
     expect(assessDestination('https://xn--exmple-cua.com/').reason).toMatch(/punycode/i)
   })
 })
+
+import { detectBrandImpersonation as dbi } from './link-safety'
+describe('link-safety heuristics v2', () => {
+  it('flags chained shorteners', () => {
+    expect(assessDestination('https://bit.ly/abc').reason).toContain('Chained')
+  })
+  it('flags risky TLDs', () => {
+    expect(assessDestination('https://free-gift.zip/').status).toBe('review')
+  })
+  it('flags brand impersonation incl. look-alikes', () => {
+    expect(dbi('paypa1.com')).toBe('paypal')
+    expect(dbi('secure-google.example.net')).toBe('google')
+    expect(assessDestination('https://login.paypal-support.com/').reason).toContain('paypal')
+  })
+  it('does not flag legit brand domains', () => {
+    expect(dbi('www.paypal.com')).toBeNull()
+    expect(assessDestination('https://www.google.com/maps').status).toBe('cleared')
+    expect(assessDestination('https://example.com/').status).toBe('cleared')
+  })
+  it('flags hyphen stuffing', () => {
+    expect(assessDestination('https://a-b-c-d-e.example.com/').reason).toContain('hyphen')
+  })
+})
