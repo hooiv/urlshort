@@ -47,4 +47,15 @@ describe('GET /api/analytics', () => {
     expect((await get('from=2026-05-01&to=2026-01-01')).status).toBe(400)
     expect(aggregateMock).not.toHaveBeenCalled()
   })
+
+  it('exports CSV and rejects bad formats', async () => {
+    aggregateMock.mockResolvedValue({ window: { from: '2026-10-01', to: '2026-10-01', days: 1 }, timeseries: [{ date: '2026-10-01', clicks: 1, conversions: 0, revenueCents: 0 }] })
+    const res = await get('range=7d&format=csv')
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toContain('text/csv')
+    expect(res.headers.get('content-disposition')).toContain('quicklink-timeseries-')
+    expect(await res.text()).toContain('"2026-10-01","1","0","0.00"')
+    expect((await get('format=xml')).status).toBe(400)
+    expect((await get('format=csv&section=x')).status).toBe(400)
+  })
 })

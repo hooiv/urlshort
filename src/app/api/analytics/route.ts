@@ -4,12 +4,13 @@ import { ANALYTICS_READ_SCOPES, resolveActor } from '@/lib/request-actor'
 import { READ_ROLES } from '@/lib/authorization'
 import { rateLimit } from '@/lib/rate-limit'
 import { canAdministerFolders, effectiveFolderRole } from '@/lib/folders'
+import { analyticsToCsv, exportFilename, parseExportSection } from '@/lib/analytics-export'
 import { getAggregatedAnalytics, resolveWindow, type AnalyticsScope } from '@/lib/aggregate-analytics'
 
 const TAG = /^[a-z0-9][a-z0-9-_ ]{0,31}$/
 
 /**
- * GET /api/analytics?workspaceId=&folder=<id|none>&tag=&range=7d|30d|90d|365d&from=YYYY-MM-DD&to=YYYY-MM-DD
+ * GET /api/analytics?workspaceId=&folder=<id|none>&tag=&range=7d|30d|90d|365d&from=YYYY-MM-DD&to=YYYY-MM-DD&format=json|csv&section=timeseries|links|tags|countries|devices|referrers
  *
  * Account-wide (or workspace-wide, or per-tag) analytics: totals with
  * period-over-period change, a gap-free daily series, top links, tag
@@ -57,6 +58,19 @@ export async function GET(request: NextRequest) {
     }
 
     const data = await getAggregatedAnalytics(scope, window)
+    const format = params.get('format')
+    if (format === 'csv') {
+      const section = parseExportSection(params.get('section'))
+      if (!section) return NextResponse.json({ error: 'Invalid section' }, { status: 400 })
+      return new NextResponse(analyticsToCsv(data, section), {
+        headers: {
+          'Content-Type': 'text/csv; charset=utf-8',
+          'Content-Disposition': `attachment; filename="${exportFilename(section, data.window)}"`,
+          'Cache-Control': 'private, no-store',
+        },
+      })
+    }
+    if (format !== null && format !== 'json') return NextResponse.json({ error: 'Invalid format' }, { status: 400 })
     return NextResponse.json(data, { headers: { 'Cache-Control': 'private, max-age=60' } })
   } catch (error) {
     console.error('Aggregated analytics failed:', error)
