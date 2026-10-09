@@ -67,6 +67,8 @@ All management endpoints accept a session cookie, a per-link management token (`
 | `GET/PATCH /api/links/[shortCode]/safety` | Risk status + abuse reports. |
 | `GET/POST/DELETE /api/account/api-keys` | API key management. |
 | `POST /api/track` | Public conversion endpoint (HMAC token, CORS allowlist, 24h dedup). |
+| `GET/POST /api/integrations/stripe`, `PATCH/DELETE /api/integrations/stripe/:id` | Manage Stripe sale-attribution integrations. |
+| `POST /api/integrations/stripe/:id/webhook` | Stripe webhook receiver (signature-verified, idempotent). See `docs/stripe-attribution.md`. |
 | `POST /api/health/sweep` | Cron: probe the 50 stalest links (`x-health-sweep-secret` header). |
 | `POST /api/abuse/report` | Public abuse reporting. |
 | `POST /api/auth/reset` + `/confirm` | Password reset request / token confirmation. |

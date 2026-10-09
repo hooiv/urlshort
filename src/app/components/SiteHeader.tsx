@@ -45,6 +45,12 @@ export default function SiteHeader() {
             Webhooks
           </Link>
           <Link
+            href="/manage/integrations"
+            className="text-sm font-medium text-slate-400 hover:text-white transition-colors"
+          >
+            Revenue
+          </Link>
+          <Link
             href="/account"
             className="rounded-lg border border-slate-700 bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-slate-500 hover:text-white"
           >

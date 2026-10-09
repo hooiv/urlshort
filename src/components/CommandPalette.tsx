@@ -20,6 +20,7 @@ const ALL_ACTIONS = [
   { name: 'Workspaces', path: '/workspaces' },
   { name: 'Bio Pages', path: '/manage/bio' },
   { name: 'Webhooks', path: '/manage/webhooks' },
+  { name: 'Revenue Attribution', path: '/manage/integrations' },
   { name: 'Bulk Import CSV', path: '/bulk' },
 ]
 

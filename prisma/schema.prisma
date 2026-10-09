@@ -95,13 +95,14 @@ model Url {
   rules            LinkRule[]
   goals            Goal[]
   conversions      ConversionEvent[]
+  stripeCustomers  StripeCustomerAttribution[]
   revisions        DestinationRevision[]
   healthChecks     DestinationHealthCheck[]
   domainLinks      DomainLink[]
-  ownedDomains     BrandedDomain[]          @relation("DomainOwner")
+  ownedDomains     BrandedDomain[]             @relation("DomainOwner")
   abuseReports     AbuseReport[]
   campaignLinks    CampaignLink[]
-  primaryCampaigns Campaign[]               @relation("CampaignPrimaryUrl")
+  primaryCampaigns Campaign[]                  @relation("CampaignPrimaryUrl")
 
   @@index([healthStatus, healthCheckedAt])
   @@index([tags])
@@ -274,6 +275,7 @@ model User {
   emailVerificationTokens EmailVerificationToken[]
   bioProfiles             BioProfile[]
   webhookEndpoints        WebhookEndpoint[]
+  stripeIntegrations      StripeIntegration[]
   scimIdentities          ScimIdentity[]
   deletionRequests        DataDeletionRequest[]
 
@@ -603,6 +605,67 @@ model WebhookEndpoint {
   @@index([workspaceId, isActive])
   @@index([userId, isActive])
   @@map("webhook_endpoints")
+}
+
+/// A Stripe account connected for automatic sale attribution. Stripe posts its
+/// events to /api/integrations/stripe/:id/webhook, signed with signingSecret.
+model StripeIntegration {
+  id             String    @id @default(cuid())
+  userId         String
+  name           String    @default("Stripe")
+  signingSecret  String
+  /// Goal event key sales are recorded under (auto-created per link).
+  goalEventKey   String    @default("purchase")
+  /// Credit renewals (invoice.paid) to the link that drove the first checkout.
+  trackRecurring Boolean   @default(true)
+  livemode       Boolean?
+  isActive       Boolean   @default(true)
+  lastEventAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user      User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events    StripeEventReceipt[]
+  customers StripeCustomerAttribution[]
+
+  @@index([userId])
+  @@map("stripe_integrations")
+}
+
+/// One row per processed Stripe event: makes webhook retries idempotent.
+model StripeEventReceipt {
+  id            String   @id @default(cuid())
+  integrationId String
+  stripeEventId String
+  type          String
+  outcome       String
+  conversionId  String?
+  createdAt     DateTime @default(now())
+
+  integration StripeIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, stripeEventId])
+  @@index([integrationId, createdAt])
+  @@map("stripe_event_receipts")
+}
+
+/// The click that acquired a Stripe customer, so later invoices are credited
+/// to the same link without the visitor ever returning.
+model StripeCustomerAttribution {
+  id               String   @id @default(cuid())
+  integrationId    String
+  stripeCustomerId String
+  urlId            String
+  clickEventId     String?
+  visitorIdHash    String?
+  createdAt        DateTime @default(now())
+
+  integration StripeIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  url         Url               @relation(fields: [urlId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationId, stripeCustomerId])
+  @@index([urlId])
+  @@map("stripe_customer_attributions")
 }
 
 model WebhookDelivery {
