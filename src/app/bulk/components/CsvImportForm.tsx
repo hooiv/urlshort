@@ -1,6 +1,7 @@
 'use client';
 
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useWritableFolders } from '@/components/FolderPicker';
 import { Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatNumber } from '@/lib/format';
@@ -17,6 +18,10 @@ export function CsvImportForm({
   validPreviewCount,
   onConflict,
   onConflictChange,
+  workspaceId,
+  onWorkspaceChange,
+  folderId,
+  onFolderChange,
   onImport,
 }: {
   csvText: string;
@@ -27,9 +32,21 @@ export function CsvImportForm({
   validPreviewCount: number;
   onConflict: 'skip' | 'generate';
   onConflictChange: (value: 'skip' | 'generate') => void;
+  workspaceId: string;
+  onWorkspaceChange: (id: string) => void;
+  folderId: string;
+  onFolderChange: (id: string) => void;
   onImport: () => Promise<{ created: number; skipped: number } | null>;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [workspaces, setWorkspaces] = useState<Array<{ id: string; name: string; role: string }>>([]);
+  const folders = useWritableFolders(workspaceId || null);
+  useEffect(() => {
+    fetch('/api/workspaces')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((rows: Array<{ id: string; name: string; role: string }>) => setWorkspaces(Array.isArray(rows) ? rows.filter((w) => ['owner', 'admin', 'editor'].includes(w.role)) : []))
+      .catch(() => undefined);
+  }, []);
 
   async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -37,7 +54,7 @@ export function CsvImportForm({
     e.target.value = '';
     if (!file) return;
     if (file.size > MAX_FILE_BYTES) {
-      toast.error('File exceeds the 1MB upload limit');
+      toast.error(`File exceeds the ${Math.round(MAX_FILE_BYTES / 1_048_576)} MB upload limit`);
       return;
     }
     const text = await file.text();
@@ -143,6 +160,22 @@ export function CsvImportForm({
             <div className="h-2 overflow-hidden rounded-full bg-slate-800">
               <div className="h-full w-1/3 animate-pulse rounded-full bg-blue-500" />
             </div>
+          </div>
+        )}
+
+        {workspaces.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+            Import into
+            <select value={workspaceId} onChange={(e) => onWorkspaceChange(e.target.value)} aria-label="Workspace" className="rounded-lg border border-slate-800 bg-slate-950 px-2 py-1 text-xs text-slate-200">
+              <option value="">My links</option>
+              {workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            </select>
+            {workspaceId && folders.length > 0 && (
+              <select value={folderId} onChange={(e) => onFolderChange(e.target.value)} aria-label="Folder" className="rounded-lg border border-slate-800 bg-slate-950 px-2 py-1 text-xs text-slate-200">
+                <option value="">No folder</option>
+                {folders.map((f) => <option key={f.id} value={f.id}>{f.restricted ? '🔒 ' : ''}{f.name}</option>)}
+              </select>
+            )}
           </div>
         )}
 

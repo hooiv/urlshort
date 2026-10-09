@@ -6,6 +6,8 @@ export type Url = {
   shortCode: string
   title: string | null
   tags?: string[]
+  workspaceId?: string | null
+  folderId?: string | null
   clicks: number
   createdAt: string
   isActive: boolean

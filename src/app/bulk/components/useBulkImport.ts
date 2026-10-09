@@ -27,6 +27,8 @@ export function useBulkImport() {
   const [submittedRows, setSubmittedRows] = useState(0);
   const [results, setResults] = useState<ImportResult[]>([]);
   const [onConflict, setOnConflict] = useState<'skip' | 'generate'>('skip');
+  const [workspaceId, setWorkspaceId] = useState('');
+  const [folderId, setFolderId] = useState('');
 
   const preview: BulkPreview = useMemo(() => parseBulkPreview(csvText), [csvText]);
   const validPreviewCount = useMemo(() => preview.rows.filter((r) => r.isValid).length, [preview]);
@@ -44,7 +46,7 @@ export function useBulkImport() {
       const response = await fetch('/api/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ csv: csvText, onConflict }),
+        body: JSON.stringify({ csv: csvText, onConflict, ...(workspaceId ? { workspaceId } : {}), ...(workspaceId && folderId ? { folderId } : {}) }),
       });
       const data: unknown = await response.json().catch(() => null);
       if (!response.ok) {
@@ -70,7 +72,7 @@ export function useBulkImport() {
     } finally {
       setBusy(false);
     }
-  }, [csvText, onConflict]);
+  }, [csvText, onConflict, workspaceId, folderId]);
 
   const resetResults = useCallback(() => {
     setImportedLinks([]);
@@ -92,6 +94,10 @@ export function useBulkImport() {
     results,
     onConflict,
     setOnConflict,
+    workspaceId,
+    setWorkspaceId: (id: string) => { setWorkspaceId(id); setFolderId(''); },
+    folderId,
+    setFolderId,
     runImport,
     resetResults,
   };

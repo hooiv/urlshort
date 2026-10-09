@@ -27,6 +27,10 @@ export default function BulkPage() {
     results,
     onConflict,
     setOnConflict,
+    workspaceId,
+    setWorkspaceId,
+    folderId,
+    setFolderId,
     runImport,
   } = useBulkImport()
 
@@ -79,6 +83,10 @@ export default function BulkPage() {
           validPreviewCount={validPreviewCount}
           onConflict={onConflict}
           onConflictChange={setOnConflict}
+          workspaceId={workspaceId}
+          onWorkspaceChange={setWorkspaceId}
+          folderId={folderId}
+          onFolderChange={setFolderId}
           onImport={runImport}
         />
 

@@ -325,6 +325,7 @@ export async function GET(request: NextRequest) {
         shortCode: true,
         title: true,
         tags: true,
+        workspaceId: true,
         folderId: true,
         clicks: true,
         createdAt: true,

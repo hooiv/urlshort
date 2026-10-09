@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { folderWriteError } from '@/lib/folders'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
@@ -23,6 +24,8 @@ import {
 export const bulkCsvSchema = z.object({
   csv: z.string().min(1, { message: 'Invalid CSV' }).max(MAX_IMPORT_BYTES, { message: 'CSV payload is too large' }),
   workspaceId: z.string().min(1).max(64).optional(),
+  /** File every imported link into this folder (must belong to workspaceId). */
+  folderId: z.string().min(1).max(64).optional(),
   /** What to do when an alias is already taken: report the row, or keep the link under a random code. */
   onConflict: z.enum(['skip', 'generate']).optional(),
 })
@@ -67,7 +70,13 @@ export async function POST(request: NextRequest) {
       if (!membership) return NextResponse.json({ error: 'You are not a member of that workspace' }, { status: 403 })
       if (!EDIT_ROLES.includes(membership.role)) return NextResponse.json({ error: 'Editor permission is required to import into this workspace' }, { status: 403 })
       workspaceId = body.data.workspaceId
+      if (body.data.folderId) {
+        const folderError = await folderWriteError(user.id, workspaceId, membership.role, body.data.folderId)
+        if (folderError) return NextResponse.json({ error: folderError }, { status: folderError === 'Folder not found' ? 404 : 403 })
+      }
     }
+    if (body.data.folderId && !workspaceId) return NextResponse.json({ error: 'Choose a workspace to import into a folder' }, { status: 400 })
+    const folderId = body.data.folderId ?? null
 
     const parsed = parseImport(body.data.csv)
     if ('error' in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 })
@@ -129,6 +138,7 @@ export async function POST(request: NextRequest) {
               tags: row.tags,
               userId: user.id,
               workspaceId,
+              folderId,
               riskStatus: risk.status,
               riskReason: risk.reason,
               riskCheckedAt: now,
@@ -165,7 +175,7 @@ export async function POST(request: NextRequest) {
         action: 'link.bulk_import',
         resourceType: 'url',
         resourceId: created[0].id,
-        after: { count: created.length, source: parsed.source, workspaceId },
+        after: { count: created.length, source: parsed.source, workspaceId, folderId },
       })
       // Side effects must not turn a committed import into a reported failure.
       try {

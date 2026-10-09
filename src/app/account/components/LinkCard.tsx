@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import CardAction from '@/app/account/components/CardAction'
 import Field from '@/app/account/components/Field'
 import type { Url } from '@/app/account/components/types'
+import { useWritableFolders } from '@/components/FolderPicker'
 import {
   parseTagsInput,
   safeDestinationHref,
@@ -27,6 +28,29 @@ export default function LinkCard({
   const [title, setTitle] = useState(link.title || '')
   const [destination, setDestination] = useState(link.originalUrl)
   const [tagsInput, setTagsInput] = useState((link.tags ?? []).join(', '))
+  const [choosingFolder, setChoosingFolder] = useState(false)
+  const folders = useWritableFolders(choosingFolder ? link.workspaceId : null)
+  const currentFolder = folders.find((f) => f.id === link.folderId)
+
+  async function moveToFolder(folderId: string | null) {
+    setBusy(true)
+    try {
+      const response = await fetch(`/api/links/${encodeURIComponent(link.shortCode)}/folder`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folderId }),
+      })
+      const data = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(data?.error || 'Move failed')
+      toast.success(folderId ? 'Moved to folder' : 'Removed from folder')
+      setChoosingFolder(false)
+      onChanged()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Move failed')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function patch(body: Record<string, unknown>, successMessage: string) {
     setBusy(true)
@@ -218,6 +242,23 @@ export default function LinkCard({
         <div className="flex flex-wrap gap-1">
           <CardAction onClick={() => setShowQr((value) => !value)} label={showQr ? 'Hide QR' : 'QR'} />
           <CardAction onClick={() => setEditing((value) => !value)} label="Edit" />
+          {link.workspaceId && (choosingFolder ? (
+            <select
+              autoFocus
+              disabled={busy}
+              value={link.folderId ?? ''}
+              onChange={(e) => void moveToFolder(e.target.value || null)}
+              onBlur={() => setChoosingFolder(false)}
+              aria-label="Move to folder"
+              className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-xs"
+            >
+              <option value="">No folder</option>
+              {link.folderId && !currentFolder && <option value={link.folderId}>Current folder</option>}
+              {folders.map((f) => <option key={f.id} value={f.id}>{f.restricted ? '🔒 ' : ''}{f.name}</option>)}
+            </select>
+          ) : (
+            <CardAction onClick={() => setChoosingFolder(true)} label="Folder" />
+          ))}
           <CardAction
             disabled={busy}
             onClick={() => void patch({ isActive: !link.isActive }, link.isActive ? 'Link paused' : 'Link activated')}

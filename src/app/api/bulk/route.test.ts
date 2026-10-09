@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server'
 
 const prismaMock = vi.hoisted(() => ({
   membership: { findUnique: vi.fn() },
+  folder: { findFirst: vi.fn() },
   url: { findMany: vi.fn(), createManyAndReturn: vi.fn() },
   destinationRevision: { createMany: vi.fn() },
   $transaction: vi.fn(),
@@ -104,6 +105,20 @@ describe('POST /api/bulk', () => {
     prismaMock.membership.findUnique.mockResolvedValueOnce({ role: 'editor' })
     expect((await post({ csv: 'originalUrl\nhttps://example.com', workspaceId: 'ws_1' })).status).toBe(201)
     expect(prismaMock.url.createManyAndReturn.mock.calls[0][0].data[0].workspaceId).toBe('ws_1')
+  })
+
+  it('imports into a folder only when the member can write to it', async () => {
+    const csv = 'originalUrl\nhttps://example.com'
+    expect((await post({ csv, folderId: 'f_1' })).status).toBe(400)
+    prismaMock.membership.findUnique.mockResolvedValue({ role: 'editor' })
+    prismaMock.folder.findFirst.mockResolvedValueOnce({ restricted: true, access: [] })
+    expect((await post({ csv, workspaceId: 'ws_1', folderId: 'f_1' })).status).toBe(404)
+    prismaMock.folder.findFirst.mockResolvedValueOnce({ restricted: true, access: [{ role: 'viewer' }] })
+    expect((await post({ csv, workspaceId: 'ws_1', folderId: 'f_1' })).status).toBe(403)
+    prismaMock.folder.findFirst.mockResolvedValueOnce({ restricted: false, access: [] })
+    expect((await post({ csv, workspaceId: 'ws_1', folderId: 'f_1' })).status).toBe(201)
+    expect(prismaMock.url.createManyAndReturn.mock.lastCall![0].data[0].folderId).toBe('f_1')
+    prismaMock.membership.findUnique.mockReset()
   })
 
   it('rejects files without a destination column', async () => {
