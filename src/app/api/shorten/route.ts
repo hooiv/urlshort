@@ -12,7 +12,7 @@ import { LINK_READ_SCOPES, LINK_WRITE_SCOPES, resolveActor } from '@/lib/request
 import { EDIT_ROLES } from '@/lib/workspaces'
 import { assessDestination } from '@/lib/link-safety'
 import { assertDestinationSafeForStorage } from '@/lib/destination-health'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { hashGatePassword } from '@/lib/password-gate'
 import { getIdempotentResponse, storeIdempotentResponse } from '@/lib/idempotency'
 import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
     if (!limit.allowed) {
       return NextResponse.json(
         { error: 'Too many links created. Please try again shortly.' },
-        { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
+        { status: 429, headers: rateLimitHeaders(limit) },
       )
     }
 

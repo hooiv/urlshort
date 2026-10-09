@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getManageableUrl, READ_ROLES } from '@/lib/authorization'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
 const MAX_ROWS = 10_000
 
@@ -20,7 +20,7 @@ export function csvEscape(value: unknown): string {
 export async function GET(request: NextRequest, context: { params: Promise<{ shortCode: string }> }) {
   try {
     const limit = await rateLimit(request, { name: 'export', limit: 10, windowMs: 60_000 })
-    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) })
 
     const { shortCode } = await context.params
     const access = await getManageableUrl(request, shortCode, READ_ROLES)

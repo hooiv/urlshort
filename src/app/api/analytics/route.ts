@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { ANALYTICS_READ_SCOPES, resolveActor } from '@/lib/request-actor'
 import { READ_ROLES } from '@/lib/authorization'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { canAdministerFolders, effectiveFolderRole } from '@/lib/folders'
 import { analyticsToCsv, exportFilename, parseExportSection } from '@/lib/analytics-export'
 import { getAggregatedAnalytics, resolveWindow, type AnalyticsScope } from '@/lib/aggregate-analytics'
@@ -19,7 +19,7 @@ const TAG = /^[a-z0-9][a-z0-9-_ ]{0,31}$/
 export async function GET(request: NextRequest) {
   try {
     const limit = await rateLimit(request, { name: 'analytics-aggregate', limit: 60, windowMs: 60_000 })
-    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) })
 
     const resolved = await resolveActor(request, ANALYTICS_READ_SCOPES)
     if (!resolved.actor) return NextResponse.json({ error: resolved.error === 'Authentication required' ? 'Unauthorized' : resolved.error }, { status: resolved.status })

@@ -3,7 +3,7 @@ import { z } from 'zod/v4'
 import type { DeviceType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { getManageableUrl, READ_ROLES } from '@/lib/authorization'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { countryToFlag, countryToName, getTrafficSource } from '@/lib/smart-routing'
 import { analyzeExperiment, type VariantStats } from '@/lib/stats'
 
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     if (!limit.allowed) {
       return NextResponse.json(
         { error: 'Too many requests' },
-        { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } }
+        { status: 429, headers: rateLimitHeaders(limit) }
       )
     }
 

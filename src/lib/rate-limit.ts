@@ -17,6 +17,8 @@ export type RateLimitResult = {
   /** Seconds until the window resets (0 when allowed). */
   retryAfterSeconds: number
   limit: number
+  /** Seconds until the oldest hit leaves the window (capacity starts freeing). Optional for custom backends. */
+  resetSeconds?: number
 }
 
 export interface RateLimiterBackend {
@@ -60,11 +62,18 @@ class InMemoryBackend implements RateLimiterBackend {
         remaining: 0,
         retryAfterSeconds: Math.max(1, Math.ceil((oldest + windowMs - now) / 1000)),
         limit,
+        resetSeconds: Math.max(1, Math.ceil((oldest + windowMs - now) / 1000)),
       }
     }
 
     bucket.hits.push(now)
-    return { allowed: true, remaining: limit - bucket.hits.length, retryAfterSeconds: 0, limit }
+    return {
+      allowed: true,
+      remaining: limit - bucket.hits.length,
+      retryAfterSeconds: 0,
+      limit,
+      resetSeconds: Math.max(1, Math.ceil((bucket.hits[0] + windowMs - now) / 1000)),
+    }
   }
 
   private evictIfNeeded(): void {
@@ -132,9 +141,9 @@ class RedisBackend implements RateLimiterBackend {
       const retryAfterSeconds = Number.isFinite(oldestAt) && oldestAt > 0
         ? Math.max(1, Math.ceil((oldestAt + windowMs - now) / 1000))
         : 1
-      return { allowed: false, remaining: 0, retryAfterSeconds, limit }
+      return { allowed: false, remaining: 0, retryAfterSeconds, limit, resetSeconds: retryAfterSeconds }
     }
-    return { allowed: true, remaining: limit - hitsCount, retryAfterSeconds: 0, limit }
+    return { allowed: true, remaining: limit - hitsCount, retryAfterSeconds: 0, limit, resetSeconds: Math.max(1, Math.ceil(windowMs / 1000)) }
   }
 }
 
@@ -166,4 +175,28 @@ export async function rateLimit(
 ): Promise<RateLimitResult> {
   const identity = options.identifier ?? getClientIp(request)
   return backend.hit(`${options.name}:${identity}`, options.limit, options.windowMs)
+}
+
+/**
+ * Standard rate-limit response headers: the IETF `RateLimit-*` fields,
+ * the widely-deployed `X-RateLimit-*` twins, and `Retry-After` on a 429.
+ */
+export function rateLimitHeaders(result: RateLimitResult): Record<string, string> {
+  const reset = String(result.resetSeconds ?? result.retryAfterSeconds)
+  const headers: Record<string, string> = {
+    'RateLimit-Limit': String(result.limit),
+    'RateLimit-Remaining': String(Math.max(0, result.remaining)),
+    'RateLimit-Reset': reset,
+    'X-RateLimit-Limit': String(result.limit),
+    'X-RateLimit-Remaining': String(Math.max(0, result.remaining)),
+    'X-RateLimit-Reset': reset,
+  }
+  if (!result.allowed) headers['Retry-After'] = String(Math.max(1, result.retryAfterSeconds))
+  return headers
+}
+
+/** Copies the rate-limit headers onto an existing response. */
+export function withRateLimitHeaders<T extends Response>(response: T, result: RateLimitResult): T {
+  for (const [key, value] of Object.entries(rateLimitHeaders(result))) response.headers.set(key, value)
+  return response
 }
