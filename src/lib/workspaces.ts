@@ -16,9 +16,19 @@ export function slugifyWorkspace(name: string): string {
 export function createInviteToken(): string { return randomBytes(32).toString('base64url') }
 export function hashInviteToken(token: string): string { return createHash('sha256').update(token).digest('hex') }
 
-export async function getWorkspaceMembership(request: NextRequest, workspaceId: string) {
-  const user = await getCurrentUser(request)
-  if (!user) return null
+export async function getWorkspaceMembership(request: NextRequest, workspaceId: string, options: { apiKeyScopes?: string[] } = {}) {
+  let userId: string | null
+  if (options.apiKeyScopes) {
+    // Opt-in per route: only read/link routes accept keys, member and
+    // billing administration stays session-only.
+    const { resolveActor } = await import('./request-actor')
+    const resolved = await resolveActor(request, options.apiKeyScopes)
+    userId = resolved.actor?.userId ?? null
+  } else {
+    userId = (await getCurrentUser(request))?.id ?? null
+  }
+  if (!userId) return null
+  const user = { id: userId }
   return prisma.membership.findUnique({ where: { workspaceId_userId: { workspaceId, userId: user.id } }, include: { workspace: true } })
 }
 

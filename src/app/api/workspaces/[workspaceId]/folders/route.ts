@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { getWorkspaceMembership, EDIT_ROLES } from '@/lib/workspaces'
+import { LINK_READ_SCOPES } from '@/lib/request-actor'
 import { recordAudit } from '@/lib/audit'
 import { canAdministerFolders, listVisibleFolders, normalizeFolderName } from '@/lib/folders'
 
@@ -17,7 +18,7 @@ const CreateFolder = z.object({
 /** GET → folders this member can see, with link counts and their effective role. */
 export async function GET(request: NextRequest, context: { params: Promise<{ workspaceId: string }> }) {
   const { workspaceId } = await context.params
-  const membership = await getWorkspaceMembership(request, workspaceId)
+  const membership = await getWorkspaceMembership(request, workspaceId, { apiKeyScopes: LINK_READ_SCOPES })
   if (!membership) return NextResponse.json({ error: 'Workspace not found' }, { status: 404 })
   return NextResponse.json({ folders: await listVisibleFolders(workspaceId, membership.userId, membership.role), canAdminister: canAdministerFolders(membership.role) })
 }

@@ -17,6 +17,8 @@ vi.mock('@/lib/destination-health', () => ({ assertDestinationSafeForStorage: sa
 vi.mock('@/lib/audit', () => ({ recordAudit: vi.fn() }))
 vi.mock('@/lib/routing-config', () => ({ publishWorkspaceRoutingConfig: vi.fn() }))
 vi.mock('@/lib/webhooks', () => ({ dispatchWebhooksForUrls: dispatchMock }))
+const keyMock = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/api-keys', async (orig) => ({ ...(await orig<typeof import('@/lib/api-keys')>()), authenticateApiKey: keyMock }))
 
 import { POST, bulkCsvSchema, normalizeBulkTags } from './route'
 
@@ -95,6 +97,15 @@ describe('POST /api/bulk', () => {
     prismaMock.url.createManyAndReturn.mockResolvedValue([])
     const body = await (await post({ csv: 'originalUrl,customAlias\nhttps://example.com/a,race-me' })).json()
     expect(body.results[0]).toMatchObject({ status: 'skipped', reason: 'Alias "race-me" was taken during import' })
+  })
+
+  it('accepts API keys only with links:write', async () => {
+    const keyed = (body: unknown) => POST(new NextRequest('https://ql.test/api/bulk', { method: 'POST', headers: { 'x-api-key': 'qlk_test' }, body: JSON.stringify(body) }))
+    keyMock.mockResolvedValueOnce({ userId: 'user_k', apiKeyId: 'k', scopes: ['analytics:read'] })
+    expect((await keyed({ csv: 'originalUrl\nhttps://example.com' })).status).toBe(403)
+    keyMock.mockResolvedValueOnce({ userId: 'user_k', apiKeyId: 'k', scopes: ['links:write'] })
+    expect((await keyed({ csv: 'originalUrl\nhttps://example.com' })).status).toBe(201)
+    expect(prismaMock.url.createManyAndReturn.mock.lastCall![0].data[0].userId).toBe('user_k')
   })
 
   it('enforces workspace edit rights', async () => {

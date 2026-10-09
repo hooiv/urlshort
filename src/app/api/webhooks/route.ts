@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { getCurrentUser } from '@/lib/auth';
+import { WEBHOOK_SCOPES, resolveActor } from '@/lib/request-actor';
 import { assertDestinationSafeForStorage } from '@/lib/destination-health';
 import { rateLimit } from '@/lib/rate-limit';
 import crypto from 'crypto';
@@ -53,8 +53,9 @@ export const webhookCreateSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getCurrentUser(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const resolved = await resolveActor(request, WEBHOOK_SCOPES);
+    if (!resolved.actor) return NextResponse.json({ error: resolved.status === 401 ? 'Unauthorized' : resolved.error }, { status: resolved.status });
+    const user = { id: resolved.actor.userId };
 
     const endpoints = await prisma.webhookEndpoint.findMany({
       where: await manageableEndpointWhere(user.id),
@@ -113,8 +114,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser(request);
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const resolved = await resolveActor(request, WEBHOOK_SCOPES);
+    if (!resolved.actor) return NextResponse.json({ error: resolved.status === 401 ? 'Unauthorized' : resolved.error }, { status: resolved.status });
+    const user = { id: resolved.actor.userId };
 
     const limit = await rateLimit(request, { name: 'webhooks-create', limit: 30, windowMs: 60_000 });
     if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { getCurrentUser } from '@/lib/auth'
+import { LINK_WRITE_SCOPES, resolveActor } from '@/lib/request-actor'
+import { extractApiKey } from '@/lib/api-keys'
 import { getManageableUrl } from '@/lib/authorization'
 import { recordAudit } from '@/lib/audit'
 import { canAdministerFolders, folderWriteError } from '@/lib/folders'
@@ -17,8 +18,9 @@ const Body = z.object({ folderId: z.string().min(1).max(64).nullable() })
  */
 export async function PATCH(request: NextRequest, context: { params: Promise<{ shortCode: string }> }) {
   const { shortCode } = await context.params
-  const user = await getCurrentUser(request)
-  if (!user) return NextResponse.json({ error: 'Sign in to organise links into folders' }, { status: 401 })
+  const resolved = await resolveActor(request, LINK_WRITE_SCOPES)
+  if (!resolved.actor) return NextResponse.json({ error: resolved.status === 401 && !extractApiKey(request) ? 'Sign in to organise links into folders' : resolved.error }, { status: resolved.status })
+  const user = { id: resolved.actor.userId }
   const access = await getManageableUrl(request, shortCode)
   if (!access.url) return NextResponse.json({ error: access.error }, { status: access.status })
   const link = access.url

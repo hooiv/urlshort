@@ -17,6 +17,7 @@ export type ActorResult = { actor: Actor } | { actor: null; status: 401 | 403; e
 
 export const LINK_READ_SCOPES = ['links:read', 'links:write']
 export const LINK_WRITE_SCOPES = ['links:write']
+export const WEBHOOK_SCOPES = ['webhooks:write']
 export const ANALYTICS_READ_SCOPES = ['analytics:read', 'links:read', 'links:write']
 
 export async function resolveActor(request: NextRequest, scopes: string[]): Promise<ActorResult> {

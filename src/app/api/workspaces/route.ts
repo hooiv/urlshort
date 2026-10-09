@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
+import { LINK_READ_SCOPES, resolveActor } from '@/lib/request-actor'
 import { slugifyWorkspace } from '@/lib/workspaces'
 import { recordAudit } from '@/lib/audit'
 
 export async function GET(request: NextRequest) {
-  const user = await getCurrentUser(request)
-  if (!user) return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+  const resolved = await resolveActor(request, LINK_READ_SCOPES)
+  if (!resolved.actor) return NextResponse.json({ error: resolved.error }, { status: resolved.status })
+  const user = { id: resolved.actor.userId }
   const memberships = await prisma.membership.findMany({ where: { userId: user.id }, include: { workspace: true }, orderBy: { workspace: { createdAt: 'asc' } } })
   return NextResponse.json(memberships.map((m) => ({ id: m.workspace.id, name: m.workspace.name, slug: m.workspace.slug, role: m.role })))
 }

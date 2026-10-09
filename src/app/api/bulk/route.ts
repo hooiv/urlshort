@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { folderWriteError } from '@/lib/folders'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { getCurrentUser } from '@/lib/auth'
+import { LINK_WRITE_SCOPES, resolveActor } from '@/lib/request-actor'
 import { rateLimit } from '@/lib/rate-limit'
 import { getBaseUrl } from '@/lib/utils'
 import { assertDestinationSafeForStorage } from '@/lib/destination-health'
@@ -51,8 +51,9 @@ const INSERT_CHUNK = 500
  */
 export async function POST(request: NextRequest) {
   try {
-    const user = await getCurrentUser(request)
-    if (!user) return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    const resolved = await resolveActor(request, LINK_WRITE_SCOPES)
+    if (!resolved.actor) return NextResponse.json({ error: resolved.error }, { status: resolved.status })
+    const user = { id: resolved.actor.userId }
 
     const limit = await rateLimit(request, { name: 'bulk-create', limit: 5, windowMs: 60_000 })
     if (!limit.allowed) return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
