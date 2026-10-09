@@ -26,3 +26,5 @@ export interface ApiResponse {
   dns?: DnsRecords
   link?: { id: string; path: string }
 }
+
+export type DnsProviderId = 'cloudflare' | 'vercel'

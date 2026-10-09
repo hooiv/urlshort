@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { createVerificationToken, edgeTarget, normalizeHost, normalizePath, verificationRecord, verifyDns } from '@/lib/domains'
+import { edgeTarget, normalizeHost, normalizePath, verificationRecord, verifyDns } from '@/lib/domains'
 import { invalidateDomain } from '@/lib/link-cache'
 import { recordAudit } from '@/lib/audit'
+import { DomainOwnershipError, registerDomain } from '@/lib/domain-registration'
 import { getManageableUrl } from '@/lib/authorization'
 import { rateLimit } from '@/lib/rate-limit'
 
@@ -43,10 +44,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
   if (!limit.allowed) return NextResponse.json({ error: 'Too many domain requests. Try again shortly.' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
   try {
     const { host, path } = await parseDomainBody(request, shortCode)
-    const existing = await prisma.brandedDomain.findUnique({ where: { host } })
-    if (existing?.ownerUrlId && existing.ownerUrlId !== result.id) return NextResponse.json({ error: 'This domain is already owned by another link account' }, { status: 409 })
-    const domain = existing || await prisma.brandedDomain.create({ data: { host, ownerUrlId: result.id, verificationToken: createVerificationToken() } })
-    await prisma.domainProvision.upsert({ where: { domainId: domain.id }, create: { domainId: domain.id, verificationValue: domain.verificationToken, status: 'requested' }, update: { status: domain.status === 'verified' ? 'provisioning' : 'verifying' } })
+    let domain
+    try {
+      domain = await registerDomain(result.id, host)
+    } catch (error) {
+      if (error instanceof DomainOwnershipError) return NextResponse.json({ error: error.message }, { status: 409 })
+      throw error
+    }
     if (domain.status !== 'verified') {
       const record = verificationRecord(host, domain.verificationToken)
       return NextResponse.json({ verified: false, domain, dns: { ...record, cname: { name: host, type: 'CNAME', value: edgeTarget() } } })

@@ -8,7 +8,7 @@ import {
   readSessionToken,
   validateDomainForm,
 } from './domainValidation'
-import type { ApiResponse, Binding, DnsRecords } from './types'
+import type { ApiResponse, Binding, DnsProviderId, DnsRecords } from './types'
 
 /**
  * Branded-domain bindings + DNS verify flow for one short link.
@@ -97,14 +97,14 @@ export function useDomains(shortCode: string) {
     }
   }
 
-  async function verify() {
-    if (!token) return
+  /** One PATCH verify attempt. `quiet` suppresses toasts for background polling. */
+  async function verifyOnce(quiet: boolean): Promise<boolean> {
+    if (!token) return false
     const checked = validateDomainForm(host, path)
     if (!checked.ok) {
-      toast.error(checked.error)
-      return
+      if (!quiet) toast.error(checked.error)
+      return false
     }
-    setWorking(true)
     try {
       const response = await fetch(`/api/links/${encodeURIComponent(shortCode)}/domains`, {
         method: 'PATCH',
@@ -116,8 +116,72 @@ export function useDomains(shortCode: string) {
       await load()
       if (mountedRef.current) setDns(null)
       toast.success('Domain ownership verified! Your branded link is active.')
+      return true
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Verification failed')
+      if (!quiet) toast.error(error instanceof Error ? error.message : 'Verification failed')
+      return false
+    }
+  }
+
+  async function verify() {
+    setWorking(true)
+    try {
+      await verifyOnce(false)
+    } finally {
+      if (mountedRef.current) setWorking(false)
+    }
+  }
+
+  /** Which supported DNS provider hosts the zone, or null. */
+  async function detectProvider(): Promise<DnsProviderId | null> {
+    if (!token) return null
+    const checked = validateDomainForm(host, path)
+    if (!checked.ok) return null
+    try {
+      const response = await fetch(`/api/links/${encodeURIComponent(shortCode)}/domains/connect?host=${encodeURIComponent(checked.host)}`, {
+        headers: { 'x-management-token': token },
+      })
+      const data = (await response.json()) as { provider?: DnsProviderId | null }
+      return response.ok ? data.provider ?? null : null
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Writes the records at the user's DNS provider, then polls verification
+   * for up to ~1 minute (Cloudflare and Vercel publish within seconds).
+   */
+  async function connectDns(input: { provider: DnsProviderId; apiToken: string; teamId?: string; replaceExisting?: boolean }): Promise<'verified' | 'pending' | 'conflict' | 'failed'> {
+    if (!token) return 'failed'
+    const checked = validateDomainForm(host, path)
+    if (!checked.ok) {
+      toast.error(checked.error)
+      return 'failed'
+    }
+    setWorking(true)
+    try {
+      const response = await fetch(`/api/links/${encodeURIComponent(shortCode)}/domains/connect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-management-token': token },
+        body: JSON.stringify({ host: checked.host, ...input }),
+      })
+      const data = (await response.json().catch(() => ({}))) as { error?: string; code?: string }
+      if (!response.ok) {
+        toast.error(data.error || 'Could not configure DNS')
+        return data.code === 'record_conflict' ? 'conflict' : 'failed'
+      }
+      toast.success('DNS records added. Waiting for them to go live…')
+      for (let attempt = 0; attempt < 12; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, attempt === 0 ? 2_000 : 5_000))
+        if (!mountedRef.current) return 'pending'
+        if (await verifyOnce(true)) return 'verified'
+      }
+      toast('Records are in place but not visible yet. Verification will finish automatically.')
+      return 'pending'
+    } catch {
+      toast.error('Network error while configuring DNS')
+      return 'failed'
     } finally {
       if (mountedRef.current) setWorking(false)
     }
@@ -158,5 +222,5 @@ export function useDomains(shortCode: string) {
     setPath(value)
   }
 
-  return { token, host, path, bindings, dns, working, handleHostChange, handlePathChange, load, addDomain, verify, remove }
+  return { token, host, path, bindings, dns, working, handleHostChange, handlePathChange, load, addDomain, verify, remove, detectProvider, connectDns }
 }

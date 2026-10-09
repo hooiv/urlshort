@@ -67,6 +67,7 @@ All management endpoints accept a session cookie, a per-link management token (`
 | `GET/PATCH /api/links/[shortCode]/safety` | Risk status + abuse reports. |
 | `GET/POST/DELETE /api/account/api-keys` | API key management. |
 | `POST /api/track` | Public conversion endpoint (HMAC token, CORS allowlist, 24h dedup). |
+| `GET/POST /api/links/:code/domains/connect` | One-click branded-domain DNS: detects Cloudflare/Vercel from NS records and writes the verification TXT + routing CNAME (ALIAS at a Vercel apex) with a one-time, never-stored token. Refuses to overwrite an existing A/AAAA/CNAME unless `replaceExisting` is set. |
 | `GET /api/analytics` | Account/workspace/tag-wide analytics: totals with period-over-period change, daily series, top links, tags, revenue by currency, human-traffic breakdowns. |
 | `GET/POST /api/integrations/stripe`, `PATCH/DELETE /api/integrations/stripe/:id` | Manage Stripe sale-attribution integrations. |
 | `POST /api/integrations/stripe/:id/webhook` | Stripe webhook receiver (signature-verified, idempotent). See `docs/stripe-attribution.md`. |

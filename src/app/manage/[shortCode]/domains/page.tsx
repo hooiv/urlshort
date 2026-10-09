@@ -5,6 +5,7 @@ import { ShieldCheck } from 'lucide-react'
 import { Toaster } from 'react-hot-toast'
 import AccessDenied from '@/app/manage/[shortCode]/domains/components/AccessDenied'
 import BindingList from '@/app/manage/[shortCode]/domains/components/BindingList'
+import AutoConnectCard from '@/app/manage/[shortCode]/domains/components/AutoConnectCard'
 import DnsSetupCard from '@/app/manage/[shortCode]/domains/components/DnsSetupCard'
 import DomainForm from '@/app/manage/[shortCode]/domains/components/DomainForm'
 import DomainsHeader from '@/app/manage/[shortCode]/domains/components/DomainsHeader'
@@ -24,6 +25,8 @@ export default function BrandedDomainsPage() {
     addDomain,
     verify,
     remove,
+    detectProvider,
+    connectDns,
   } = useDomains(shortCode)
 
   if (!token) return <AccessDenied shortCode={shortCode} />
@@ -60,6 +63,9 @@ export default function BrandedDomainsPage() {
         />
 
         {/* DNS Configuration Cards */}
+        {dns && (
+          <AutoConnectCard host={host} working={working} detectProvider={detectProvider} connectDns={connectDns} />
+        )}
         {dns && (
           <DnsSetupCard
             host={host}
