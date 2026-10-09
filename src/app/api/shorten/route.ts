@@ -7,6 +7,8 @@ import { generateShortCode, getBaseUrl, isReservedCode, isValidUrl, normalizeUrl
 import { buildManagementUrl, createManagementToken, hashManagementToken } from '@/lib/management'
 import { recordAudit } from '@/lib/audit'
 import { getCurrentUser } from '@/lib/auth'
+import { extractApiKey } from '@/lib/api-keys'
+import { LINK_READ_SCOPES, LINK_WRITE_SCOPES, resolveActor } from '@/lib/request-actor'
 import { EDIT_ROLES } from '@/lib/workspaces'
 import { assessDestination } from '@/lib/link-safety'
 import { assertDestinationSafeForStorage } from '@/lib/destination-health'
@@ -161,7 +163,15 @@ export async function POST(request: NextRequest) {
     }
 
     const managementToken = createManagementToken()
-    const user = await getCurrentUser(request)
+    // Anonymous creation stays allowed; an API key creates as its owner (links:write).
+    let user: { id: string } | null
+    if (extractApiKey(request)) {
+      const resolved = await resolveActor(request, LINK_WRITE_SCOPES)
+      if (!resolved.actor) return NextResponse.json({ error: resolved.error }, { status: resolved.status })
+      user = { id: resolved.actor.userId }
+    } else {
+      user = await getCurrentUser(request)
+    }
     const risk = assessDestination(normalizedUrl)
     const requestedFolderId = typeof body.folderId === 'string' && body.folderId ? body.folderId.slice(0, 64) : null
     // A folder implies its workspace, so callers may pass either.
@@ -281,8 +291,9 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await getCurrentUser(request)
-    if (!user) return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    const resolved = await resolveActor(request, LINK_READ_SCOPES)
+    if (!resolved.actor) return NextResponse.json({ error: resolved.error }, { status: resolved.status })
+    const user = { id: resolved.actor.userId }
 
     // Query params: ?search=<code|title|destination>&tag=<tag>&cursor=<createdAt iso>&take=<1-100>
     const params = request.nextUrl.searchParams

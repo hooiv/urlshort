@@ -3,7 +3,8 @@ import type { WorkspaceRole } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { hasValidManagementToken } from '@/lib/management'
-import { authenticateApiKey } from '@/lib/api-keys'
+import { authenticateApiKey, hasAnyApiScope } from '@/lib/api-keys'
+import { ANALYTICS_READ_SCOPES, LINK_WRITE_SCOPES } from '@/lib/request-actor'
 import { EDIT_ROLES } from '@/lib/workspaces'
 import { roleWithinFolder } from '@/lib/folders'
 export { EDIT_ROLES }
@@ -38,6 +39,10 @@ export async function canManageUrl(request: NextRequest, url: { managementTokenH
   if (role && allowedRoles.includes(role)) return true
   const apiKeyAuth = await authenticateApiKey(request)
   if (apiKeyAuth) {
+    // Keys act within their scopes: read-only routes accept read/analytics
+    // scopes, anything that needs an edit role needs links:write.
+    const readOnly = allowedRoles.some((r) => r === 'viewer' || r === 'analyst')
+    if (!hasAnyApiScope(apiKeyAuth, readOnly ? ANALYTICS_READ_SCOPES : LINK_WRITE_SCOPES)) return false
     const apiKeyRole = await getRoleForUserId(apiKeyAuth.userId, url)
     return Boolean(apiKeyRole && allowedRoles.includes(apiKeyRole))
   }

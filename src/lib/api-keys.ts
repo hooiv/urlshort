@@ -26,7 +26,7 @@ export function hashApiKey(key: string): string {
   return createHash('sha256').update(key).digest('hex')
 }
 
-function extractApiKey(request: NextRequest): string | null {
+export function extractApiKey(request: NextRequest): string | null {
   const header = request.headers.get('x-api-key') || request.headers.get('authorization')?.replace(/^Bearer\s+/i, '')
   if (!header || !header.startsWith(`${PREFIX}_`)) return null
   return header

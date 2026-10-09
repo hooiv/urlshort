@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getCurrentUser } from '@/lib/auth'
+import { ANALYTICS_READ_SCOPES, resolveActor } from '@/lib/request-actor'
 import { READ_ROLES } from '@/lib/authorization'
 import { rateLimit } from '@/lib/rate-limit'
 import { canAdministerFolders, effectiveFolderRole } from '@/lib/folders'
@@ -20,8 +20,9 @@ export async function GET(request: NextRequest) {
     const limit = await rateLimit(request, { name: 'analytics-aggregate', limit: 60, windowMs: 60_000 })
     if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
 
-    const user = await getCurrentUser(request)
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const resolved = await resolveActor(request, ANALYTICS_READ_SCOPES)
+    if (!resolved.actor) return NextResponse.json({ error: resolved.error === 'Authentication required' ? 'Unauthorized' : resolved.error }, { status: resolved.status })
+    const user = { id: resolved.actor.userId }
 
     const params = request.nextUrl.searchParams
     const workspaceId = params.get('workspaceId')

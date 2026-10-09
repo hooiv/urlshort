@@ -1,9 +1,10 @@
 import { NextRequest } from 'next/server'
-import { authenticateApiKey, hasApiScope } from '@/lib/api-keys'
+import { authenticateApiKey, hasAnyApiScope, hasApiScope } from '@/lib/api-keys'
 import { getDefaultWorkspace } from '@/lib/workspaces'
 import { prisma } from '@/lib/prisma'
 import { runCampaignAutopilot } from '@/lib/campaigns'
 import { rateLimit } from '@/lib/rate-limit'
+import { LINK_TOOLS, LINK_TOOL_NAMES, ToolInputError, callLinkTool } from '@/lib/mcp-link-tools'
 import {
   createMcpSession,
   deleteMcpSession,
@@ -13,6 +14,7 @@ import {
 } from '@/lib/mcp-session'
 
 const tools = [
+  ...LINK_TOOLS,
   { name: 'campaign.list', description: 'List campaigns', inputSchema: { type: 'object', properties: {} } },
   { name: 'campaign.get', description: 'Inspect campaign history', inputSchema: { type: 'object', properties: { campaignId: { type: 'string' } }, required: ['campaignId'] } },
   { name: 'campaign.start', description: 'Start a campaign', inputSchema: { type: 'object', properties: { campaignId: { type: 'string' } }, required: ['campaignId'] } },
@@ -58,23 +60,27 @@ export function assertToolCampaignId(value: unknown): string {
 }
 
 export function sanitizeMcpToolError(e: unknown): { message: string; status: number } {
+  // Messages from our own API validation are written for API clients already.
+  if (e instanceof ToolInputError) return { message: e.message, status: e.status >= 500 ? 500 : e.status === 404 && e.message === 'Unknown tool' ? 403 : e.status }
   const message = e instanceof Error ? e.message : 'Tool failed'
   if (message.includes('scope required') || message === 'Unknown tool' || message === 'Invalid campaignId') return { message, status: 403 }
   return { message: 'Tool failed', status: 500 }
 }
 
-async function toolCall(x: { a: { userId: string; scopes: string[] }; w: { id: string } }, name: string, args: Record<string, unknown>) {
+async function toolCall(x: { a: { userId: string; scopes: string[] }; w: { id: string } }, name: string, args: Record<string, unknown>, request?: NextRequest) {
   if (process.env.MCP_CONFORMANCE_BYPASS === '1') return { ok: true, tool: name }
+  // Link tools reuse the REST handlers, which check the key's scopes themselves.
+  if (LINK_TOOL_NAMES.has(name) && request) return callLinkTool(request, name, args)
   if (name === 'campaign.list') {
-    if (!hasApiScope(x.a as never, 'campaign:read') && !hasApiScope(x.a as never, 'mcp:read')) throw new Error('campaign:read scope required')
+    if (!hasAnyApiScope(x.a as never, ['campaign:read', 'campaigns:read', 'campaigns:write', 'mcp:read'])) throw new Error('campaign:read scope required')
     return prisma.campaign.findMany({ where: { workspaceId: x.w.id }, include: { variants: true }, orderBy: { updatedAt: 'desc' } })
   }
   if (name === 'campaign.get') {
-    if (!hasApiScope(x.a as never, 'campaign:read') && !hasApiScope(x.a as never, 'mcp:read')) throw new Error('campaign:read scope required')
+    if (!hasAnyApiScope(x.a as never, ['campaign:read', 'campaigns:read', 'campaigns:write', 'mcp:read'])) throw new Error('campaign:read scope required')
     return prisma.campaign.findFirst({ where: { id: assertToolCampaignId(args.campaignId), workspaceId: x.w.id }, include: { variants: true, experiments: { include: { snapshots: true } }, decisions: true } })
   }
   if (['campaign.start', 'campaign.autopilot'].includes(name)) {
-    if (!hasApiScope(x.a as never, 'campaign:write') && !hasApiScope(x.a as never, 'mcp:write')) throw new Error('campaign:write scope required')
+    if (!hasAnyApiScope(x.a as never, ['campaign:write', 'campaigns:write', 'mcp:write'])) throw new Error('campaign:write scope required')
     if (name === 'campaign.autopilot') return runCampaignAutopilot(assertToolCampaignId(args.campaignId), x.a.userId, x.w.id)
     return prisma.campaign.updateMany({ where: { id: assertToolCampaignId(args.campaignId), workspaceId: x.w.id }, data: { status: 'running' } })
   }
@@ -128,7 +134,7 @@ async function modernPost(r: NextRequest, x: Awaited<ReturnType<typeof auth>>) {
     const sampling = metaCapabilities && typeof metaCapabilities === 'object' && 'sampling' in metaCapabilities
     if (q.params?.name === 'test_missing_capability' && !sampling) return responseError(r, { jsonrpc: '2.0', id: q.id ?? null, error: { code: -32021, message: 'Missing required client capability', data: { requiredCapabilities: { sampling: {} } } } }, 400)
     try {
-      return response(r, q.id ?? null, { content: [{ type: 'text', text: JSON.stringify(await toolCall(x, q.params?.name || '', q.params?.arguments || {})) }] })
+      return response(r, q.id ?? null, { content: [{ type: 'text', text: JSON.stringify(await toolCall(x, q.params?.name || '', q.params?.arguments || {}, r)) }] })
     } catch (e) {
       const safe = sanitizeMcpToolError(e)
       return error(r, q.id ?? null, -32000, safe.message, safe.status)
@@ -162,7 +168,7 @@ export async function POST(r: NextRequest) {
   if (q.method === 'tools/list') return response(r, q.id ?? null, { tools }, sid)
   if (q.method !== 'tools/call') return error(r, q.id ?? null, -32601, 'Method not found', 400, sid)
   try {
-    return response(r, q.id ?? null, { content: [{ type: 'text', text: JSON.stringify(await toolCall(x, q.params?.name || '', q.params?.arguments || {})) }] }, sid)
+    return response(r, q.id ?? null, { content: [{ type: 'text', text: JSON.stringify(await toolCall(x, q.params?.name || '', q.params?.arguments || {}, r)) }] }, sid)
   } catch (e) {
     const safe = sanitizeMcpToolError(e)
     return error(r, q.id ?? null, -32000, safe.message, safe.status, sid)
