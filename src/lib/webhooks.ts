@@ -6,6 +6,7 @@ import { reserveUsageInTransaction } from './tenant-usage';
 import { CircuitBreaker } from './resilience';
 import { endpointMatchesLink, signWebhookPayload } from './webhook-filters';
 
+import { evaluateEndpointHealth } from './webhook-health';
 export const WEBHOOK_MAX_RETRIES = 5;
 const RESPONSE_BODY_LIMIT = 1000;
 
@@ -203,6 +204,8 @@ export async function processWebhookDelivery(deliveryId: string): Promise<Webhoo
     },
   });
   if (finalized.count !== 1) return skipped;
+
+  if (status === 'failed') await evaluateEndpointHealth(endpoint.id).catch((e) => console.error('[webhook] health check failed', e));
 
   return { attempted: true, status, responseCode, latencyMs };
 }

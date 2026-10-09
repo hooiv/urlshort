@@ -641,6 +641,9 @@ model WebhookEndpoint {
   tagFilter      String[] @default([])
   urlIdFilter    String[] @default([])
   folderIdFilter String[] @default([])
+  /// Set when sustained delivery failures switched the endpoint off automatically.
+  disabledAt     DateTime?
+  disabledReason String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

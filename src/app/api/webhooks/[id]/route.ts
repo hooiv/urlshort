@@ -60,7 +60,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'JSON object body required' }, { status: 400 });
     }
     const input = body as Record<string, unknown>;
-    const data: { events?: string[]; isActive?: boolean; linkScope?: string; tagFilter?: string[]; urlIdFilter?: string[]; folderIdFilter?: string[] } = {};
+    const data: { events?: string[]; isActive?: boolean; disabledAt?: null; disabledReason?: null; linkScope?: string; tagFilter?: string[]; urlIdFilter?: string[]; folderIdFilter?: string[] } = {};
 
     if (input.events !== undefined) {
       try {
@@ -72,6 +72,7 @@ export async function PATCH(
     if (input.isActive !== undefined) {
       if (typeof input.isActive !== 'boolean') return NextResponse.json({ error: 'isActive must be a boolean' }, { status: 400 });
       data.isActive = input.isActive;
+      if (input.isActive) Object.assign(data, { disabledAt: null, disabledReason: null });
     }
     if (input.linkScope !== undefined) {
       const filter = parseLinkFilterInput({ linkScope: input.linkScope, tags: input.tags, shortCodes: input.shortCodes, folderIds: input.folderIds });
