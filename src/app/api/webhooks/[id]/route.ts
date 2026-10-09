@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { rateLimit } from '@/lib/rate-limit';
 import { parseLinkFilterInput } from '@/lib/webhook-filters';
-import { resolveOwnedLinkIds } from '@/lib/webhook-link-resolution';
+import { findManageableEndpoint, resolveEndpointFilter } from '@/lib/webhook-endpoint-access';
 import { normalizeEvents } from '../route';
 
 export async function DELETE(
@@ -16,11 +16,8 @@ export async function DELETE(
 
     const { id } = await params;
 
-    const endpoint = await prisma.webhookEndpoint.findUnique({
-      where: { id },
-    });
-
-    if (!endpoint || endpoint.userId !== user.id) {
+    const endpoint = await findManageableEndpoint(user.id, id);
+    if (!endpoint) {
       return NextResponse.json({ error: 'Not found or forbidden' }, { status: 404 });
     }
 
@@ -51,8 +48,8 @@ export async function PATCH(
     if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
 
     const { id } = await params;
-    const endpoint = await prisma.webhookEndpoint.findUnique({ where: { id }, select: { id: true, userId: true } });
-    if (!endpoint || endpoint.userId !== user.id) {
+    const endpoint = await findManageableEndpoint(user.id, id);
+    if (!endpoint) {
       return NextResponse.json({ error: 'Not found or forbidden' }, { status: 404 });
     }
 
@@ -61,7 +58,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'JSON object body required' }, { status: 400 });
     }
     const input = body as Record<string, unknown>;
-    const data: { events?: string[]; isActive?: boolean; linkScope?: string; tagFilter?: string[]; urlIdFilter?: string[] } = {};
+    const data: { events?: string[]; isActive?: boolean; linkScope?: string; tagFilter?: string[]; urlIdFilter?: string[]; folderIdFilter?: string[] } = {};
 
     if (input.events !== undefined) {
       try {
@@ -75,19 +72,13 @@ export async function PATCH(
       data.isActive = input.isActive;
     }
     if (input.linkScope !== undefined) {
-      const filter = parseLinkFilterInput({ linkScope: input.linkScope, tags: input.tags, shortCodes: input.shortCodes });
+      const filter = parseLinkFilterInput({ linkScope: input.linkScope, tags: input.tags, shortCodes: input.shortCodes, folderIds: input.folderIds });
       if (!filter.ok) return NextResponse.json({ error: filter.error }, { status: 400 });
-      let urlIdFilter: string[] = [];
-      if (filter.linkScope === 'links') {
-        const resolved = await resolveOwnedLinkIds(user.id, filter.shortCodes);
-        if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 400 });
-        urlIdFilter = resolved.ids;
-      }
-      data.linkScope = filter.linkScope;
-      data.tagFilter = filter.tagFilter;
-      data.urlIdFilter = urlIdFilter;
-    } else if (input.tags !== undefined || input.shortCodes !== undefined) {
-      return NextResponse.json({ error: 'Send linkScope together with tags or shortCodes' }, { status: 400 });
+      const resolved = await resolveEndpointFilter({ userId: user.id, workspaceId: endpoint.workspaceId }, filter);
+      if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 400 });
+      Object.assign(data, resolved.value);
+    } else if (input.tags !== undefined || input.shortCodes !== undefined || input.folderIds !== undefined) {
+      return NextResponse.json({ error: 'Send linkScope together with tags, shortCodes or folderIds' }, { status: 400 });
     }
 
     if (Object.keys(data).length === 0) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
@@ -95,7 +86,7 @@ export async function PATCH(
     const updated = await prisma.webhookEndpoint.update({
       where: { id },
       data,
-      select: { id: true, url: true, isActive: true, events: true, linkScope: true, tagFilter: true, urlIdFilter: true, updatedAt: true },
+      select: { id: true, workspaceId: true, url: true, isActive: true, events: true, linkScope: true, tagFilter: true, urlIdFilter: true, folderIdFilter: true, updatedAt: true },
     });
     return NextResponse.json({
       id: updated.id,
@@ -103,7 +94,9 @@ export async function PATCH(
       isActive: updated.isActive,
       events: updated.events,
       linkScope: updated.linkScope,
+      workspaceId: updated.workspaceId,
       tags: updated.tagFilter,
+      folderIds: updated.folderIdFilter,
       shortCodes: updated.urlIdFilter.length
         ? (await prisma.url.findMany({ where: { id: { in: updated.urlIdFilter } }, select: { shortCode: true } })).map((link) => link.shortCode)
         : [],

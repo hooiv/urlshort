@@ -6,7 +6,7 @@ import { assertDestinationSafeForStorage } from '@/lib/destination-health';
 import { rateLimit } from '@/lib/rate-limit';
 import crypto from 'crypto';
 import { parseLinkFilterInput } from '@/lib/webhook-filters';
-import { resolveOwnedLinkIds } from '@/lib/webhook-link-resolution';
+import { isWorkspaceAdmin, manageableEndpointWhere, resolveEndpointFilter } from '@/lib/webhook-endpoint-access';
 
 /**
  * Events an endpoint may subscribe to. Keeping this a closed allowlist stops
@@ -46,6 +46,9 @@ export const webhookCreateSchema = z.object({
   linkScope: z.unknown().optional(),
   tags: z.unknown().optional(),
   shortCodes: z.unknown().optional(),
+  folderIds: z.unknown().optional(),
+  /** Create a workspace endpoint (owner/admin) that fires for every workspace link. */
+  workspaceId: z.string().min(1).max(64).optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -54,15 +57,18 @@ export async function GET(request: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const endpoints = await prisma.webhookEndpoint.findMany({
-      where: { userId: user.id },
+      where: await manageableEndpointWhere(user.id),
       select: {
         id: true,
+        workspaceId: true,
+        workspace: { select: { name: true } },
         url: true,
         isActive: true,
         events: true,
         linkScope: true,
         tagFilter: true,
         urlIdFilter: true,
+        folderIdFilter: true,
         createdAt: true,
         updatedAt: true,
         _count: {
@@ -85,11 +91,14 @@ export async function GET(request: NextRequest) {
     // expose only a short non-reversible-looking hint for UI identification.
     return NextResponse.json(endpoints.map((endpoint) => ({
       id: endpoint.id,
+      workspaceId: endpoint.workspaceId,
+      workspaceName: endpoint.workspace?.name ?? null,
       url: endpoint.url,
       isActive: endpoint.isActive,
       events: endpoint.events,
       linkScope: endpoint.linkScope,
       tags: endpoint.tagFilter,
+      folderIds: endpoint.folderIdFilter,
       shortCodes: endpoint.urlIdFilter.map((id) => shortCodeById.get(id)).filter((code): code is string => !!code),
       createdAt: endpoint.createdAt,
       updatedAt: endpoint.updatedAt,
@@ -114,14 +123,14 @@ export async function POST(request: NextRequest) {
     if (!parsed.success) return NextResponse.json({ error: 'URL is required' }, { status: 400 });
     const { url, events } = parsed.data;
 
+    const workspaceId = parsed.data.workspaceId ?? null;
+    if (workspaceId && !(await isWorkspaceAdmin(user.id, workspaceId))) {
+      return NextResponse.json({ error: 'Only workspace owners and admins can add workspace webhooks' }, { status: 403 });
+    }
     const filter = parseLinkFilterInput(parsed.data);
     if (!filter.ok) return NextResponse.json({ error: filter.error }, { status: 400 });
-    let urlIdFilter: string[] = [];
-    if (filter.linkScope === 'links') {
-      const resolved = await resolveOwnedLinkIds(user.id, filter.shortCodes);
-      if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: 400 });
-      urlIdFilter = resolved.ids;
-    }
+    const resolvedFilter = await resolveEndpointFilter({ userId: user.id, workspaceId }, filter);
+    if (!resolvedFilter.ok) return NextResponse.json({ error: resolvedFilter.error }, { status: 400 });
 
     let normalizedEvents: string[];
     try {
@@ -148,13 +157,13 @@ export async function POST(request: NextRequest) {
 
     const endpoint = await prisma.webhookEndpoint.create({
       data: {
-        userId: user.id,
+        // Exactly one owner: a workspace endpoint has no user, so it survives the creator leaving.
+        userId: workspaceId ? null : user.id,
+        workspaceId,
         url: normalizedUrl,
         secret,
         events: normalizedEvents,
-        linkScope: filter.linkScope,
-        tagFilter: filter.tagFilter,
-        urlIdFilter,
+        ...resolvedFilter.value,
       },
     });
 

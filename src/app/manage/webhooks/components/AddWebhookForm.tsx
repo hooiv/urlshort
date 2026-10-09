@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useWritableFolders } from '@/components/FolderPicker';
 import { Activity, Check, Copy, Plus } from 'lucide-react';
 import type { WebhookLinkFilter, WebhookLinkScope } from './types';
 import { parseFilterList } from './validateWebhook';
@@ -22,9 +23,24 @@ export function AddWebhookForm({
   const [copied, setCopied] = useState(false);
   const [linkScope, setLinkScope] = useState<WebhookLinkScope>('all');
   const [filterText, setFilterText] = useState('');
+  const [workspaceId, setWorkspaceId] = useState('');
+  const [adminWorkspaces, setAdminWorkspaces] = useState<Array<{ id: string; name: string }>>([]);
+  const [folderIds, setFolderIds] = useState<string[]>([]);
+  // Admins see every folder, so "writable" is the full list here.
+  const folders = useWritableFolders(workspaceId || null);
+
+  useEffect(() => {
+    fetch('/api/workspaces')
+      .then((res) => (res.ok ? res.json() : []))
+      .then((rows: Array<{ id: string; name: string; role: string }>) =>
+        setAdminWorkspaces(Array.isArray(rows) ? rows.filter((w) => w.role === 'owner' || w.role === 'admin') : []),
+      )
+      .catch(() => undefined);
+  }, []);
 
   const filterValues = parseFilterList(filterText);
-  const filterIncomplete = linkScope !== 'all' && filterValues.length === 0;
+  const filterIncomplete =
+    linkScope === 'folders' ? folderIds.length === 0 : linkScope !== 'all' && filterValues.length === 0;
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,10 +49,13 @@ export function AddWebhookForm({
       linkScope,
       tags: linkScope === 'tags' ? filterValues : [],
       shortCodes: linkScope === 'links' ? filterValues.map((code) => code.replace(/^\//, '')) : [],
+      folderIds: linkScope === 'folders' ? folderIds : [],
+      workspaceId: workspaceId || null,
     });
     if (added) {
       setNewUrl('');
       setFilterText('');
+      setFolderIds([]);
       setLinkScope('all');
     }
   };
@@ -74,6 +93,30 @@ export function AddWebhookForm({
           Add Endpoint
         </button>
         </div>
+        {adminWorkspaces.length > 0 && (
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <label htmlFor="webhook-owner" className="text-sm text-slate-400 shrink-0">
+              Owned by
+            </label>
+            <select
+              id="webhook-owner"
+              value={workspaceId}
+              onChange={(e) => {
+                setWorkspaceId(e.target.value);
+                setFolderIds([]);
+                if (!e.target.value && linkScope === 'folders') setLinkScope('all');
+              }}
+              className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-blue-500"
+            >
+              <option value="">Me (links I create)</option>
+              {adminWorkspaces.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name} (every workspace link)
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <label htmlFor="webhook-scope" className="text-sm text-slate-400 shrink-0">
             Fire for
@@ -87,8 +130,29 @@ export function AddWebhookForm({
             <option value="all">All links</option>
             <option value="tags">Links with tags…</option>
             <option value="links">Specific links…</option>
+            {workspaceId && <option value="folders">Links in folders…</option>}
           </select>
-          {linkScope !== 'all' && (
+          {linkScope === 'folders' && (
+            <div className="flex flex-1 flex-wrap gap-2" role="group" aria-label="Folders">
+              {folders.length === 0 && <span className="text-xs text-slate-500">This workspace has no folders yet.</span>}
+              {folders.map((folder) => {
+                const on = folderIds.includes(folder.id);
+                return (
+                  <button
+                    key={folder.id}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => setFolderIds((ids) => (on ? ids.filter((id) => id !== folder.id) : [...ids, folder.id]))}
+                    className={`rounded-full border px-3 py-1 text-xs ${on ? 'border-blue-500 bg-blue-500/20 text-blue-100' : 'border-slate-700 text-slate-400 hover:text-white'}`}
+                  >
+                    {folder.restricted ? '🔒 ' : ''}
+                    {folder.name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {linkScope !== 'all' && linkScope !== 'folders' && (
             <input
               type="text"
               value={filterText}

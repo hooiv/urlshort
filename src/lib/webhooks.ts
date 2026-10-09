@@ -209,9 +209,10 @@ type FanoutEndpoint = {
   linkScope: string
   tagFilter: string[]
   urlIdFilter: string[]
+  folderIdFilter?: string[]
 }
 
-type FanoutLink = { id: string; workspaceId: string | null; userId: string | null; tags: string[] }
+type FanoutLink = { id: string; workspaceId: string | null; userId: string | null; tags: string[]; folderId?: string | null }
 
 /**
  * Pure matcher: which endpoint should receive which item. An endpoint is only
@@ -228,9 +229,11 @@ export function planWebhookFanout(
     const link = links.get(item.urlId)
     if (!link) continue
     for (const endpoint of endpoints) {
-      const sameTenant =
-        (endpoint.workspaceId !== null && endpoint.workspaceId === link.workspaceId) ||
-        (endpoint.userId !== null && endpoint.userId === link.userId)
+      // A workspace endpoint serves that workspace's links; a personal one
+      // serves its owner's links. Never both, so ownership can't be widened.
+      const sameTenant = endpoint.workspaceId !== null
+        ? endpoint.workspaceId === link.workspaceId
+        : endpoint.userId !== null && endpoint.userId === link.userId
       if (!sameTenant || !endpointMatchesLink(endpoint, link)) continue
       planned.push({ endpointId: endpoint.id, workspaceId: endpoint.workspaceId, payload: item.payload })
     }
@@ -248,7 +251,7 @@ export async function dispatchWebhooksForUrls(event: string, items: WebhookFanou
   const urlIds = [...new Set(items.map(item => item.urlId))]
   const links = await prisma.url.findMany({
     where: { id: { in: urlIds } },
-    select: { id: true, workspaceId: true, userId: true, tags: true },
+    select: { id: true, workspaceId: true, userId: true, tags: true, folderId: true },
   })
   const linkMap = new Map(links.map(link => [link.id, link]))
 
@@ -265,7 +268,7 @@ export async function dispatchWebhooksForUrls(event: string, items: WebhookFanou
 
   const endpoints = await prisma.webhookEndpoint.findMany({
     where: { isActive: true, events: { has: event }, OR: ownerScope },
-    select: { id: true, workspaceId: true, userId: true, linkScope: true, tagFilter: true, urlIdFilter: true },
+    select: { id: true, workspaceId: true, userId: true, linkScope: true, tagFilter: true, urlIdFilter: true, folderIdFilter: true },
   })
   if (endpoints.length === 0) return { enqueued: 0, droppedForQuota: 0 }
 

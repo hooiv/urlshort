@@ -14,7 +14,7 @@ vi.mock('./tenant-usage', () => ({ reserveUsageInTransaction: reserveMock }))
 
 import { dispatchWebhooksForUrls, planWebhookFanout } from './webhooks'
 
-const endpoint = (over: Partial<{ id: string; workspaceId: string | null; userId: string | null; linkScope: string; tagFilter: string[]; urlIdFilter: string[] }>) => ({
+const endpoint = (over: Partial<{ id: string; workspaceId: string | null; userId: string | null; linkScope: string; tagFilter: string[]; urlIdFilter: string[]; folderIdFilter: string[] }>) => ({
   id: 'ep', workspaceId: null, userId: null, linkScope: 'all', tagFilter: [], urlIdFilter: [], ...over,
 })
 
@@ -45,6 +45,24 @@ describe('planWebhookFanout', () => {
       ],
     )
     expect(plan.map(p => p.endpointId)).toEqual(['tag-hit', 'link-hit'])
+  })
+
+  it('routes workspace endpoints by workspace only and filters by folder', () => {
+    const folderLinks = new Map([
+      ['f1', { id: 'f1', workspaceId: 'ws_a', userId: 'user_x', tags: [], folderId: 'fold_1' }],
+      ['p1', { id: 'p1', workspaceId: null, userId: 'user_x', tags: [] }],
+    ])
+    const plan = planWebhookFanout(
+      [{ urlId: 'f1', payload: {} }, { urlId: 'p1', payload: {} }],
+      folderLinks,
+      [
+        endpoint({ id: 'folder-hit', workspaceId: 'ws_a', linkScope: 'folders', folderIdFilter: ['fold_1'] }),
+        endpoint({ id: 'folder-miss', workspaceId: 'ws_a', linkScope: 'folders', folderIdFilter: ['fold_2'] }),
+        // A workspace endpoint must not pick up a member's personal links even if a userId lingers on it.
+        endpoint({ id: 'ws-all', workspaceId: 'ws_a', userId: 'user_x' }),
+      ],
+    )
+    expect(plan.map(p => p.endpointId)).toEqual(['folder-hit', 'ws-all'])
   })
 
   it('skips items whose link no longer exists', () => {

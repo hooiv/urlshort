@@ -5,20 +5,23 @@ import crypto from 'crypto'
  *  - `all`   every link owned by the endpoint's workspace or user
  *  - `tags`  links carrying at least one tag in `tagFilter`
  *  - `links` links whose id is in `urlIdFilter`
+ *  - `folders` links filed in a folder in `folderIdFilter` (workspace endpoints)
  */
-export const WEBHOOK_LINK_SCOPES = ['all', 'tags', 'links'] as const
+export const WEBHOOK_LINK_SCOPES = ['all', 'tags', 'links', 'folders'] as const
 export type WebhookLinkScope = (typeof WEBHOOK_LINK_SCOPES)[number]
 
 export const MAX_WEBHOOK_TAG_FILTERS = 50
 export const MAX_WEBHOOK_LINK_FILTERS = 500
+export const MAX_WEBHOOK_FOLDER_FILTERS = 50
 
 export type EndpointLinkFilter = {
   linkScope: string
   tagFilter: string[]
   urlIdFilter: string[]
+  folderIdFilter?: string[]
 }
 
-export type FilterableLink = { id: string; tags: string[] }
+export type FilterableLink = { id: string; tags: string[]; folderId?: string | null }
 
 /** Tags are matched case-insensitively and whitespace-trimmed, mirroring how link tags are stored. */
 export function normalizeTag(tag: string): string {
@@ -36,6 +39,8 @@ export function endpointMatchesLink(endpoint: EndpointLinkFilter, link: Filterab
     }
     case 'links':
       return endpoint.urlIdFilter.includes(link.id)
+    case 'folders':
+      return Boolean(link.folderId && endpoint.folderIdFilter?.includes(link.folderId))
     default:
       // Unknown scope (e.g. written by a newer deploy during a rollback):
       // fail closed rather than leaking every click to the endpoint.
@@ -47,10 +52,11 @@ export type LinkFilterInput = {
   linkScope?: unknown
   tags?: unknown
   shortCodes?: unknown
+  folderIds?: unknown
 }
 
 export type ParsedLinkFilter =
-  | { ok: true; linkScope: WebhookLinkScope; tagFilter: string[]; shortCodes: string[] }
+  | { ok: true; linkScope: WebhookLinkScope; tagFilter: string[]; shortCodes: string[]; folderIds: string[] }
   | { ok: false; error: string }
 
 /**
@@ -83,15 +89,19 @@ export function parseLinkFilterInput(input: LinkFilterInput): ParsedLinkFilter {
   if (typeof tags === 'string') return { ok: false, error: tags }
   const shortCodes = strings(input.shortCodes, 'shortCodes', MAX_WEBHOOK_LINK_FILTERS, 128)
   if (typeof shortCodes === 'string') return { ok: false, error: shortCodes }
+  const folderIds = strings(input.folderIds, 'folderIds', MAX_WEBHOOK_FOLDER_FILTERS, 64)
+  if (typeof folderIds === 'string') return { ok: false, error: folderIds }
 
   if (linkScope === 'tags' && tags.length === 0) return { ok: false, error: 'linkScope "tags" needs at least one tag' }
   if (linkScope === 'links' && shortCodes.length === 0) return { ok: false, error: 'linkScope "links" needs at least one short code' }
+  if (linkScope === 'folders' && folderIds.length === 0) return { ok: false, error: 'linkScope "folders" needs at least one folder' }
 
   return {
     ok: true,
     linkScope,
     tagFilter: linkScope === 'tags' ? [...new Set(tags.map(normalizeTag))] : [],
     shortCodes: linkScope === 'links' ? shortCodes : [],
+    folderIds: linkScope === 'folders' ? folderIds : [],
   }
 }
 

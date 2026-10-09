@@ -40,6 +40,15 @@ describe('real database: link folders', () => {
       expect(await total({ userId: granted.id })).toBe(30)
       expect(await total(undefined, null)).toBe(10)
       expect(await total(undefined, secret.id)).toBe(10)
+
+      // A workspace webhook scoped to the secret folder fires for its links only.
+      const { dispatchWebhooksForUrls } = await import('./webhooks')
+      const hook = await db.webhookEndpoint.create({ data: { workspaceId: workspace.id, url: 'https://hooks.example.com/x', secret: 's', events: ['link.clicked'], linkScope: 'folders', folderIdFilter: [secret.id] } })
+      const sent = await dispatchWebhooksForUrls('link.clicked', [hidden, visible, loose].map((u) => ({ urlId: u.id, payload: { id: u.id } })))
+      expect(sent.enqueued).toBe(1)
+      expect(JSON.parse((await db.webhookDelivery.findFirstOrThrow({ where: { endpointId: hook.id } })).payload).id).toBe(hidden.id)
+      await db.$executeRaw`UPDATE "webhook_endpoints" SET "folderIdFilter" = array_remove("folderIdFilter", ${secret.id}) WHERE "workspaceId" = ${workspace.id} AND ${secret.id} = ANY("folderIdFilter")`
+      expect((await db.webhookEndpoint.findUniqueOrThrow({ where: { id: hook.id } })).folderIdFilter).toEqual([])
     } finally {
       await db.url.deleteMany({ where: { workspaceId: workspace.id } })
       await db.workspace.delete({ where: { id: workspace.id } })

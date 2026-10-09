@@ -627,19 +627,22 @@ enum WebhookStatus {
 }
 
 model WebhookEndpoint {
-  id          String   @id @default(cuid())
-  workspaceId String?
-  userId      String?
-  url         String
-  secret      String
-  isActive    Boolean  @default(true)
-  events      String[] // Array of event names like "click", "conversion"
-  /// 'all' | 'tags' | 'links' - which of the owner's links fire this endpoint.
-  linkScope   String   @default("all")
-  tagFilter   String[] @default([])
-  urlIdFilter String[] @default([])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String   @id @default(cuid())
+  workspaceId    String?
+  userId         String?
+  url            String
+  secret         String
+  isActive       Boolean  @default(true)
+  events         String[] // Array of event names like "click", "conversion"
+  /// 'all' | 'tags' | 'links' | 'folders' - which of the owner's links fire this endpoint.
+  /// An endpoint has exactly one owner: a workspace (userId null, managed by
+  /// owners/admins, fires for every workspace link) or a user (their own links).
+  linkScope      String   @default("all")
+  tagFilter      String[] @default([])
+  urlIdFilter    String[] @default([])
+  folderIdFilter String[] @default([])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   workspace  Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user       User?             @relation(fields: [userId], references: [id], onDelete: Cascade)

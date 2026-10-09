@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { findManageableEndpoint } from '@/lib/webhook-endpoint-access';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { enqueueWebhook, processWebhookDelivery } from '@/lib/webhooks';
@@ -17,14 +18,9 @@ export async function POST(
 
     const { id } = await params;
 
-    // Strict ownership: the endpoint must belong to the caller. Unlike a
-    // `userId && userId !== user.id` check, orphaned (workspace-only) rows
-    // can never be probed by arbitrary users.
-    const endpoint = await prisma.webhookEndpoint.findUnique({
-      where: { id },
-    });
-
-    if (!endpoint || endpoint.userId !== user.id) {
+    // Personal endpoints: their owner. Workspace endpoints: workspace owners/admins.
+    const endpoint = await findManageableEndpoint(user.id, id);
+    if (!endpoint) {
       return NextResponse.json({ error: 'Not found or forbidden' }, { status: 404 });
     }
 

@@ -17,6 +17,10 @@ type RawWebhook = {
   linkScope?: string;
   tags?: string[];
   shortCodes?: string[];
+  folderIds?: string[];
+  folderIdFilter?: string[];
+  workspaceId?: string | null;
+  workspaceName?: string | null;
 };
 
 /**
@@ -41,9 +45,12 @@ function normalizeWebhook(raw: RawWebhook): Webhook {
     updatedAt: raw.updatedAt,
     deliveries,
     secretHint: raw.secretHint,
-    linkScope: raw.linkScope === 'tags' || raw.linkScope === 'links' ? (raw.linkScope as WebhookLinkScope) : 'all',
+    linkScope: raw.linkScope === 'tags' || raw.linkScope === 'links' || raw.linkScope === 'folders' ? (raw.linkScope as WebhookLinkScope) : 'all',
     tags: Array.isArray(raw.tags) ? raw.tags : [],
     shortCodes: Array.isArray(raw.shortCodes) ? raw.shortCodes : [],
+    folderIds: Array.isArray(raw.folderIds) ? raw.folderIds : Array.isArray(raw.folderIdFilter) ? raw.folderIdFilter : [],
+    workspaceId: raw.workspaceId ?? null,
+    workspaceName: raw.workspaceName ?? null,
   };
 }
 
@@ -98,6 +105,9 @@ export function useWebhooks() {
           linkScope: filter.linkScope,
           ...(filter.linkScope === 'tags' ? { tags: filter.tags } : {}),
           ...(filter.linkScope === 'links' ? { shortCodes: filter.shortCodes } : {}),
+          ...(filter.linkScope === 'folders' ? { folderIds: filter.folderIds } : {}),
+          ...(filter.linkScope === 'folders' ? { folderIds: filter.folderIds } : {}),
+          ...(filter.workspaceId ? { workspaceId: filter.workspaceId } : {}),
         }),
       });
       const data: unknown = await res.json().catch(() => null);

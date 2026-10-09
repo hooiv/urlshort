@@ -42,7 +42,16 @@ export function parseFilterList(input: string): string[] {
   return [...new Set(input.split(/[\s,]+/).map((part) => part.trim()).filter(Boolean))];
 }
 
-export function describeLinkScope(filter: { linkScope: string; tags: string[]; shortCodes: string[] }): string {
+export function describeLinkScope(filter: { linkScope: string; tags: string[]; shortCodes: string[]; folderIds?: string[]; workspaceName?: string | null }): string {
+  const owner = filter.workspaceName ? `${filter.workspaceName}: ` : '';
+  return owner + describeFilter(filter);
+}
+
+function describeFilter(filter: { linkScope: string; tags: string[]; shortCodes: string[]; folderIds?: string[] }): string {
+  if (filter.linkScope === 'folders') {
+    const n = filter.folderIds?.length ?? 0;
+    return `Links in ${n} folder${n === 1 ? '' : 's'}`;
+  }
   if (filter.linkScope === 'tags') return `Links tagged ${filter.tags.join(', ')}`;
   if (filter.linkScope === 'links') {
     const shown = filter.shortCodes.slice(0, 3).map((code) => `/${code}`).join(', ');

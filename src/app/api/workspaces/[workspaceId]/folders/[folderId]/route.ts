@@ -92,6 +92,8 @@ export async function DELETE(request: NextRequest, context: Ctx) {
   }
   const moved = await prisma.$transaction(async (tx) => {
     const { count } = await tx.url.updateMany({ where: { folderId }, data: { folderId: null } })
+    // Folder-scoped webhooks stop matching this folder (fail closed, never widen).
+    await tx.$executeRaw`UPDATE "webhook_endpoints" SET "folderIdFilter" = array_remove("folderIdFilter", ${folderId}) WHERE "workspaceId" = ${workspaceId} AND ${folderId} = ANY("folderIdFilter")`
     await tx.folder.delete({ where: { id: folderId } })
     return count
   })

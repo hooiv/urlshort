@@ -35,12 +35,12 @@ describe('endpointMatchesLink', () => {
 
 describe('parseLinkFilterInput', () => {
   it('defaults to all and discards stray filters', () => {
-    expect(parseLinkFilterInput({ tags: ['a'] })).toEqual({ ok: true, linkScope: 'all', tagFilter: [], shortCodes: [] })
+    expect(parseLinkFilterInput({ tags: ['a'] })).toEqual({ ok: true, linkScope: 'all', tagFilter: [], shortCodes: [], folderIds: [] })
   })
 
   it('normalises and dedupes tags', () => {
     expect(parseLinkFilterInput({ linkScope: 'tags', tags: [' Launch ', 'launch', 'Q4'] })).toEqual({
-      ok: true, linkScope: 'tags', tagFilter: ['launch', 'q4'], shortCodes: [],
+      ok: true, linkScope: 'tags', tagFilter: ['launch', 'q4'], shortCodes: [], folderIds: [],
     })
   })
 
