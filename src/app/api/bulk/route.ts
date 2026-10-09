@@ -9,10 +9,12 @@ import { assertDestinationSafeForStorage } from '@/lib/destination-health'
 import { assessDestination } from '@/lib/link-safety'
 import { EDIT_ROLES } from '@/lib/workspaces'
 import { recordAudit } from '@/lib/audit'
+import { ProviderImportError, fetchProviderImport } from '@/lib/provider-import'
 import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
 import { dispatchWebhooksForUrls } from '@/lib/webhooks'
 import {
   MAX_IMPORT_BYTES,
+  MAX_IMPORT_ROWS,
   freshShortCode,
   mapWithConcurrency,
   parseImport,
@@ -22,13 +24,20 @@ import {
 } from '@/lib/bulk-import'
 
 export const bulkCsvSchema = z.object({
-  csv: z.string().min(1, { message: 'Invalid CSV' }).max(MAX_IMPORT_BYTES, { message: 'CSV payload is too large' }),
+  csv: z.string().min(1, { message: 'Invalid CSV' }).max(MAX_IMPORT_BYTES, { message: 'CSV payload is too large' }).optional(),
+  /** Pull links from a competitor's API instead of a CSV. The token is used once and never stored. */
+  provider: z.object({
+    name: z.enum(['bitly', 'shortio', 'rebrandly']),
+    token: z.string().trim().min(8, { message: 'API token is required' }).max(512),
+    /** Bitly group GUID, Short.io domain hostname, or Rebrandly domain. Optional. */
+    scope: z.string().trim().max(253).optional(),
+  }).optional(),
   workspaceId: z.string().min(1).max(64).optional(),
   /** File every imported link into this folder (must belong to workspaceId). */
   folderId: z.string().min(1).max(64).optional(),
   /** What to do when an alias is already taken: report the row, or keep the link under a random code. */
   onConflict: z.enum(['skip', 'generate']).optional(),
-})
+}).refine((b) => Boolean(b.csv) !== Boolean(b.provider), { message: 'Send either a CSV or a provider to import from' })
 
 /** Kept for API compatibility with existing callers/tests. */
 export const normalizeBulkTags = (input: string) => parseImportTags(input)
@@ -79,7 +88,20 @@ export async function POST(request: NextRequest) {
     if (body.data.folderId && !workspaceId) return NextResponse.json({ error: 'Choose a workspace to import into a folder' }, { status: 400 })
     const folderId = body.data.folderId ?? null
 
-    const parsed = parseImport(body.data.csv)
+    let parsed: ReturnType<typeof parseImport> & { truncated?: boolean }
+    if (body.data.provider) {
+      // API pulls are slower and hit a third party: tighter per-user budget.
+      const pullLimit = await rateLimit(request, { name: 'bulk-provider-pull', limit: 3, windowMs: 10 * 60_000, identifier: user.id })
+      if (!pullLimit.allowed) return NextResponse.json({ error: 'Too many provider imports; try again in a few minutes' }, { status: 429 })
+      try {
+        parsed = await fetchProviderImport(body.data.provider.name, body.data.provider.token, body.data.provider.scope || undefined)
+      } catch (error) {
+        if (error instanceof ProviderImportError) return NextResponse.json({ error: error.message }, { status: error.status })
+        throw error
+      }
+    } else {
+      parsed = parseImport(body.data.csv!)
+    }
     if ('error' in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 })
 
     const results = new Map<number, ImportResult>()
@@ -194,7 +216,7 @@ export async function POST(request: NextRequest) {
     const baseUrl = getBaseUrl()
     return NextResponse.json({
       source: parsed.source,
-      summary: { total: parsed.totalRows, created: created.length, skipped: parsed.totalRows - created.length },
+      summary: { total: parsed.totalRows, created: created.length, skipped: parsed.totalRows - created.length, ...(parsed.truncated ? { truncated: true, limit: MAX_IMPORT_ROWS } : {}) },
       links: created.map((link) => ({ ...link, shortUrl: `${baseUrl}/${link.shortCode}` })),
       results: ordered,
     }, { status: created.length ? 201 : 200 })

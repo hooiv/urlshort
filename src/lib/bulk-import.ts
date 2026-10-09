@@ -123,35 +123,16 @@ export function parseImport(text: string): ParsedImport {
   const detected = detectColumns(table[0])
   if ('error' in detected) return detected
   const { columns, source } = detected
-  const seenAliases = new Map<string, number>()
-  const rows: ImportRow[] = table.slice(1).map((cells, index) => {
-    const row = index + 2
-    const cell = (column: number) => (column === -1 ? '' : stripControl(cells[column] ?? ''))
-    const { url, error: urlError } = validateImportUrl(cell(columns.url))
-    let alias: string | null = cell(columns.alias) || (columns.shortLink !== -1 ? aliasFromShortLink(cell(columns.shortLink)) : null)
-    let error = urlError
-    if (alias) {
-      alias = alias.replace(/^\/+/, '')
-      if (!ALIAS.test(alias)) error ??= 'Alias must be 3–64 letters, numbers, _ or -'
-      else if (isReservedCode(alias)) error ??= 'Alias is reserved'
-      else {
-        // Short codes are case-sensitive in storage but users read them case-insensitively.
-        const key = alias.toLowerCase()
-        const first = seenAliases.get(key)
-        if (first !== undefined) error ??= `Alias already used on row ${first}`
-        else seenAliases.set(key, row)
-      }
-    }
-    return {
-      row,
-      url,
-      rawUrl: cell(columns.url).slice(0, MAX_IMPORT_URL_LENGTH),
-      alias: alias || null,
-      title: cell(columns.title).slice(0, 200) || null,
-      tags: columns.tags === -1 ? [] : parseImportTags(cell(columns.tags)),
-      error,
-    }
-  })
+  const cellOf = (cells: string[], column: number) => (column === -1 ? '' : stripControl(cells[column] ?? ''))
+  const rows = buildImportRows(
+    table.slice(1).map((cells) => ({
+      url: cellOf(cells, columns.url),
+      alias: cellOf(cells, columns.alias) || (columns.shortLink !== -1 ? aliasFromShortLink(cellOf(cells, columns.shortLink)) : null),
+      title: cellOf(cells, columns.title),
+      tags: columns.tags === -1 ? [] : parseImportTags(cellOf(cells, columns.tags)),
+    })),
+    2,
+  )
   return { source, rows, totalRows: rows.length }
 }
 
@@ -179,4 +160,42 @@ export function freshShortCode(taken: Set<string>): string {
     if (!taken.has(code) && !isReservedCode(code)) return code
   }
   return generateShortCode(10)
+}
+
+export type RawImportRecord = { url: string; alias: string | null; title: string; tags: string[] }
+
+/**
+ * Validates source records (CSV cells or provider API items) into import rows
+ * with the same rules: URL safety, alias shape, reserved words, duplicates.
+ * `firstRow` is the number shown to users for the first record.
+ */
+export function buildImportRows(records: RawImportRecord[], firstRow: number): ImportRow[] {
+  const seenAliases = new Map<string, number>()
+  return records.map((record, index) => {
+    const row = index + firstRow
+    const rawUrl = stripControl(record.url)
+    const { url, error: urlError } = validateImportUrl(rawUrl)
+    let alias = record.alias ? stripControl(record.alias).replace(/^\/+/, '') : null
+    let error = urlError
+    if (alias) {
+      if (!ALIAS.test(alias)) error ??= 'Alias must be 3–64 letters, numbers, _ or -'
+      else if (isReservedCode(alias)) error ??= 'Alias is reserved'
+      else {
+        // Short codes are case-sensitive in storage but users read them case-insensitively.
+        const key = alias.toLowerCase()
+        const first = seenAliases.get(key)
+        if (first !== undefined) error ??= `Alias already used on row ${first}`
+        else seenAliases.set(key, row)
+      }
+    } else alias = null
+    return {
+      row,
+      url,
+      rawUrl: rawUrl.slice(0, MAX_IMPORT_URL_LENGTH),
+      alias,
+      title: stripControl(record.title).slice(0, 200) || null,
+      tags: record.tags,
+      error,
+    }
+  })
 }

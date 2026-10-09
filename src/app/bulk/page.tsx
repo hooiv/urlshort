@@ -10,6 +10,7 @@ import toast, { Toaster } from 'react-hot-toast'
 import { BULK_SAMPLE_CSV } from './components/bulkCsv'
 import { CsvImportForm } from './components/CsvImportForm'
 import { CsvSchemaCard } from './components/CsvSchemaCard'
+import { ProviderImportCard } from './components/ProviderImportCard'
 import { BulkResults } from './components/BulkResults'
 import { downloadTextFile } from './components/downloadFile'
 import { useBulkImport } from './components/useBulkImport'
@@ -32,6 +33,7 @@ export default function BulkPage() {
     folderId,
     setFolderId,
     runImport,
+    runProviderImport,
   } = useBulkImport()
 
   function downloadSampleCsv() {
@@ -89,6 +91,8 @@ export default function BulkPage() {
           onFolderChange={setFolderId}
           onImport={runImport}
         />
+
+        <ProviderImportCard busy={busy} onImport={runProviderImport} />
 
         {/* Results List */}
         <BulkResults links={importedLinks} skippedCount={skippedCount} results={results} />

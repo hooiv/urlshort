@@ -37,42 +37,50 @@ export function useBulkImport() {
     [submittedRows, importedLinks]
   );
 
-  const runImport = useCallback(async (): Promise<{ created: number; skipped: number } | null> => {
-    const validation = validateBulkCsv(csvText);
-    if (validation.error) return Promise.reject(new Error(validation.error));
+  /** POSTs an import and records the outcome. `submitted` falls back to the server's row count (provider pulls). */
+  const submit = useCallback(async (source: Record<string, unknown>, submitted?: number): Promise<{ created: number; skipped: number; truncated: boolean }> => {
     setBusy(true);
     setPhase('uploading');
     try {
       const response = await fetch('/api/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ csv: csvText, onConflict, ...(workspaceId ? { workspaceId } : {}), ...(workspaceId && folderId ? { folderId } : {}) }),
+        body: JSON.stringify({ ...source, onConflict, ...(workspaceId ? { workspaceId } : {}), ...(workspaceId && folderId ? { folderId } : {}) }),
       });
-      const data: unknown = await response.json().catch(() => null);
-      if (!response.ok) {
-        const message =
-          typeof data === 'object' && data !== null && 'error' in data && typeof data.error === 'string'
-            ? data.error
-            : 'Import failed';
-        throw new Error(message);
-      }
-      const links =
-        typeof data === 'object' && data !== null && 'links' in data && Array.isArray(data.links)
-          ? (data.links as ImportedBulkLink[])
-          : [];
-      const rowResults =
-        typeof data === 'object' && data !== null && 'results' in data && Array.isArray(data.results)
-          ? (data.results as ImportResult[])
-          : [];
+      const data = (await response.json().catch(() => null)) as {
+        error?: unknown;
+        links?: unknown;
+        results?: unknown;
+        summary?: { total?: number; truncated?: boolean };
+      } | null;
+      if (!response.ok) throw new Error(typeof data?.error === 'string' ? data.error : 'Import failed');
+      const links = Array.isArray(data?.links) ? (data.links as ImportedBulkLink[]) : [];
+      const rowResults = Array.isArray(data?.results) ? (data.results as ImportResult[]) : [];
+      const total = submitted ?? (typeof data?.summary?.total === 'number' ? data.summary.total : rowResults.length);
       setImportedLinks(links);
       setResults(rowResults);
-      setSubmittedRows(validation.totalRows);
+      setSubmittedRows(total);
       setPhase('done');
-      return summarizeBulkImport(validation.totalRows, links.length);
+      return { ...summarizeBulkImport(total, links.length), truncated: data?.summary?.truncated === true };
+    } catch (error) {
+      setPhase('idle');
+      throw error;
     } finally {
       setBusy(false);
     }
-  }, [csvText, onConflict, workspaceId, folderId]);
+  }, [onConflict, workspaceId, folderId]);
+
+  const runImport = useCallback(async (): Promise<{ created: number; skipped: number } | null> => {
+    const validation = validateBulkCsv(csvText);
+    if (validation.error) return Promise.reject(new Error(validation.error));
+    return submit({ csv: csvText }, validation.totalRows);
+  }, [csvText, submit]);
+
+  const runProviderImport = useCallback(
+    (name: 'bitly' | 'shortio' | 'rebrandly', token: string, scope: string) =>
+      submit({ provider: { name, token, ...(scope.trim() ? { scope: scope.trim() } : {}) } }),
+    [submit],
+  );
 
   const resetResults = useCallback(() => {
     setImportedLinks([]);
@@ -99,6 +107,7 @@ export function useBulkImport() {
     folderId,
     setFolderId,
     runImport,
+    runProviderImport,
     resetResults,
   };
 }

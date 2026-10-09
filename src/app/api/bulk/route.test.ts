@@ -17,6 +17,8 @@ vi.mock('@/lib/destination-health', () => ({ assertDestinationSafeForStorage: sa
 vi.mock('@/lib/audit', () => ({ recordAudit: vi.fn() }))
 vi.mock('@/lib/routing-config', () => ({ publishWorkspaceRoutingConfig: vi.fn() }))
 vi.mock('@/lib/webhooks', () => ({ dispatchWebhooksForUrls: dispatchMock }))
+const providerMock = vi.hoisted(() => vi.fn())
+vi.mock('@/lib/provider-import', async (orig) => ({ ...(await orig<typeof import('@/lib/provider-import')>()), fetchProviderImport: providerMock }))
 const keyMock = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/api-keys', async (orig) => ({ ...(await orig<typeof import('@/lib/api-keys')>()), authenticateApiKey: keyMock }))
 
@@ -97,6 +99,23 @@ describe('POST /api/bulk', () => {
     prismaMock.url.createManyAndReturn.mockResolvedValue([])
     const body = await (await post({ csv: 'originalUrl,customAlias\nhttps://example.com/a,race-me' })).json()
     expect(body.results[0]).toMatchObject({ status: 'skipped', reason: 'Alias "race-me" was taken during import' })
+  })
+
+  it('imports from a provider API through the same pipeline, never echoing the token', async () => {
+    expect((await post({ csv: 'originalUrl\nhttps://example.com', provider: { name: 'bitly', token: 'tok_12345678' } })).status).toBe(400)
+    const { buildImportRows, MAX_IMPORT_ROWS } = await import('@/lib/bulk-import')
+    providerMock.mockResolvedValueOnce({ source: 'bitly', rows: buildImportRows([{ url: 'https://example.com/a', alias: 'abc12', title: 'A', tags: [] }], 1), totalRows: 1, truncated: true })
+    const res = await post({ provider: { name: 'bitly', token: 'tok_12345678', scope: 'Bg1' } })
+    expect(res.status).toBe(201)
+    const body = await res.json()
+    expect(body.summary).toMatchObject({ created: 1, truncated: true, limit: MAX_IMPORT_ROWS })
+    expect(JSON.stringify(body)).not.toContain('tok_12345678')
+    expect(providerMock).toHaveBeenCalledWith('bitly', 'tok_12345678', 'Bg1')
+    const { ProviderImportError } = await import('@/lib/provider-import')
+    providerMock.mockRejectedValueOnce(new ProviderImportError('Bitly rejected the token.', 400))
+    const denied = await post({ provider: { name: 'bitly', token: 'tok_12345678' } })
+    expect(denied.status).toBe(400)
+    expect((await denied.json()).error).toBe('Bitly rejected the token.')
   })
 
   it('accepts API keys only with links:write', async () => {
