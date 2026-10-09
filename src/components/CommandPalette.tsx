@@ -18,6 +18,7 @@ type SearchLink = { id: string; shortCode: string; title: string | null; origina
 const ALL_ACTIONS = [
   { name: 'Dashboard / Creator', path: '/' },
   { name: 'Workspaces', path: '/workspaces' },
+  { name: 'Analytics Overview', path: '/analytics' },
   { name: 'Bio Pages', path: '/manage/bio' },
   { name: 'Webhooks', path: '/manage/webhooks' },
   { name: 'Revenue Attribution', path: '/manage/integrations' },

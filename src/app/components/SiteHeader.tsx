@@ -33,6 +33,12 @@ export default function SiteHeader() {
             Bulk Import
           </Link>
           <Link
+            href="/analytics"
+            className="text-sm font-medium text-slate-400 hover:text-white transition-colors"
+          >
+            Analytics
+          </Link>
+          <Link
             href="/manage/bio"
             className="text-sm font-medium text-slate-400 hover:text-white transition-colors"
           >

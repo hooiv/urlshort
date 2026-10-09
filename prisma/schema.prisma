@@ -105,7 +105,11 @@ model Url {
   primaryCampaigns Campaign[]                  @relation("CampaignPrimaryUrl")
 
   @@index([healthStatus, healthCheckedAt])
-  @@index([tags])
+  /// GIN: tag filters use `tag = ANY(tags)` / `has`, which a btree on an array can't serve.
+  @@index([tags], type: Gin)
+  /// Owner listings and aggregated analytics scope by owner.
+  @@index([userId, createdAt])
+  @@index([workspaceId, createdAt])
   @@map("urls")
 }
 
