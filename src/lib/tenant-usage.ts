@@ -54,3 +54,70 @@ export async function reserveUsage(workspaceId:string,metric:UsageMetric,amount=
 }
 export async function enforceUsage(_request:NextRequest,workspaceId:string,metric:UsageMetric,amount=1n){return reserveUsage(workspaceId,metric,amount)}
 
+
+export function usagePeriodKey(date = new Date()): string { return date.toISOString().slice(0, 7) }
+
+export type UsageLease = { unlimited: boolean; granted: bigint; limit: bigint | null; used: bigint }
+
+/**
+ * Reserve a *block* of usage under the quota row lock so a hot tenant pays one
+ * locked transaction per block instead of per event. The grant shrinks with
+ * the remaining headroom (headroom / headroomDivisor, at least 1), so blocks
+ * are large when a tenant is far from its limit and exact when close to it.
+ * Under a burst the grant also grows to cover the callers already waiting
+ * (`demand`), so a spike is served in a few round trips rather than one per
+ * small lease. The limit can never be exceeded: every granted unit is
+ * committed here.
+ *
+ * `release` hands back units left over from an earlier lease (possibly in a
+ * previous period) inside the same transaction.
+ */
+export async function reserveUsageLeaseInTransaction(
+  tx: PrismaTypes.TransactionClient,
+  workspaceId: string,
+  metric: UsageMetric,
+  maxGrant: bigint,
+  headroomDivisor: bigint,
+  release?: { periodKey: string; amount: bigint },
+  /** Callers already waiting for units: the grant covers them when headroom allows. */
+  demand = 1n,
+): Promise<UsageLease> {
+  if (maxGrant <= 0n || headroomDivisor <= 0n) throw new Error('Lease size and divisor must be positive')
+  const lockedRows = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
+    SELECT "id" FROM "tenant_quotas" WHERE "workspaceId" = ${workspaceId} FOR UPDATE
+  `)
+  if (release && release.amount > 0n) {
+    await tx.usageBucket.updateMany({
+      where: { workspaceId, metric, periodKey: release.periodKey, quantity: { gte: release.amount } },
+      data: { quantity: { decrement: release.amount } },
+    })
+  }
+  if (lockedRows.length === 0) return { unlimited: true, granted: 0n, limit: null, used: 0n }
+  const quota = await tx.tenantQuota.findUnique({ where: { workspaceId } })
+  if (!quota) throw new Error('Tenant quota row disappeared while locked')
+  const limit = BigInt(quota[quotaColumn[metric] as keyof typeof quota] as bigint)
+  const periodKey = usagePeriodKey()
+  const bucket = await tx.usageBucket.upsert({
+    where: { workspaceId_metric_periodKey: { workspaceId, metric, periodKey } },
+    create: { workspaceId, metric, periodKey, quantity: 0n },
+    update: {},
+  })
+  const headroom = limit - bucket.quantity
+  if (headroom <= 0n) return { unlimited: false, granted: 0n, limit, used: bucket.quantity }
+  let grant = headroom / headroomDivisor
+  if (grant < demand) grant = demand
+  if (grant < 1n) grant = 1n
+  if (grant > maxGrant) grant = maxGrant
+  if (grant > headroom) grant = headroom
+  const updated = await tx.usageBucket.update({ where: { id: bucket.id }, data: { quantity: { increment: grant } } })
+  return { unlimited: false, granted: grant, limit, used: updated.quantity }
+}
+
+/** Return unused leased units outside of a reservation (idle-lease sweeper). */
+export async function releaseUsage(workspaceId: string, metric: UsageMetric, periodKey: string, amount: bigint): Promise<void> {
+  if (amount <= 0n) return
+  await prisma.usageBucket.updateMany({
+    where: { workspaceId, metric, periodKey, quantity: { gte: amount } },
+    data: { quantity: { decrement: amount } },
+  })
+}

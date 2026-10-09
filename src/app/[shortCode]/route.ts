@@ -6,7 +6,7 @@ import { getBaseUrl } from '@/lib/utils'
 import { getLinkByCode, getLinkByDomainPath, getLatestRevision } from '@/lib/link-cache'
 import { clickQueue } from '@/lib/queue'
 import { chooseWeightedVariant, getRunningCampaignForUrl } from '@/lib/campaigns'
-import { reserveUsageInTransaction } from '@/lib/tenant-usage'
+import { admitBillableClick, returnAdmittedClick } from '@/lib/click-admission'
 import { resolveIpGeolocation } from '@/lib/ip-geolocation'
 import { verifyUnlockToken } from '@/lib/password-gate'
 import { escapeHtml, forwardQueryParams, isBillableTraffic, jsString, resolveDestination } from '@/lib/redirect'
@@ -118,45 +118,39 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     const utm = captureUtmParams(request.nextUrl.searchParams)
 
     // Admit the click before accepting the redirect. Tenant quotas and
-    // per-link max-click caps are both hard admission controls, so they must
-    // commit (or roll back) together; otherwise a rejected request could still
-    // consume one of the two budgets. The asynchronous queue receives a marker
-    // so it does not charge the same click a second time during accounting.
+    // per-link max-click caps are both hard admission controls; a unit taken
+    // from the tenant lease is handed back if the link cap then rejects. The
+    // asynchronous queue receives a marker so it does not charge the same
+    // click a second time during accounting.
     //
     // Automated crawler traffic is never billable: bots are logged for
     // analytics transparency but skip quota and max-clicks reservation so a
     // shared link cannot die (or burn budget) before any human arrives.
-    // Links with no quota and no click cap skip the transaction entirely.
+    // Links with no quota and no click cap skip admission entirely.
     const billable = isBillableTraffic(trafficType)
     const needsQuota = billable && url.workspaceId !== null
     const needsCap = billable && url.maxClicks !== null
     let usageReserved = false
-    if (needsQuota || needsCap) {
-      const admitted = await prisma.$transaction(async tx => {
-        if (needsQuota && url.workspaceId) {
-          const usage = await reserveUsageInTransaction(tx, url.workspaceId, 'clicks')
-          if (!usage.allowed) return false
-          usageReserved = true
-        }
-        if (needsCap && url.maxClicks !== null) {
-          const reservation = await tx.url.updateMany({
-            where: {
-              id: url.id,
-              OR: [
-                { maxClicks: null },
-                { clicksReserved: { lt: url.maxClicks } },
-              ],
-            },
-            data: { clicksReserved: { increment: 1 } },
-          })
-          if (reservation.count !== 1) return false
-        }
-        return true
+    const rejectOverLimit = () => url!.expiredUrl
+      ? NextResponse.redirect(url!.expiredUrl, 307)
+      : NextResponse.redirect(new URL('/expired', baseUrl), 307)
+    if (needsQuota && url.workspaceId) {
+      // Served from a per-instance lease of pre-reserved units: no row lock
+      // or transaction per click (see click-admission.ts).
+      const admission = await admitBillableClick(url.workspaceId)
+      if (!admission.admitted) return rejectOverLimit()
+      usageReserved = admission.reserved
+    }
+    if (needsCap && url.maxClicks !== null) {
+      // Single conditional UPDATE (autocommit): exact per-link cap without a
+      // transaction round trip.
+      const reservation = await prisma.url.updateMany({
+        where: { id: url.id, clicksReserved: { lt: url.maxClicks } },
+        data: { clicksReserved: { increment: 1 } },
       })
-      if (!admitted) {
-        return url.expiredUrl
-          ? NextResponse.redirect(url.expiredUrl, 307)
-          : NextResponse.redirect(new URL('/expired', baseUrl), 307)
+      if (reservation.count !== 1) {
+        if (usageReserved && url.workspaceId) returnAdmittedClick(url.workspaceId)
+        return rejectOverLimit()
       }
     }
 
