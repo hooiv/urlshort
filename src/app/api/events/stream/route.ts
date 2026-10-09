@@ -1,4 +1,5 @@
 import { NextRequest } from 'next/server'
+import { visibleUrlWhere } from '@/lib/folders'
 import { getCurrentUser } from '@/lib/auth'
 import { getDefaultWorkspace } from '@/lib/workspaces'
 import { prisma } from '@/lib/prisma'
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
     const urlIds = Array.isArray(event.data.urlIds) ? event.data.urlIds.filter((id): id is string => typeof id === 'string') : []
     if (!urlIds.length) return null
     const visible = await prisma.url.findMany({
-      where: { id: { in: urlIds }, OR: [{ userId: u.id }, { workspaceId: { in: [...workspaceIds] } }] },
+      where: { id: { in: urlIds }, AND: [visibleUrlWhere(u.id), { OR: [{ userId: u.id }, { workspaceId: { in: [...workspaceIds] } }] }] },
       select: { id: true },
     })
     const visibleSet = new Set(visible.map((v) => v.id))

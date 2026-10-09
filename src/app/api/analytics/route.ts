@@ -3,12 +3,13 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { READ_ROLES } from '@/lib/authorization'
 import { rateLimit } from '@/lib/rate-limit'
+import { canAdministerFolders, effectiveFolderRole } from '@/lib/folders'
 import { getAggregatedAnalytics, resolveWindow, type AnalyticsScope } from '@/lib/aggregate-analytics'
 
 const TAG = /^[a-z0-9][a-z0-9-_ ]{0,31}$/
 
 /**
- * GET /api/analytics?workspaceId=&tag=&range=7d|30d|90d|365d&from=YYYY-MM-DD&to=YYYY-MM-DD
+ * GET /api/analytics?workspaceId=&folder=<id|none>&tag=&range=7d|30d|90d|365d&from=YYYY-MM-DD&to=YYYY-MM-DD
  *
  * Account-wide (or workspace-wide, or per-tag) analytics: totals with
  * period-over-period change, a gap-free daily series, top links, tag
@@ -43,7 +44,13 @@ export async function GET(request: NextRequest) {
       })
       // 404, not 403: don't confirm which workspace ids exist.
       if (!membership || !READ_ROLES.includes(membership.role)) return NextResponse.json({ error: 'Workspace not found' }, { status: 404 })
-      scope = { kind: 'workspace', workspaceId, tag }
+      const folderParam = params.get('folder')
+      const folderId = folderParam === 'none' ? null : folderParam || undefined
+      if (folderId) {
+        const folder = await prisma.folder.findFirst({ where: { id: folderId, workspaceId }, select: { restricted: true, access: { where: { userId: user.id }, select: { role: true } } } })
+        if (!folder || effectiveFolderRole(membership.role, folder, folder.access[0]?.role ?? null) === null) return NextResponse.json({ error: 'Folder not found' }, { status: 404 })
+      }
+      scope = { kind: 'workspace', workspaceId, tag, folderId, viewer: canAdministerFolders(membership.role) ? undefined : { userId: user.id } }
     } else {
       scope = { kind: 'user', userId: user.id, tag }
     }

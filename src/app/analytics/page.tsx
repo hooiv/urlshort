@@ -58,10 +58,31 @@ export default function AnalyticsOverviewPage() {
   const [range, setRange] = useState('30d')
   const [workspaceId, setWorkspaceId] = useState('')
   const [tag, setTag] = useState('')
+  const [folder, setFolder] = useState('')
+  const [folders, setFolders] = useState<Array<{ id: string; name: string; restricted: boolean }>>([])
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [data, setData] = useState<Overview | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [metric, setMetric] = useState<ChartMetric>('both')
+
+  // Deep links from the folders screen: /analytics?workspaceId=…&folder=…
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const ws = params.get('workspaceId')
+    if (ws) setWorkspaceId(ws) // eslint-disable-line react-hooks/set-state-in-effect -- one-time read of the URL after mount
+    const f = params.get('folder')
+    if (ws && f) setFolder(f)
+  }, [])
+
+  useEffect(() => {
+    if (!workspaceId) return
+    const controller = new AbortController()
+    fetch(`/api/workspaces/${encodeURIComponent(workspaceId)}/folders`, { signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : { folders: [] }))
+      .then((body: { folders?: Array<{ id: string; name: string; restricted: boolean }> }) => setFolders(body.folders ?? []))
+      .catch(() => undefined)
+    return () => controller.abort()
+  }, [workspaceId])
 
   useEffect(() => {
     fetch('/api/workspaces')
@@ -75,6 +96,7 @@ export default function AnalyticsOverviewPage() {
     const query = new URLSearchParams({ range })
     if (workspaceId) query.set('workspaceId', workspaceId)
     if (tag) query.set('tag', tag)
+    if (workspaceId && folder) query.set('folder', folder)
     fetch(`/api/analytics?${query}`, { signal: controller.signal })
       .then(async (res) => {
         const body = await res.json().catch(() => ({}))
@@ -86,7 +108,7 @@ export default function AnalyticsOverviewPage() {
         if (!controller.signal.aborted) setError(err instanceof Error ? err.message : 'Could not load analytics')
       })
     return () => controller.abort()
-  }, [range, workspaceId, tag])
+  }, [range, workspaceId, tag, folder])
 
   const series = useMemo(() => {
     const clicks: Record<string, number> = {}
@@ -113,10 +135,17 @@ export default function AnalyticsOverviewPage() {
             <p className="text-sm text-slate-400 mt-1">Every link at once: clicks, conversions and revenue.</p>
           </div>
           <div className="flex flex-wrap gap-2 text-sm">
-            <select value={workspaceId} onChange={(e) => { setWorkspaceId(e.target.value); setTag('') }} aria-label="Scope" className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2">
+            <select value={workspaceId} onChange={(e) => { setWorkspaceId(e.target.value); setTag(''); setFolder(''); setFolders([]) }} aria-label="Scope" className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2">
               <option value="">My links</option>
               {workspaces.map((ws) => <option key={ws.id} value={ws.id}>{ws.name}</option>)}
             </select>
+            {workspaceId && folders.length > 0 && (
+              <select value={folder} onChange={(e) => setFolder(e.target.value)} aria-label="Folder" className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2">
+                <option value="">All folders</option>
+                <option value="none">Not in a folder</option>
+                {folders.map((f) => <option key={f.id} value={f.id}>{f.restricted ? '🔒 ' : ''}{f.name}</option>)}
+              </select>
+            )}
             <select value={range} onChange={(e) => setRange(e.target.value)} aria-label="Date range" className="rounded-xl border border-slate-800 bg-slate-900 px-3 py-2">
               {RANGES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { folderWriteError, visibleUrlWhere } from '@/lib/folders'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
@@ -162,7 +163,12 @@ export async function POST(request: NextRequest) {
     const managementToken = createManagementToken()
     const user = await getCurrentUser(request)
     const risk = assessDestination(normalizedUrl)
-    const requestedWorkspaceId = typeof body.workspaceId === 'string' ? body.workspaceId : null
+    const requestedFolderId = typeof body.folderId === 'string' && body.folderId ? body.folderId.slice(0, 64) : null
+    // A folder implies its workspace, so callers may pass either.
+    const folderWorkspaceId = requestedFolderId && typeof body.workspaceId !== 'string'
+      ? (await prisma.folder.findUnique({ where: { id: requestedFolderId }, select: { workspaceId: true } }))?.workspaceId ?? null
+      : null
+    const requestedWorkspaceId = typeof body.workspaceId === 'string' ? body.workspaceId : folderWorkspaceId
     const membership = user
       ? await prisma.membership.findFirst({
           where: { userId: user.id, ...(requestedWorkspaceId ? { workspaceId: requestedWorkspaceId } : {}) },
@@ -171,6 +177,11 @@ export async function POST(request: NextRequest) {
       : null
     if (requestedWorkspaceId && !membership) return NextResponse.json({ error: 'You are not a member of that workspace' }, { status: 403 })
     if (requestedWorkspaceId && membership && !EDIT_ROLES.includes(membership.role)) return NextResponse.json({ error: 'Editor permission is required to create links in this workspace' }, { status: 403 })
+    if (requestedFolderId) {
+      if (!user || !membership) return NextResponse.json({ error: user ? 'Folder not found' : 'Sign in to file links in folders' }, { status: user ? 404 : 401 })
+      const folderError = await folderWriteError(user.id, membership.workspaceId, membership.role, requestedFolderId)
+      if (folderError) return NextResponse.json({ error: folderError }, { status: folderError === 'Folder not found' ? 404 : 403 })
+    }
     let idempotency: Awaited<ReturnType<typeof getIdempotentResponse>> = null
     try {
       idempotency = membership?.workspaceId ? await getIdempotentResponse(request, membership.workspaceId, body) : null
@@ -205,6 +216,7 @@ export async function POST(request: NextRequest) {
             managementTokenHash: hashManagementToken(managementToken),
             userId: user?.id || null,
             workspaceId: membership?.workspaceId || null,
+            folderId: requestedFolderId,
             riskStatus: risk.status,
             riskReason: risk.reason,
             riskCheckedAt: new Date(),
@@ -276,6 +288,8 @@ export async function GET(request: NextRequest) {
     const params = request.nextUrl.searchParams
     const search = (params.get('search') || '').trim()
     const tagFilter = (params.get('tag') || '').trim().toLowerCase()
+    // ?folder=<id> or ?folder=none for links outside any folder.
+    const folderFilter = (params.get('folder') || '').trim().slice(0, 40)
     const take = Math.min(Math.max(Number(params.get('take')) || 25, 1), 100)
     const cursorParam = params.get('cursor')
     const cursor = cursorParam ? new Date(cursorParam) : null
@@ -287,12 +301,8 @@ export async function GET(request: NextRequest) {
       where: {
         deletedAt: null,
         AND: [
-          {
-            OR: [
-              { userId: user.id },
-              { workspace: { members: { some: { userId: user.id } } } },
-            ],
-          },
+          visibleUrlWhere(user.id),
+          ...(folderFilter === 'none' ? [{ folderId: null }] : folderFilter ? [{ folderId: folderFilter }] : []),
           ...(search
             ? [{
                 OR: [
@@ -315,6 +325,7 @@ export async function GET(request: NextRequest) {
         shortCode: true,
         title: true,
         tags: true,
+        folderId: true,
         clicks: true,
         createdAt: true,
         expiresAt: true,

@@ -57,7 +57,11 @@ export async function DELETE(request: NextRequest, context: { params: Promise<{ 
   if (!target) return NextResponse.json({ error: 'Member not found' }, { status: 404 })
   if (target.role === 'owner') return NextResponse.json({ error: 'The owner cannot be removed. Transfer ownership first.' }, { status: 409 })
 
-  await prisma.membership.delete({ where: { id: target.id } })
+  // Drop folder grants too, so they don't silently return if the person is re-invited.
+  await prisma.$transaction([
+    prisma.folderAccess.deleteMany({ where: { userId: target.userId, folder: { workspaceId } } }),
+    prisma.membership.delete({ where: { id: target.id } }),
+  ])
   await recordAudit(request, { action: isSelf ? 'workspace.leave' : 'workspace.member_remove', resourceType: 'membership', resourceId: target.id, metadata: { workspaceId, userId: targetUserId, role: target.role } })
   return NextResponse.json({ removed: true, userId: targetUserId })
 }

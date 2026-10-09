@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { ArrowLeft, Info, Shield } from 'lucide-react'
 import { Toaster } from 'react-hot-toast'
 import { CreateWorkspaceForm } from './components/CreateWorkspaceForm'
+import { FolderManager } from './components/FolderManager'
 import { InviteForm } from './components/InviteForm'
 import { InviteLinkBanner } from './components/InviteLinkBanner'
 import { MemberList } from './components/MemberList'
@@ -123,6 +124,8 @@ export default function WorkspacesPage() {
                 onRemove={(member) => void removeMember(member)}
                 onRetry={() => void loadDetails(selected.id)}
               />
+
+              <FolderManager workspaceId={selected.id} members={members} canEdit={['owner', 'admin', 'editor'].includes(selected.role)} />
 
               {/* Pending Invitations */}
               <PendingInvites invites={invites} onRevoke={(id) => void revokeInvite(id)} />

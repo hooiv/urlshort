@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { visibleUrlWhere } from '@/lib/folders'
 import { graphql, buildSchema } from 'graphql'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
@@ -14,7 +15,7 @@ type Query { me: String, links(limit: Int = 25): [Url!]!, campaigns(limit: Int =
 type Mutation { persistQuery(query: String!): String! }
 type Subscription { event(types: [String!]): Event! }
 `)
-function viewerUrlWhere(userId:string){return {OR:[{userId},{workspace:{members:{some:{userId}}}}]}}
+const viewerUrlWhere = visibleUrlWhere
 
 export function validatePersistQueryInput(query: unknown): string {
   if (typeof query !== 'string' || !query.trim()) throw new Error('query must be a non-empty string')

@@ -73,6 +73,8 @@ model Url {
   managementTokenHash        String?
   workspaceId                String?
   workspace                  Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+  folderId                   String?
+  folder                     Folder?        @relation(fields: [folderId], references: [id], onDelete: SetNull)
   deepLinkAppId              String?
   deepLinkApp                DeepLinkApp?   @relation(fields: [deepLinkAppId], references: [id], onDelete: SetNull)
   healthStatus               HealthStatus   @default(unknown)
@@ -107,6 +109,7 @@ model Url {
   @@index([healthStatus, healthCheckedAt])
   /// GIN: tag filters use `tag = ANY(tags)` / `has`, which a btree on an array can't serve.
   @@index([tags], type: Gin)
+  @@index([folderId, createdAt])
   /// Owner listings and aggregated analytics scope by owner.
   @@index([userId, createdAt])
   @@index([workspaceId, createdAt])
@@ -282,6 +285,7 @@ model User {
   stripeIntegrations      StripeIntegration[]
   scimIdentities          ScimIdentity[]
   deletionRequests        DataDeletionRequest[]
+  folderAccess            FolderAccess[]
 
   @@map("users")
 }
@@ -377,6 +381,7 @@ model Workspace {
   deepLinkApps           DeepLinkApp[]
   idempotencyKeys        IdempotencyKey[]
   featureFlags           FeatureFlag[]
+  folders                Folder[]
 
   @@map("workspaces")
 }
@@ -395,6 +400,42 @@ model Membership {
   @@unique([workspaceId, userId])
   @@index([userId, role])
   @@map("workspace_memberships")
+}
+
+/// A folder groups a workspace's links. An open folder follows workspace
+/// roles; a restricted folder is visible only to workspace owners/admins and
+/// the members granted access, at the lower of their workspace and folder role.
+model Folder {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  description String?
+  restricted  Boolean  @default(false)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  access    FolderAccess[]
+  urls      Url[]
+
+  @@unique([workspaceId, name])
+  @@map("folders")
+}
+
+model FolderAccess {
+  id        String        @id @default(cuid())
+  folderId  String
+  userId    String
+  role      WorkspaceRole
+  createdAt DateTime      @default(now())
+
+  folder Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([folderId, userId])
+  @@index([userId])
+  @@map("folder_access")
 }
 
 model WorkspaceInvite {

@@ -14,7 +14,11 @@ const DAY_MS = 86_400_000
 
 export type AnalyticsScope =
   | { kind: 'user'; userId: string; tag?: string }
-  | { kind: 'workspace'; workspaceId: string; tag?: string }
+  /**
+   * `viewer` hides restricted folders the member has no grant for (omit for
+   * owners/admins). `folderId` narrows to one folder; null = links in no folder.
+   */
+  | { kind: 'workspace'; workspaceId: string; tag?: string; viewer?: { userId: string }; folderId?: string | null }
 
 export type AnalyticsWindow = { from: string; to: string; days: number }
 
@@ -58,10 +62,22 @@ export function dateKeys(window: AnalyticsWindow): string[] {
   return keys
 }
 
+function workspaceFilter(scope: Extract<AnalyticsScope, { kind: 'workspace' }>): Prisma.Sql {
+  let filter = Prisma.sql`u."workspaceId" = ${scope.workspaceId}`
+  if (scope.folderId === null) filter = Prisma.sql`${filter} AND u."folderId" IS NULL`
+  else if (scope.folderId) filter = Prisma.sql`${filter} AND u."folderId" = ${scope.folderId}`
+  if (scope.viewer) {
+    filter = Prisma.sql`${filter} AND (u."folderId" IS NULL OR u."userId" = ${scope.viewer.userId} OR EXISTS (
+      SELECT 1 FROM "folders" f WHERE f."id" = u."folderId" AND (NOT f."restricted" OR EXISTS (
+        SELECT 1 FROM "folder_access" fa WHERE fa."folderId" = f."id" AND fa."userId" = ${scope.viewer.userId}))))`
+  }
+  return filter
+}
+
 function scopeFilter(scope: AnalyticsScope): Prisma.Sql {
   const owner = scope.kind === 'user'
     ? Prisma.sql`u."userId" = ${scope.userId} AND u."workspaceId" IS NULL`
-    : Prisma.sql`u."workspaceId" = ${scope.workspaceId}`
+    : workspaceFilter(scope)
   return scope.tag ? Prisma.sql`${owner} AND u."tags" @> ARRAY[${scope.tag}]::text[]` : owner
 }
 

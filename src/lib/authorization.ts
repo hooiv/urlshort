@@ -5,24 +5,25 @@ import { getCurrentUser } from '@/lib/auth'
 import { hasValidManagementToken } from '@/lib/management'
 import { authenticateApiKey } from '@/lib/api-keys'
 import { EDIT_ROLES } from '@/lib/workspaces'
+import { roleWithinFolder } from '@/lib/folders'
 export { EDIT_ROLES }
 
 export const READ_ROLES: WorkspaceRole[] = ['owner', 'admin', 'editor', 'analyst', 'viewer']
 
-async function getRoleForUrl(request: NextRequest, url: { userId: string | null; workspaceId?: string | null }) {
+type UrlAccessShape = { userId: string | null; workspaceId?: string | null; folderId?: string | null }
+
+async function getRoleForUrl(request: NextRequest, url: UrlAccessShape) {
   const user = await getCurrentUser(request)
   if (!user) return null
-  if (url.userId === user.id) return 'owner' as WorkspaceRole
-  if (!url.workspaceId) return null
-  const membership = await prisma.membership.findUnique({ where: { workspaceId_userId: { workspaceId: url.workspaceId, userId: user.id } } })
-  return membership?.role ?? null
+  return getRoleForUserId(user.id, url)
 }
 
-async function getRoleForUserId(userId: string, url: { userId: string | null; workspaceId?: string | null }) {
+/** The creator is owner; otherwise the workspace role, narrowed by a restricted folder. */
+export async function getRoleForUserId(userId: string, url: UrlAccessShape): Promise<WorkspaceRole | null> {
   if (url.userId === userId) return 'owner' as WorkspaceRole
   if (!url.workspaceId) return null
   const membership = await prisma.membership.findUnique({ where: { workspaceId_userId: { workspaceId: url.workspaceId, userId } } })
-  return membership?.role ?? null
+  return roleWithinFolder(userId, membership?.role ?? null, url.folderId)
 }
 
 /**
@@ -31,7 +32,7 @@ async function getRoleForUserId(userId: string, url: { userId: string | null; wo
  * 2. Session cookie → workspace role.
  * 3. API key (`x-api-key` / Bearer `qlk_…`) → owner's workspace role.
  */
-export async function canManageUrl(request: NextRequest, url: { managementTokenHash: string | null; userId: string | null; workspaceId?: string | null }, allowedRoles: WorkspaceRole[] = EDIT_ROLES): Promise<boolean> {
+export async function canManageUrl(request: NextRequest, url: { managementTokenHash: string | null } & UrlAccessShape, allowedRoles: WorkspaceRole[] = EDIT_ROLES): Promise<boolean> {
   if (hasValidManagementToken(request, url.managementTokenHash)) return true
   const role = await getRoleForUrl(request, url)
   if (role && allowedRoles.includes(role)) return true

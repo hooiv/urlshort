@@ -78,6 +78,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   // removed IdP user cannot keep using existing sessions or keys.
   await prisma.$transaction([
     prisma.scimIdentity.update({ where: { id: identity.id }, data: { active: false } }),
+    prisma.folderAccess.deleteMany({ where: { userId: identity.userId, folder: { workspaceId } } }),
     prisma.membership.deleteMany({ where: { workspaceId, userId: identity.userId } }),
   ])
   return new Response(null, { status: 204 })

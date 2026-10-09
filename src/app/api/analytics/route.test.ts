@@ -35,7 +35,11 @@ describe('GET /api/analytics', () => {
     expect((await get('workspaceId=ws_x')).status).toBe(404)
     prismaMock.membership.findUnique.mockResolvedValue({ role: 'viewer' })
     expect((await get('workspaceId=ws_x')).status).toBe(200)
-    expect(aggregateMock).toHaveBeenLastCalledWith({ kind: 'workspace', workspaceId: 'ws_x', tag: undefined }, expect.anything())
+    // Non-admins get the restricted-folder filter; admins see everything.
+    expect(aggregateMock).toHaveBeenLastCalledWith({ kind: 'workspace', workspaceId: 'ws_x', tag: undefined, folderId: undefined, viewer: { userId: 'user_a' } }, expect.anything())
+    prismaMock.membership.findUnique.mockResolvedValue({ role: 'admin' })
+    await get('workspaceId=ws_x&folder=none')
+    expect(aggregateMock).toHaveBeenLastCalledWith({ kind: 'workspace', workspaceId: 'ws_x', tag: undefined, folderId: null, viewer: undefined }, expect.anything())
   })
 
   it('validates tags and dates', async () => {
