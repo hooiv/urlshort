@@ -92,19 +92,24 @@ describe('validateBulkCsv', () => {
     expect(validateBulkCsv('originalUrl,title').error).toMatch(/header and at least one row/);
   });
 
-  it('enforces the 500-row server cap before uploading', () => {
-    const body = Array.from({ length: 501 }, (_, i) => `https://example.com/${i}`).join('\n');
-    expect(validateBulkCsv(`originalUrl\n${body}`).error).toBe('Max 500 links per bulk import');
-    const okBody = Array.from({ length: 500 }, (_, i) => `https://example.com/${i}`).join('\n');
-    expect(validateBulkCsv(`originalUrl\n${okBody}`)).toEqual({ error: null, totalRows: 500 });
+  it('enforces the 2000-row server cap before uploading', () => {
+    const body = Array.from({ length: 2001 }, (_, i) => `https://example.com/${i}`).join('\n');
+    expect(validateBulkCsv(`originalUrl\n${body}`).error).toBe('Max 2000 links per import');
+    const okBody = Array.from({ length: 2000 }, (_, i) => `https://example.com/${i}`).join('\n');
+    expect(validateBulkCsv(`originalUrl\n${okBody}`)).toEqual({ error: null, totalRows: 2000 });
   });
 
-  it('rejects payloads over the 1MB upload guard', () => {
-    expect(validateBulkCsv(`originalUrl\nhttps://example.com/${'x'.repeat(2_000_000)}`).error).toMatch(/1MB/);
+  it('rejects payloads over the 2 MB upload guard', () => {
+    expect(validateBulkCsv(`originalUrl\nhttps://example.com/${'x'.repeat(2_000_000)}`).error).toMatch(/2 MB/);
   });
 
-  it('requires the originalUrl column', () => {
-    expect(validateBulkCsv('title\nhi').error).toBe('Missing originalUrl column');
+  it('requires a destination column', () => {
+    expect(validateBulkCsv('title\nhi').error).toMatch(/Missing a destination column/);
+  });
+
+  it('accepts other platforms\' exports', () => {
+    expect(validateBulkCsv('Bitlink,Long URL\nbit.ly/abc,https://example.com')).toEqual({ error: null, totalRows: 1 });
+    expect(parseBulkPreview('Bitlink,Long URL\nbit.ly/abc,https://example.com').source).toBe('bitly');
   });
 });
 

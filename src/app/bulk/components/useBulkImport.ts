@@ -5,6 +5,7 @@ import {
   validateBulkCsv,
   type BulkPreview,
   type ImportedBulkLink,
+  type ImportResult,
 } from './bulkCsv';
 
 export type BulkPhase = 'idle' | 'uploading' | 'done';
@@ -24,6 +25,8 @@ export function useBulkImport() {
   const [phase, setPhase] = useState<BulkPhase>('idle');
   const [importedLinks, setImportedLinks] = useState<ImportedBulkLink[]>([]);
   const [submittedRows, setSubmittedRows] = useState(0);
+  const [results, setResults] = useState<ImportResult[]>([]);
+  const [onConflict, setOnConflict] = useState<'skip' | 'generate'>('skip');
 
   const preview: BulkPreview = useMemo(() => parseBulkPreview(csvText), [csvText]);
   const validPreviewCount = useMemo(() => preview.rows.filter((r) => r.isValid).length, [preview]);
@@ -41,7 +44,7 @@ export function useBulkImport() {
       const response = await fetch('/api/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ csv: csvText }),
+        body: JSON.stringify({ csv: csvText, onConflict }),
       });
       const data: unknown = await response.json().catch(() => null);
       if (!response.ok) {
@@ -55,17 +58,23 @@ export function useBulkImport() {
         typeof data === 'object' && data !== null && 'links' in data && Array.isArray(data.links)
           ? (data.links as ImportedBulkLink[])
           : [];
+      const rowResults =
+        typeof data === 'object' && data !== null && 'results' in data && Array.isArray(data.results)
+          ? (data.results as ImportResult[])
+          : [];
       setImportedLinks(links);
+      setResults(rowResults);
       setSubmittedRows(validation.totalRows);
       setPhase('done');
       return summarizeBulkImport(validation.totalRows, links.length);
     } finally {
       setBusy(false);
     }
-  }, [csvText]);
+  }, [csvText, onConflict]);
 
   const resetResults = useCallback(() => {
     setImportedLinks([]);
+    setResults([]);
     setSubmittedRows(0);
     setPhase('idle');
   }, []);
@@ -80,6 +89,9 @@ export function useBulkImport() {
     importedLinks,
     submittedRows,
     skippedCount,
+    results,
+    onConflict,
+    setOnConflict,
     runImport,
     resetResults,
   };

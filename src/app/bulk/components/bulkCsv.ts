@@ -9,11 +9,12 @@
  * of the page's own sample template.
  */
 
-import { parseCsv, serializeCsv } from '@/lib/csv';
+import { serializeCsv } from '@/lib/csv';
+import { MAX_IMPORT_BYTES, MAX_IMPORT_ROWS, parseImport, type ImportResult, type ImportSource } from '@/lib/bulk-import';
 
-/** Mirrors the server cap (`Max 500 links per bulk import`, header + 500 rows). */
-export const MAX_BULK_ROWS = 500;
-export const MAX_BULK_CSV_BYTES = 1_000_000;
+/** Mirrors the server caps; both sides share the same parser. */
+export const MAX_BULK_ROWS = MAX_IMPORT_ROWS;
+export const MAX_BULK_CSV_BYTES = MAX_IMPORT_BYTES;
 export const MAX_BULK_URL_LENGTH = 2048;
 export const PREVIEW_SAMPLE_SIZE = 9;
 
@@ -37,7 +38,11 @@ export type BulkPreview = {
   rows: BulkPreviewRow[];
   /** Set when the header row is missing the required column. */
   headerError: string | null;
+  /** Which platform's export the header looks like. */
+  source?: ImportSource;
 };
+
+export type { ImportResult, ImportSource };
 
 export type ImportedBulkLink = {
   originalUrl: string;
@@ -75,39 +80,37 @@ export function getBulkUrlError(raw: string): string | null {
   return null;
 }
 
-function columnIndex(header: string[], name: string): number {
-  return header.findIndex((cell) => cell.trim().toLowerCase() === name);
-}
+const SOURCE_LABELS: Record<ImportSource, string> = {
+  quicklink: 'QuickLink template',
+  bitly: 'Bitly export',
+  rebrandly: 'Rebrandly export',
+  shortio: 'Short.io export',
+  dub: 'Dub export',
+  generic: 'CSV',
+};
+export const sourceLabel = (source: ImportSource) => SOURCE_LABELS[source];
 
 /**
- * Quote-aware preview of pasted/file CSV content. Rows beyond
- * `sampleSize` are counted in `totalRows` but not returned.
+ * Quote-aware preview of pasted/file CSV content, using the exact parser the
+ * server runs, so every error shown here is the error the import will report.
+ * Rows beyond `sampleSize` are counted in `totalRows` but not returned.
  */
 export function parseBulkPreview(csvText: string, sampleSize: number = PREVIEW_SAMPLE_SIZE): BulkPreview {
   if (!csvText.trim()) return { totalRows: 0, rows: [], headerError: null };
-  const table = parseCsv(csvText);
-  if (table.length === 0) return { totalRows: 0, rows: [], headerError: null };
-
-  const header = table[0];
-  const urlIdx = columnIndex(header, 'originalurl');
-  if (urlIdx === -1) return { totalRows: 0, rows: [], headerError: 'Missing originalUrl column' };
-  const titleIdx = columnIndex(header, 'title');
-  const aliasIdx = columnIndex(header, 'customalias');
-
-  const totalRows = table.length - 1;
-  const rows = table.slice(1, 1 + sampleSize).map((cells, idx) => {
-    const url = sanitizeBulkUrl(cells[urlIdx] ?? '');
-    const error = getBulkUrlError(cells[urlIdx] ?? '');
-    return {
-      id: idx,
-      url,
-      title: titleIdx !== -1 ? (cells[titleIdx] ?? '').trim() : '',
-      alias: aliasIdx !== -1 ? (cells[aliasIdx] ?? '').trim() : '',
-      isValid: error === null,
-      error,
-    };
-  });
-  return { totalRows, rows, headerError: null };
+  const parsed = parseImport(csvText);
+  if ('error' in parsed) {
+    if (/at least one row/.test(parsed.error)) return { totalRows: 0, rows: [], headerError: null };
+    return { totalRows: 0, rows: [], headerError: parsed.error };
+  }
+  const rows = parsed.rows.slice(0, sampleSize).map((row, idx) => ({
+    id: idx,
+    url: row.url ?? sanitizeBulkUrl(row.rawUrl),
+    title: row.title ?? '',
+    alias: row.alias ?? '',
+    isValid: row.error === null,
+    error: row.error,
+  }));
+  return { totalRows: parsed.totalRows, rows, headerError: null, source: parsed.source };
 }
 
 /**
@@ -116,27 +119,12 @@ export function parseBulkPreview(csvText: string, sampleSize: number = PREVIEW_S
  */
 export function validateBulkCsv(csvText: string): { error: string | null; totalRows: number } {
   if (!csvText.trim()) return { error: 'CSV data is empty', totalRows: 0 };
-  if (new TextEncoder().encode(csvText).length > MAX_BULK_CSV_BYTES) {
-    return { error: 'CSV exceeds the 1MB upload limit', totalRows: 0 };
-  }
-  const table = parseCsv(csvText);
-  if (table.length < 2) {
-    return { error: 'CSV must contain a header and at least one row', totalRows: 0 };
-  }
-  if (table.length - 1 > MAX_BULK_ROWS) {
-    return { error: 'Max 500 links per bulk import', totalRows: table.length - 1 };
-  }
-  if (columnIndex(table[0], 'originalurl') === -1) {
-    return { error: 'Missing originalUrl column', totalRows: table.length - 1 };
-  }
-  return { error: null, totalRows: table.length - 1 };
+  const parsed = parseImport(csvText);
+  if ('error' in parsed) return { error: parsed.error, totalRows: 0 };
+  return { error: null, totalRows: parsed.totalRows };
 }
 
-/**
- * Partial-failure summary: the API silently skips invalid rows, so the
- * created count can be lower than the submitted row count. Callers report
- * both numbers instead of claiming full success.
- */
+/** Created vs skipped, for the toast. The server's per-row report has the reasons. */
 export function summarizeBulkImport(totalRows: number, createdCount: number): {
   created: number;
   skipped: number;
@@ -150,5 +138,13 @@ export function buildResultsCsv(links: ImportedBulkLink[], origin: string): stri
   return serializeCsv([
     ['originalUrl', 'shortCode', 'shortUrl'],
     ...links.map((l) => [l.originalUrl, l.shortCode, `${origin}/${l.shortCode}`]),
+  ]);
+}
+
+/** Skipped rows with reasons, so users can fix and re-import just those. */
+export function buildSkippedCsv(results: ImportResult[]): string {
+  return serializeCsv([
+    ['row', 'originalUrl', 'reason'],
+    ...results.filter((r) => r.status === 'skipped').map((r) => [String(r.row), r.originalUrl ?? '', r.reason ?? '']),
   ]);
 }

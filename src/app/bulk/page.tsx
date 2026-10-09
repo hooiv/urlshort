@@ -24,6 +24,9 @@ export default function BulkPage() {
     validPreviewCount,
     importedLinks,
     skippedCount,
+    results,
+    onConflict,
+    setOnConflict,
     runImport,
   } = useBulkImport()
 
@@ -74,11 +77,13 @@ export default function BulkPage() {
           uploading={phase === 'uploading'}
           preview={preview}
           validPreviewCount={validPreviewCount}
+          onConflict={onConflict}
+          onConflictChange={setOnConflict}
           onImport={runImport}
         />
 
         {/* Results List */}
-        <BulkResults links={importedLinks} skippedCount={skippedCount} />
+        <BulkResults links={importedLinks} skippedCount={skippedCount} results={results} />
       </main>
     </div>
   )

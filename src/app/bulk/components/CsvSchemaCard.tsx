@@ -10,7 +10,8 @@ export function CsvSchemaCard() {
         <p className="text-xs text-slate-400 mt-1">
           Include a header row. Columns: <code className="text-blue-300">originalUrl</code> (required),{' '}
           <code className="text-blue-300">title</code>, <code className="text-blue-300">customAlias</code>,{' '}
-          <code className="text-blue-300">tags</code>.
+          <code className="text-blue-300">tags</code>. Exports from Bitly, Rebrandly, Short.io and Dub import
+          as-is, keeping their back-halves. Up to 2,000 rows per file.
         </p>
       </div>
 

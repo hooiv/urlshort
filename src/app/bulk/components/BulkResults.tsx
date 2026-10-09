@@ -3,7 +3,7 @@
 import { Copy, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatNumber } from '@/lib/format';
-import { buildResultsCsv, type ImportedBulkLink } from './bulkCsv';
+import { buildResultsCsv, buildSkippedCsv, type ImportResult, type ImportedBulkLink } from './bulkCsv';
 import { downloadTextFile } from './downloadFile';
 
 async function copyShortLink(shortCode: string) {
@@ -19,11 +19,14 @@ async function copyShortLink(shortCode: string) {
 export function BulkResults({
   links,
   skippedCount,
+  results = [],
 }: {
   links: ImportedBulkLink[];
   skippedCount: number;
+  results?: ImportResult[];
 }) {
-  if (links.length === 0) return null;
+  const skipped = results.filter((r) => r.status === 'skipped');
+  if (links.length === 0 && skipped.length === 0) return null;
 
   function exportImportedCsv() {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://quicklink.to';
@@ -41,8 +44,7 @@ export function BulkResults({
           </p>
           {skippedCount > 0 && (
             <p className="text-xs text-amber-200/90 mt-1">
-              {formatNumber(skippedCount)} rows were skipped (invalid URLs or duplicates) — only valid
-              rows were provisioned.
+              {formatNumber(skippedCount)} rows were skipped. Each reason is listed below.
             </p>
           )}
         </div>
@@ -54,6 +56,29 @@ export function BulkResults({
           <Download className="h-3.5 w-3.5" /> Export Results CSV
         </button>
       </div>
+
+      {skipped.length > 0 && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5">
+          <div className="flex items-center justify-between px-3.5 py-2 text-xs font-semibold text-amber-200">
+            Skipped rows
+            <button
+              onClick={() => downloadTextFile('quicklink-skipped-rows.csv', buildSkippedCsv(results))}
+              className="inline-flex items-center gap-1 text-amber-200/80 hover:text-white"
+            >
+              <Download className="h-3.5 w-3.5" /> Download
+            </button>
+          </div>
+          <ul className="max-h-64 divide-y divide-slate-800/80 overflow-y-auto">
+            {skipped.map((r) => (
+              <li key={r.row} className="flex gap-3 px-3.5 py-2 text-xs">
+                <span className="w-14 shrink-0 font-mono text-slate-500">row {r.row}</span>
+                <span className="truncate font-mono text-slate-300">{r.originalUrl ?? '—'}</span>
+                <span className="ml-auto shrink-0 text-amber-200/90">{r.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="divide-y divide-slate-800/80 rounded-xl border border-slate-800 bg-slate-950">
         {links.map((l) => (

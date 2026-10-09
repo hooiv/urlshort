@@ -4,7 +4,7 @@ import { useRef } from 'react';
 import { Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatNumber } from '@/lib/format';
-import { MAX_BULK_CSV_BYTES, type BulkPreview } from './bulkCsv';
+import { MAX_BULK_CSV_BYTES, sourceLabel, type BulkPreview } from './bulkCsv';
 
 const MAX_FILE_BYTES = MAX_BULK_CSV_BYTES;
 
@@ -15,6 +15,8 @@ export function CsvImportForm({
   uploading,
   preview,
   validPreviewCount,
+  onConflict,
+  onConflictChange,
   onImport,
 }: {
   csvText: string;
@@ -23,6 +25,8 @@ export function CsvImportForm({
   uploading: boolean;
   preview: BulkPreview;
   validPreviewCount: number;
+  onConflict: 'skip' | 'generate';
+  onConflictChange: (value: 'skip' | 'generate') => void;
   onImport: () => Promise<{ created: number; skipped: number } | null>;
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -103,6 +107,11 @@ export function CsvImportForm({
                 : ''}
               {' · '}
               {formatNumber(validPreviewCount)} valid)
+              {preview.source && preview.source !== 'quicklink' && (
+                <span className="ml-2 rounded bg-blue-500/10 px-1.5 py-0.5 normal-case text-blue-300">
+                  Detected {sourceLabel(preview.source)}
+                </span>
+              )}
             </div>
             <div className="divide-y divide-slate-800/80 rounded-xl border border-slate-800 bg-slate-950">
               {preview.rows.map((r) => (
@@ -117,7 +126,7 @@ export function CsvImportForm({
                         r.isValid ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'
                       }`}
                     >
-                      {r.isValid ? 'Valid URL' : 'Invalid Syntax'}
+                      {r.isValid ? 'Ready' : r.error ?? 'Invalid'}
                     </span>
                   </div>
                 </div>
@@ -136,6 +145,18 @@ export function CsvImportForm({
             </div>
           </div>
         )}
+
+        <label className="flex items-center gap-2 text-xs text-slate-400">
+          If an alias is already taken
+          <select
+            value={onConflict}
+            onChange={(e) => onConflictChange(e.target.value as 'skip' | 'generate')}
+            className="rounded-lg border border-slate-800 bg-slate-950 px-2 py-1 text-xs text-slate-200"
+          >
+            <option value="skip">skip the row and report it</option>
+            <option value="generate">import it with a generated code</option>
+          </select>
+        </label>
 
         <button
           disabled={busy || !csvText.trim()}
