@@ -39,4 +39,10 @@ describe('Slug Suggestion Generator', () => {
   it('accepts schemeless destinations', () => {
     expect(generateSlugSuggestions('', 'github.com/facebook/react')).toContain('react')
   })
+
+  it('never returns duplicates and only emits url-safe slugs', () => {
+    const out = generateSlugSuggestions('Café Müller: Summer Sale!!', 'https://shop.example.com/summer-sale')
+    expect(new Set(out).size).toBe(out.length)
+    for (const slug of out) expect(slug).toMatch(/^[a-z0-9-]+$/)
+  })
 })
