@@ -168,3 +168,30 @@ export function simulateRewards(
 ): { cents: number; ruleId: string | null; scopeIndex: number | null }[] {
   return samples.map((s) => resolveReward(s.saleValueCents, s.metadata ?? {}, scopes))
 }
+
+/**
+ * Finds rules that can never fire because an earlier-evaluated rule on the
+ * same key already catches every sale they would match (superset of values
+ * and a sale-value band that contains theirs). Helps owners clean up rule sets.
+ */
+export function findShadowedRules(rules: RewardRule[]): { ruleId: string; shadowedBy: string }[] {
+  const ordered = rules
+    .map((rule, index) => ({ rule, index }))
+    .filter(({ rule }) => validateRule(rule) === null)
+    .sort((a, b) => (a.rule.priority ?? 0) - (b.rule.priority ?? 0) || a.index - b.index)
+    .map((x) => x.rule)
+  const out: { ruleId: string; shadowedBy: string }[] = []
+  for (let i = 1; i < ordered.length; i++) {
+    const r = ordered[i]
+    for (let j = 0; j < i; j++) {
+      const e = ordered[j]
+      if (e.key !== r.key) continue
+      if (!r.equals.every((v) => e.equals.includes(v))) continue
+      if ((e.minSaleCents ?? 0) > (r.minSaleCents ?? 0)) continue
+      if ((e.maxSaleCents ?? Infinity) < (r.maxSaleCents ?? Infinity)) continue
+      out.push({ ruleId: r.id, shadowedBy: e.id })
+      break
+    }
+  }
+  return out
+}

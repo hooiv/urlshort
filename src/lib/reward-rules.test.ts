@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseRules } from './reward-rules'
+import { parseRules, findShadowedRules } from './reward-rules'
 import { computeReward, resolveReward, matchRule, validateRule, type RewardRule } from './reward-rules'
 
 const pro: RewardRule = { id: 'pro', key: 'plan', equals: ['pro', 'team'], type: 'percent', amount: 3000 }
@@ -142,5 +142,20 @@ describe('maxSaleCents band', () => {
     expect('error' in parseRules([{ ...base, minSaleCents: 5, maxSaleCents: 4 }])).toBe(true)
     const ok = parseRules([{ ...base, minSaleCents: 5, maxSaleCents: 50 }])
     expect('rules' in ok && ok.rules[0].maxSaleCents).toBe(50)
+  })
+})
+
+describe('findShadowedRules', () => {
+  const mk = (id: string, equals: string[], extra: Partial<RewardRule> = {}): RewardRule => ({ id, key: 'plan', equals, type: 'flat', amount: 1, ...extra })
+  it('flags a later rule fully covered by an earlier one', () => {
+    expect(findShadowedRules([mk('a', ['pro', 'team']), mk('b', ['pro'])])).toEqual([{ ruleId: 'b', shadowedBy: 'a' }])
+  })
+  it('respects priority ordering', () => {
+    expect(findShadowedRules([mk('a', ['pro']), mk('b', ['pro', 'team'], { priority: -1 })])).toEqual([{ ruleId: 'a', shadowedBy: 'b' }])
+  })
+  it('does not flag when bands differ or values are not covered', () => {
+    expect(findShadowedRules([mk('a', ['pro'], { minSaleCents: 100 }), mk('b', ['pro'])])).toEqual([])
+    expect(findShadowedRules([mk('a', ['pro']), mk('b', ['pro', 'team'])])).toEqual([])
+    expect(findShadowedRules([mk('a', ['pro'], { maxSaleCents: 50 }), mk('b', ['pro'], { maxSaleCents: 500 })])).toEqual([])
   })
 })
