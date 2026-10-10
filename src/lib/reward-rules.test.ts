@@ -68,3 +68,22 @@ d2('parseRules', () => {
     expect2(parseRulesFn(many)).toEqual({ error: 'at most 25 rules per scope' })
   })
 })
+
+import { simulateRewards } from './reward-rules'
+
+describe('simulateRewards', () => {
+  it('previews each sample against ordered scopes', () => {
+    const rule = { id: 'pro', key: 'plan', equals: ['pro'], type: 'percent' as const, amount: 2000 }
+    const out = simulateRewards(
+      [
+        { saleValueCents: 10000, metadata: { plan: 'pro' } },
+        { saleValueCents: 10000, metadata: { plan: 'free' } },
+      ],
+      [{ rules: [rule] }, { fallback: { type: 'flat', amount: 500 } }],
+    )
+    expect(out).toEqual([
+      { cents: 2000, ruleId: 'pro', scopeIndex: 0 },
+      { cents: 500, ruleId: null, scopeIndex: 1 },
+    ])
+  })
+})

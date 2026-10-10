@@ -123,3 +123,14 @@ export function parseRules(input: unknown): { rules: RewardRule[] } | { error: s
   }
   return { rules }
 }
+
+/**
+ * Dry-run a rule set against sample sales so a program owner can preview
+ * payouts before saving. Never throws; invalid rules are skipped like at runtime.
+ */
+export function simulateRewards(
+  samples: { saleValueCents: number; metadata: Record<string, unknown> }[],
+  scopes: RewardScope[],
+): { cents: number; ruleId: string | null; scopeIndex: number | null }[] {
+  return samples.map((s) => resolveReward(s.saleValueCents, s.metadata ?? {}, scopes))
+}
