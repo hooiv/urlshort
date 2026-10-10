@@ -201,3 +201,12 @@ describe('double-extension masquerade', () => {
     expect(assessDestination('https://example.com/packages/overview').status).toBe('cleared')
   })
 })
+
+describe('cloud metadata endpoints', () => {
+  it.each(['http://169.254.169.254/latest/meta-data/', 'https://metadata.google.internal/computeMetadata/v1/', 'http://100.100.100.200/latest/', 'http://[fd00:ec2::254]/latest/'])('flags %s', (u) => {
+    expect(assessDestination(u).reason).toContain('Cloud instance-metadata')
+  })
+  it('does not flag ordinary hosts', () => {
+    expect(assessDestination('https://example.com/metadata').reason).toBeNull()
+  })
+})
