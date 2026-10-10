@@ -18,6 +18,7 @@ import { getIdempotentResponse, storeIdempotentResponse } from '@/lib/idempotenc
 import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
 import { dispatchWebhooksForUrl } from '@/lib/webhooks'
 import { invalidateLink } from '@/lib/link-cache'
+import { applyUtmTemplate } from '@/lib/utm-templates'
 
 const CUSTOM_CODE = /^[A-Za-z0-9_-]{3,64}$/
 const CODE_COLLISION_RETRIES = 5
@@ -193,6 +194,16 @@ export async function POST(request: NextRequest) {
       const folderError = await folderWriteError(user.id, membership.workspaceId, membership.role, requestedFolderId)
       if (folderError) return NextResponse.json({ error: folderError }, { status: folderError === 'Folder not found' ? 404 : 403 })
     }
+    // Optional workspace UTM template: fills only the utm_* params the URL doesn't already carry.
+    let destinationUrl = normalizedUrl
+    if (body.utmTemplateId !== undefined && body.utmTemplateId !== null && body.utmTemplateId !== '') {
+      if (typeof body.utmTemplateId !== 'string') return NextResponse.json({ error: 'utmTemplateId must be a string' }, { status: 400 })
+      if (!membership) return NextResponse.json({ error: 'Sign in and pick a workspace to use a UTM template' }, { status: 401 })
+      const template = await prisma.utmTemplate.findFirst({ where: { id: body.utmTemplateId.slice(0, 64), workspaceId: membership.workspaceId } })
+      if (!template) return NextResponse.json({ error: 'UTM template not found in this workspace' }, { status: 404 })
+      destinationUrl = applyUtmTemplate(normalizedUrl, template)
+      if (destinationUrl.length > 2048) return NextResponse.json({ error: 'Destination URL is too long after applying the UTM template' }, { status: 400 })
+    }
     let idempotency: Awaited<ReturnType<typeof getIdempotentResponse>> = null
     try {
       idempotency = membership?.workspaceId ? await getIdempotentResponse(request, membership.workspaceId, body) : null
@@ -210,7 +221,7 @@ export async function POST(request: NextRequest) {
       try {
         created = await prisma.url.create({
           data: {
-            originalUrl: normalizedUrl,
+            originalUrl: destinationUrl,
             shortCode,
             title: title || null,
             description: description || null,

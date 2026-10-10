@@ -55,6 +55,7 @@ const KEY_REACHABLE = [
   'links/[shortCode]/domains/connect/route.ts',
   'links/[shortCode]/domains/route.ts',
   'links/[shortCode]/export/route.ts',
+  'workspaces/[workspaceId]/utm-templates/route.ts',   // GET only, LINK_READ_SCOPES; writes are session-only
   'links/[shortCode]/folder/route.ts',
   'links/[shortCode]/goals/[goalId]/route.ts',
   'links/[shortCode]/goals/route.ts',
