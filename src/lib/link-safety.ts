@@ -99,6 +99,7 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if (/\.(?:docm|xlsm|pptm|dotm|xlam|ppam|wsf|vbs|vbe|hta|scr|lnk)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Macro-enabled document or script-file destination')
   if (TUNNEL_SUFFIXES.some((t) => host === t || host.endsWith(`.${t}`))) reasons.push('Temporary tunnel or dynamic-DNS hostname')
   if (BRANDS.some((b) => FREE_HOSTING_SUFFIXES.some((f) => host.endsWith(`.${f}`) && host.slice(0, -f.length - 1).split('.').some((l) => l.includes(b))))) reasons.push('Brand name on a free-hosting subdomain (possible phishing page)')
+  if (/(^|\.)(ipfs\.io|dweb\.link|cloudflare-ipfs\.com|w3s\.link|nftstorage\.link)$/.test(host) && BRANDS.some((b) => url.pathname.toLowerCase().includes(b))) reasons.push('Brand name in IPFS-hosted page (possible phishing page)')
   if (url.href.length > 2000) reasons.push('Unusually long URL')
   if (/\.\.|\.$/.test(url.hostname)) reasons.push('Malformed hostname (trailing or empty label)')
   if (hasMixedScriptLabel(rawHostUnicode(url.hostname))) reasons.push('Mixed-script hostname label (possible homoglyph spoofing)')

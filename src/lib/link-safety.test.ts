@@ -247,3 +247,12 @@ describe('free-hosting brand phishing', () => {
     expect(assessDestination('https://my-portfolio.pages.dev/').reason ?? '').not.toMatch(/free-hosting/)
   })
 })
+
+describe('ipfs-hosted brand phishing', () => {
+  it('flags brand names in IPFS gateway paths', () => {
+    expect(assessDestination('https://ipfs.io/ipfs/Qm123/paypal-login.html').reason).toMatch(/IPFS/)
+  })
+  it('allows plain IPFS content', () => {
+    expect(assessDestination('https://ipfs.io/ipfs/Qm123/readme.html').reason ?? '').not.toMatch(/IPFS/)
+  })
+})
