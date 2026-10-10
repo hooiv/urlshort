@@ -128,3 +128,19 @@ describe('minSaleCents', () => {
     expect(parseRules([big])).toEqual({ rules: [big] })
   })
 })
+
+describe('maxSaleCents band', () => {
+  const band: RewardRule = { id: 'small', key: 'plan', equals: ['pro'], type: 'flat', amount: 100, minSaleCents: 100, maxSaleCents: 1000 }
+  it('only matches inside the band', () => {
+    expect(matchRule([band], { plan: 'pro' }, 1000)?.id).toBe('small')
+    expect(matchRule([band], { plan: 'pro' }, 1001)).toBeNull()
+    expect(matchRule([band], { plan: 'pro' }, 99)).toBeNull()
+  })
+  it('parseRules validates the band', () => {
+    const base = { id: 'a', key: 'plan', equals: ['pro'], type: 'flat', amount: 1 }
+    expect('error' in parseRules([{ ...base, maxSaleCents: -1 }])).toBe(true)
+    expect('error' in parseRules([{ ...base, minSaleCents: 5, maxSaleCents: 4 }])).toBe(true)
+    const ok = parseRules([{ ...base, minSaleCents: 5, maxSaleCents: 50 }])
+    expect('rules' in ok && ok.rules[0].maxSaleCents).toBe(50)
+  })
+})

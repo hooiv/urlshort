@@ -20,6 +20,8 @@ export type RewardRule = {
   capCents?: number
   /** Rule only applies to sales of at least this many cents. */
   minSaleCents?: number
+  /** Rule only applies to sales of at most this many cents. */
+  maxSaleCents?: number
 }
 
 export type RewardDefault = { type: RewardType; amount: number; /** Max commission per sale in cents. */ capCents?: number }
@@ -41,6 +43,7 @@ export function matchRule(rules: RewardRule[], metadata: Record<string, unknown>
   for (const { rule } of sorted) {
     if (validateRule(rule)) continue
     if (rule.minSaleCents !== undefined && saleValueCents !== undefined && saleValueCents < rule.minSaleCents) continue
+    if (rule.maxSaleCents !== undefined && saleValueCents !== undefined && saleValueCents > rule.maxSaleCents) continue
     const value = metadata[rule.key]
     if (value === undefined || value === null || typeof value === 'object') continue
     if (rule.equals.includes(String(value))) return rule
@@ -133,6 +136,10 @@ export function parseRules(input: unknown): { rules: RewardRule[] } | { error: s
       return { error: `rules[${i}].capCents must be a non-negative integer` }
     if (r.minSaleCents !== undefined && (typeof r.minSaleCents !== 'number' || !Number.isInteger(r.minSaleCents) || r.minSaleCents < 0))
       return { error: `rules[${i}].minSaleCents must be a non-negative integer` }
+    if (r.maxSaleCents !== undefined && (typeof r.maxSaleCents !== 'number' || !Number.isInteger(r.maxSaleCents) || r.maxSaleCents < 0))
+      return { error: `rules[${i}].maxSaleCents must be a non-negative integer` }
+    if (r.minSaleCents !== undefined && r.maxSaleCents !== undefined && (r.minSaleCents as number) > (r.maxSaleCents as number))
+      return { error: `rules[${i}].minSaleCents cannot exceed maxSaleCents` }
     const rule: RewardRule = {
       id: r.id,
       key: r.key,
@@ -142,6 +149,7 @@ export function parseRules(input: unknown): { rules: RewardRule[] } | { error: s
       ...(r.priority !== undefined ? { priority: r.priority as number } : {}),
       ...(r.capCents !== undefined ? { capCents: r.capCents as number } : {}),
       ...(r.minSaleCents !== undefined ? { minSaleCents: r.minSaleCents as number } : {}),
+      ...(r.maxSaleCents !== undefined ? { maxSaleCents: r.maxSaleCents as number } : {}),
     }
     const err = validateRule(rule)
     if (err) return { error: `rules[${i}]: ${err}` }
