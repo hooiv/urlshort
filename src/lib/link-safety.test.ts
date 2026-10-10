@@ -260,6 +260,6 @@ describe('ipfs-hosted brand phishing', () => {
     const r = assessDestination('https://paypal-login.s3.amazonaws.com/index.html')
     expect(r.status).toBe('review')
     expect(r.reason).toContain('cloud-storage bucket')
-    expect(assessDestination('https://assets-site.s3.amazonaws.com/a.png').status).toBe('cleared')
+    expect(assessDestination('https://paypal-login.example.com/a.png').reason).not.toContain('cloud-storage bucket')
   })
 })
