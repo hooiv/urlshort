@@ -293,3 +293,17 @@ describe('findShadowedRules priority ordering', () => {
     expect(findShadowedRules([broad, narrow])).toEqual([])
   })
 })
+
+describe('diffRules equals ordering', () => {
+  it('does not flag a rule whose equals values were only reordered', async () => {
+    const { diffRules } = await import('./reward-rules')
+    const a: RewardRule = { id: 'x', key: 'plan', equals: ['pro', 'team'], type: 'flat', amount: 500 }
+    const b: RewardRule = { ...a, equals: ['team', 'pro'] }
+    expect(diffRules([a], [b])).toEqual({ added: [], removed: [], changed: [] })
+  })
+  it('flags a cap change', async () => {
+    const { diffRules } = await import('./reward-rules')
+    const a: RewardRule = { id: 'x', key: 'plan', equals: ['pro'], type: 'percent', amount: 1000 }
+    expect(diffRules([a], [{ ...a, capCents: 900 }]).changed).toEqual(['x'])
+  })
+})
