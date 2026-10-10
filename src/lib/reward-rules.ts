@@ -131,6 +131,7 @@ export function parseRules(input: unknown): { rules: RewardRule[] } | { error: s
     if (!Array.isArray(r.equals) || !r.equals.every((v) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean'))
       return { error: `rules[${i}].equals must be an array of scalars` }
     if (r.equals.length > 50) return { error: `rules[${i}].equals allows at most 50 values` }
+    if (r.equals.some((v) => String(v).length > 256)) return { error: `rules[${i}].equals values must be at most 256 characters` }
     if (r.type !== 'percent' && r.type !== 'flat') return { error: `rules[${i}].type must be percent or flat` }
     if (typeof r.amount !== 'number') return { error: `rules[${i}].amount must be a number` }
     if (r.priority !== undefined && (typeof r.priority !== 'number' || !Number.isFinite(r.priority)))

@@ -209,3 +209,14 @@ describe('parseRules key bounds', () => {
     expect(parseRules([{ ...base, key: 'k'.repeat(65) }])).toEqual({ error: 'rules[0].key must be at most 64 characters' })
   })
 })
+
+describe('parseRules equals value length', () => {
+  it('rejects values over 256 characters', () => {
+    const r = parseRules([{ id: 'a', key: 'plan', equals: ['x'.repeat(257)], type: 'flat', amount: 100 }])
+    expect(r).toEqual({ error: 'rules[0].equals values must be at most 256 characters' })
+  })
+  it('accepts exactly 256 characters', () => {
+    const r = parseRules([{ id: 'a', key: 'plan', equals: ['x'.repeat(256)], type: 'flat', amount: 100 }])
+    expect('rules' in r).toBe(true)
+  })
+})
