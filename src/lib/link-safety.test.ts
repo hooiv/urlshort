@@ -85,4 +85,11 @@ describe('embedded redirect parameters', () => {
   it('ignores non-http inner schemes', () => {
     expect(assessDestination('https://example.com/a?url=mailto:a@b.co').status).toBe('cleared')
   })
+
+  it('flags non-standard ports and script/launcher files', () => {
+    expect(assessDestination('https://example.com:8443/x').reason).toMatch(/port/i)
+    expect(assessDestination('https://example.com/run.ps1').reason).toMatch(/script/i)
+    expect(assessDestination('https://example.com/a.lnk?x=1').status).toBe('review')
+    expect(assessDestination('https://example.com:443/x').status).toBe('cleared')
+  })
 })

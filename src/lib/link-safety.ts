@@ -63,6 +63,8 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   // otherwise score as clean.
   if (/(?:\.exe|\.scr|\.msi|\.apk|\.dmg|\.iso)(?:$|[?#/])/i.test(url.pathname + url.search + url.hash)) reasons.push('Executable file destination')
 
+  if (url.port && !isIP(host)) reasons.push('Non-standard port on a public hostname')
+  if (/(?:\.jar|\.vbs|\.ps1|\.bat|\.cmd|\.lnk|\.hta)(?:$|[?#/])/i.test(url.pathname + url.search + url.hash)) reasons.push('Script or launcher file destination')
   if (detectEmbeddedRedirect(url)) reasons.push('Destination forwards to another site via a redirect parameter')
   if (SHORTENER_HOSTS.has(host)) reasons.push('Chained link-shortener destination')
   const tld = host.split('.').pop() ?? ''
