@@ -180,4 +180,9 @@ describe('double-extension masquerade', () => {
   it('does not flag ordinary documents', () => {
     expect(assessDestination('https://example.com/files/invoice.pdf').status).toBe('cleared')
   })
+
+  it('flags fragments that mimic another destination', () => {
+    expect(assessDestination('https://example.com/#//paypal.com/login').reason).toContain('fragment mimics')
+    expect(assessDestination('https://example.com/#section-2').status).toBe('cleared')
+  })
 })
