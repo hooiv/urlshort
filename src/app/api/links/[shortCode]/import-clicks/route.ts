@@ -4,13 +4,12 @@ import { getManageableUrl } from '@/lib/authorization'
 import { rateLimit } from '@/lib/rate-limit'
 import { recordAudit } from '@/lib/audit'
 import { prisma } from '@/lib/prisma'
-import { applyDailyHistory, fetchBitlyDailyClicks } from '@/lib/click-history-import'
+import { applyDailyHistory, fetchBitlyDailyClicks, fetchShortIoDailyClicks } from '@/lib/click-history-import'
 
-const Body = z.object({
-  provider: z.literal('bitly'),
-  apiToken: z.string().min(10).max(512),
-  bitlinkId: z.string().min(3).max(210),
-})
+const Body = z.discriminatedUnion('provider', [
+  z.object({ provider: z.literal('bitly'), apiToken: z.string().min(10).max(512), bitlinkId: z.string().min(3).max(210) }),
+  z.object({ provider: z.literal('shortio'), apiToken: z.string().min(10).max(512), linkId: z.string().min(4).max(64) }),
+])
 
 /**
  * POST → copies up to a year of daily click counts for the matching Bitly link
@@ -29,10 +28,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
 
   let series
   try {
-    series = await fetchBitlyDailyClicks(parsed.data.apiToken, parsed.data.bitlinkId.trim())
+    series = parsed.data.provider === 'bitly'
+      ? await fetchBitlyDailyClicks(parsed.data.apiToken, parsed.data.bitlinkId.trim())
+      : await fetchShortIoDailyClicks(parsed.data.apiToken, parsed.data.linkId.trim())
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Import failed'
-    const status = /rejected the token/.test(message) ? 401 : /Invalid bitlink/.test(message) ? 400 : 502
+    const status = /rejected the token/.test(message) ? 401 : /Invalid (bitlink|Short\.io)/.test(message) ? 400 : 502
     return NextResponse.json({ error: message }, { status })
   }
   const result = await applyDailyHistory(prisma, access.url.id, series)
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
     urlId: access.url.id,
     resourceType: 'url',
     resourceId: access.url.id,
-    after: { provider: 'bitly', ...result },
+    after: { provider: parsed.data.provider, ...result },
   })
-  return NextResponse.json({ provider: 'bitly', daysFound: series.length, ...result })
+  return NextResponse.json({ provider: parsed.data.provider, daysFound: series.length, ...result })
 }

@@ -62,3 +62,26 @@ describe('applyDailyHistory', () => {
     expect(update).not.toHaveBeenCalled()
   })
 })
+
+import { fetchShortIoDailyClicks, normalizeShortIoClicks } from './click-history-import'
+
+describe('Short.io click import', () => {
+  const now = new Date('2026-10-10T12:00:00Z')
+  it('normalizes string counts, merges days, drops junk and future days', () => {
+    const body = { clickStatistics: { datasets: [{ data: [{ x: '2026-10-01', y: '3' }, { x: '2026-10-01T05:00:00Z', y: 2 }, { x: '2026-10-02', y: '0' }, { x: 'bad', y: '4' }, { x: '2026-12-01', y: '9' }] }] } }
+    expect(normalizeShortIoClicks(body, now)).toEqual([{ dateKey: '2026-10-01', clicks: 5 }])
+    expect(normalizeShortIoClicks(null, now)).toEqual([])
+  })
+  it('calls the statistics API with the key and a one-year custom window', async () => {
+    const calls: Array<[string, RequestInit | undefined]> = []
+    const f = async (u: string, i?: RequestInit) => { calls.push([u, i]); return new Response(JSON.stringify({ clickStatistics: { datasets: [{ data: [{ x: '2026-10-03', y: '7' }] }] } })) }
+    expect(await fetchShortIoDailyClicks('secret_key_123', 'lnk_abc123', f, now)).toEqual([{ dateKey: '2026-10-03', clicks: 7 }])
+    expect(calls[0][0]).toContain('statistics.short.io/statistics/link/lnk_abc123?')
+    expect(calls[0][0]).toContain('period=custom')
+    expect((calls[0][1]?.headers as Record<string, string>).authorization).toBe('secret_key_123')
+  })
+  it('rejects bad ids and maps auth failures', async () => {
+    await expect(fetchShortIoDailyClicks('secret_key_123', '../x', async () => new Response('{}'))).rejects.toThrow(/Invalid Short\.io/)
+    await expect(fetchShortIoDailyClicks('secret_key_123', 'lnk_abc123', async () => new Response('', { status: 401 }))).rejects.toThrow(/rejected/)
+  })
+})

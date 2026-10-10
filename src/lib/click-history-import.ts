@@ -43,6 +43,39 @@ export async function fetchBitlyDailyClicks(token: string, bitlinkId: string, fe
   return normalizeBitlyClicks(body.link_clicks)
 }
 
+const SHORT_LINK_ID = /^[A-Za-z0-9_-]{4,64}$/
+
+/** Normalises Short.io statistics datasets ({x: date, y: count}, y may be a string) into UTC day keys. */
+export function normalizeShortIoClicks(body: unknown, now = new Date()): DailyClicks[] {
+  const datasets = (body as { clickStatistics?: { datasets?: unknown } } | null)?.clickStatistics?.datasets
+  const first = Array.isArray(datasets) ? (datasets[0] as { data?: unknown } | undefined) : undefined
+  const entries = Array.isArray(first?.data) ? first.data : []
+  return normalizeBitlyClicks(
+    entries.map((e) => {
+      const { x, y } = (e ?? {}) as { x?: unknown; y?: unknown }
+      const n = typeof y === 'string' && /^\d{1,12}$/.test(y) ? Number(y) : y
+      return { date: x, clicks: n }
+    }),
+    now,
+  )
+}
+
+/** Fetches up to a year of daily clicks for one Short.io link id (e.g. "lnk_abc..."). The key is used for this call only. */
+export async function fetchShortIoDailyClicks(secretKey: string, linkId: string, fetchImpl: FetchLike = (i, o) => fetch(i, o), now = new Date()): Promise<DailyClicks[]> {
+  if (!SHORT_LINK_ID.test(linkId)) throw new Error('Invalid Short.io link id')
+  const end = now.toISOString().slice(0, 10)
+  const start = new Date(now.getTime() - MAX_DAYS * 86_400_000).toISOString().slice(0, 10)
+  const q = new URLSearchParams({ period: 'custom', startDate: start, endDate: end, tz: 'UTC' })
+  const res = await fetchImpl(`https://statistics.short.io/statistics/link/${linkId}?${q}`, {
+    headers: { authorization: secretKey, accept: 'application/json' },
+    signal: AbortSignal.timeout(10_000),
+    redirect: 'error',
+  })
+  if (res.status === 401 || res.status === 403) throw new Error('Short.io rejected the token')
+  if (!res.ok) throw new Error(`Short.io returned an error (${res.status})`)
+  return normalizeShortIoClicks(await res.json().catch(() => ({})), now)
+}
+
 /** Writes history for one link; returns how many days were added and how many were skipped as already present. */
 export async function applyDailyHistory(db: Pick<PrismaClient, 'clickDaily' | 'url'>, urlId: string, series: DailyClicks[]): Promise<{ added: number; skipped: number; clicks: number }> {
   if (series.length === 0) return { added: 0, skipped: 0, clicks: 0 }
