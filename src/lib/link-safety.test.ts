@@ -115,3 +115,16 @@ describe('encoded and numeric tricks', () => {
     expect(assessDestination('https://999.999.999.999/').status).toBe('review')
   })
 })
+
+describe('double encoding and archives', () => {
+  it('flags double-encoded characters', () => {
+    expect(assessDestination('https://example.com/a%252e%252e/b').reason).toMatch(/Double-encoded/)
+  })
+  it('flags archive and macro downloads', () => {
+    expect(assessDestination('https://example.com/invoice.zip').reason).toMatch(/Archive/)
+    expect(assessDestination('https://example.com/q.docm').status).toBe('review')
+  })
+  it('does not flag a literal percent sign followed by plain text', () => {
+    expect(assessDestination('https://example.com/zip-codes?q=50%25off').status).toBe('cleared')
+  })
+})
