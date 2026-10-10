@@ -240,3 +240,31 @@ export function diffRules(before: RewardRule[], after: RewardRule[]): { added: s
     changed: [...a.keys()].filter((id) => b.has(id) && b.get(id) !== a.get(id)),
   }
 }
+
+/**
+ * Explain why each rule did or did not match a sale, in evaluation order.
+ * Lets a program owner debug "why did this sale pay 5%?" without guessing.
+ */
+export function explainMatch(
+  rules: RewardRule[],
+  metadata: Record<string, unknown>,
+  saleValueCents?: number,
+): { ruleId: string; matched: boolean; reason: string }[] {
+  return rules
+    .map((rule, index) => ({ rule, index }))
+    .sort((a, b) => (a.rule.priority ?? 0) - (b.rule.priority ?? 0) || a.index - b.index)
+    .map(({ rule }) => {
+      const fail = (reason: string) => ({ ruleId: rule.id, matched: false, reason })
+      const invalid = validateRule(rule)
+      if (invalid) return fail(`invalid rule: ${invalid}`)
+      if (saleValueCents !== undefined && rule.minSaleCents !== undefined && saleValueCents < rule.minSaleCents)
+        return fail(`sale below minimum of ${rule.minSaleCents} cents`)
+      if (saleValueCents !== undefined && rule.maxSaleCents !== undefined && saleValueCents > rule.maxSaleCents)
+        return fail(`sale above maximum of ${rule.maxSaleCents} cents`)
+      const value = metadata[rule.key]
+      if (value === undefined || value === null) return fail(`metadata key "${rule.key}" is missing`)
+      if (typeof value === 'object') return fail(`metadata key "${rule.key}" is not a scalar`)
+      if (!rule.equals.includes(String(value))) return fail(`"${rule.key}" is "${String(value)}", not one of ${rule.equals.join(', ')}`)
+      return { ruleId: rule.id, matched: true, reason: `"${rule.key}" equals "${String(value)}"` }
+    })
+}

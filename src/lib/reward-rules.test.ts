@@ -327,3 +327,27 @@ describe('computeReward bounds', () => {
     expect(computeReward(0, {}, [], { type: 'flat', amount: 100 }).cents).toBe(0)
   })
 })
+
+import { explainMatch as explainMatchFn } from './reward-rules'
+describe('explainMatch', () => {
+  const base = { key: 'plan', equals: ['pro'], type: 'percent' as const, amount: 1000 }
+  it('reports each rule in priority order with reasons', () => {
+    const out = explainMatchFn(
+      [
+        { ...base, id: 'b', priority: 2 },
+        { ...base, id: 'a', priority: 1, minSaleCents: 5000 },
+      ],
+      { plan: 'pro' },
+      1000,
+    )
+    expect(out.map((o) => o.ruleId)).toEqual(['a', 'b'])
+    expect(out[0]).toMatchObject({ matched: false, reason: 'sale below minimum of 5000 cents' })
+    expect(out[1].matched).toBe(true)
+  })
+  it('flags missing and non-scalar metadata', () => {
+    const [m] = explainMatchFn([{ ...base, id: 'a' }], {})
+    expect(m.reason).toContain('missing')
+    const [o] = explainMatchFn([{ ...base, id: 'a' }], { plan: { x: 1 } })
+    expect(o.reason).toContain('not a scalar')
+  })
+})
