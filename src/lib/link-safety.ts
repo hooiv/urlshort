@@ -94,6 +94,7 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if (/(?:\.msix|\.msixbundle|\.appx|\.appinstaller|\.pkg|\.deb|\.rpm|\.jnlp|\.reg|\.dll)(?:$|[?#/])/i.test(url.pathname + url.search + url.hash)) reasons.push('Installer or system-package file destination')
   if (/^(?:metadata\.google\.internal|metadata\.goog|instance-data(?:\.ec2\.internal)?|169\.254\.169\.254|100\.100\.100\.200|\[?fd00:ec2::254\]?)$/.test(host)) reasons.push('Cloud instance-metadata endpoint destination')
   if (/\.(?:iso|img|vhd|vhdx|dmg)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Disk-image download destination')
+  if (/\.(?:docm|xlsm|pptm|dotm|xlam|ppam|wsf|vbs|vbe|hta|scr|lnk)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Macro-enabled document or script-file destination')
   if (url.href.length > 2000) reasons.push('Unusually long URL')
   if (/\.\.|\.$/.test(url.hostname)) reasons.push('Malformed hostname (trailing or empty label)')
   if (hasMixedScriptLabel(rawHostUnicode(url.hostname))) reasons.push('Mixed-script hostname label (possible homoglyph spoofing)')

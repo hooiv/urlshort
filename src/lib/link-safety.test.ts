@@ -219,3 +219,12 @@ describe('disk-image downloads', () => {
     expect(assessDestination('https://example.com/isometric-guide').reason).toBeNull()
   })
 })
+
+describe('macro documents and script files', () => {
+  it.each(['https://example.com/invoice.docm', 'https://example.com/a/run.VBS?x=1', 'https://example.com/pay.hta'])('flags %s', (u) => {
+    expect(assessDestination(u).reason).toContain('Macro-enabled')
+  })
+  it('does not flag lookalike paths', () => {
+    expect(assessDestination('https://example.com/docmost-guide').reason).toBeNull()
+  })
+})
