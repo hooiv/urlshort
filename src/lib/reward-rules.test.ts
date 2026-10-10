@@ -184,3 +184,18 @@ describe('describeRule', () => {
     )
   })
 })
+
+describe('parseRules size limits', () => {
+  const base = { key: 'plan', equals: ['pro'], type: 'percent', amount: 1000 }
+  it('rejects overlong ids', () => {
+    expect(parseRules([{ ...base, id: 'x'.repeat(65) }])).toEqual({ error: 'rules[0].id must be at most 64 characters' })
+  })
+  it('rejects oversized equals lists', () => {
+    const equals = Array.from({ length: 51 }, (_, i) => String(i))
+    expect(parseRules([{ ...base, id: 'a', equals }])).toEqual({ error: 'rules[0].equals allows at most 50 values' })
+  })
+  it('accepts boundary sizes', () => {
+    const equals = Array.from({ length: 50 }, (_, i) => String(i))
+    expect('rules' in parseRules([{ ...base, id: 'x'.repeat(64), equals }])).toBe(true)
+  })
+})

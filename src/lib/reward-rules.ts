@@ -123,11 +123,13 @@ export function parseRules(input: unknown): { rules: RewardRule[] } | { error: s
     const r = input[i] as Record<string, unknown> | null
     if (!r || typeof r !== 'object') return { error: `rules[${i}] must be an object` }
     if (typeof r.id !== 'string' || !r.id) return { error: `rules[${i}].id is required` }
+    if (r.id.length > 64) return { error: `rules[${i}].id must be at most 64 characters` }
     if (ids.has(r.id)) return { error: `rules[${i}].id is duplicated` }
     ids.add(r.id)
     if (typeof r.key !== 'string') return { error: `rules[${i}].key must be a string` }
     if (!Array.isArray(r.equals) || !r.equals.every((v) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean'))
       return { error: `rules[${i}].equals must be an array of scalars` }
+    if (r.equals.length > 50) return { error: `rules[${i}].equals allows at most 50 values` }
     if (r.type !== 'percent' && r.type !== 'flat') return { error: `rules[${i}].type must be percent or flat` }
     if (typeof r.amount !== 'number') return { error: `rules[${i}].amount must be a number` }
     if (r.priority !== undefined && (typeof r.priority !== 'number' || !Number.isFinite(r.priority)))
