@@ -382,6 +382,7 @@ model Workspace {
   idempotencyKeys        IdempotencyKey[]
   featureFlags           FeatureFlag[]
   folders                Folder[]
+  utmTemplates           UtmTemplate[]
 
   @@map("workspaces")
 }
@@ -1250,4 +1251,23 @@ model DataDeletionRequest {
   @@index([status, scheduledFor])
   @@index([userId, requestedAt])
   @@map("data_deletion_requests")
+}
+
+model UtmTemplate {
+  id          String   @id @default(cuid())
+  workspaceId String
+  name        String
+  source      String?
+  medium      String?
+  campaign    String?
+  term        String?
+  content     String?
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, name])
+  @@map("utm_templates")
 }
