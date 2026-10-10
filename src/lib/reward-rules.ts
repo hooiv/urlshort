@@ -18,6 +18,8 @@ export type RewardRule = {
   priority?: number
   /** Max commission per sale in cents. */
   capCents?: number
+  /** Rule only applies to sales of at least this many cents. */
+  minSaleCents?: number
 }
 
 export type RewardDefault = { type: RewardType; amount: number; /** Max commission per sale in cents. */ capCents?: number }
@@ -32,12 +34,13 @@ export function validateRule(rule: RewardRule): string | null {
   return null
 }
 
-export function matchRule(rules: RewardRule[], metadata: Record<string, unknown>): RewardRule | null {
+export function matchRule(rules: RewardRule[], metadata: Record<string, unknown>, saleValueCents?: number): RewardRule | null {
   const sorted = rules
     .map((rule, index) => ({ rule, index }))
     .sort((a, b) => (a.rule.priority ?? 0) - (b.rule.priority ?? 0) || a.index - b.index)
   for (const { rule } of sorted) {
     if (validateRule(rule)) continue
+    if (rule.minSaleCents !== undefined && saleValueCents !== undefined && saleValueCents < rule.minSaleCents) continue
     const value = metadata[rule.key]
     if (value === undefined || value === null || typeof value === 'object') continue
     if (rule.equals.includes(String(value))) return rule
@@ -53,7 +56,7 @@ export function computeReward(
   fallback: RewardDefault | null,
 ): { cents: number; ruleId: string | null } {
   if (!Number.isFinite(saleValueCents) || saleValueCents <= 0) return { cents: 0, ruleId: null }
-  const rule = matchRule(rules, metadata)
+  const rule = matchRule(rules, metadata, saleValueCents)
   const spec = rule ?? fallback
   if (!spec) return { cents: 0, ruleId: null }
   const raw = spec.type === 'percent' ? Math.floor((saleValueCents * spec.amount) / MAX_PERCENT_BPS) : spec.amount
@@ -128,6 +131,8 @@ export function parseRules(input: unknown): { rules: RewardRule[] } | { error: s
       return { error: `rules[${i}].priority must be a number` }
     if (r.capCents !== undefined && (typeof r.capCents !== 'number' || !Number.isInteger(r.capCents) || r.capCents < 0))
       return { error: `rules[${i}].capCents must be a non-negative integer` }
+    if (r.minSaleCents !== undefined && (typeof r.minSaleCents !== 'number' || !Number.isInteger(r.minSaleCents) || r.minSaleCents < 0))
+      return { error: `rules[${i}].minSaleCents must be a non-negative integer` }
     const rule: RewardRule = {
       id: r.id,
       key: r.key,
@@ -136,6 +141,7 @@ export function parseRules(input: unknown): { rules: RewardRule[] } | { error: s
       amount: r.amount,
       ...(r.priority !== undefined ? { priority: r.priority as number } : {}),
       ...(r.capCents !== undefined ? { capCents: r.capCents as number } : {}),
+      ...(r.minSaleCents !== undefined ? { minSaleCents: r.minSaleCents as number } : {}),
     }
     const err = validateRule(rule)
     if (err) return { error: `rules[${i}]: ${err}` }

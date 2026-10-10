@@ -115,3 +115,16 @@ describe('parseDefault', () => {
     }
   })
 })
+
+describe('minSaleCents', () => {
+  const big = { id: 'big', key: 'plan', equals: ['pro'], type: 'percent' as const, amount: 3000, minSaleCents: 5000, priority: 0 }
+  const any = { id: 'any', key: 'plan', equals: ['pro'], type: 'percent' as const, amount: 1000, priority: 1 }
+  it('skips rules below the sale threshold and falls through', () => {
+    expect(computeReward(10000, { plan: 'pro' }, [big, any], null)).toEqual({ cents: 3000, ruleId: 'big' })
+    expect(computeReward(4000, { plan: 'pro' }, [big, any], null)).toEqual({ cents: 400, ruleId: 'any' })
+  })
+  it('validates the field', () => {
+    expect('error' in parseRules([{ ...big, minSaleCents: -5 }])).toBe(true)
+    expect(parseRules([big])).toEqual({ rules: [big] })
+  })
+})
