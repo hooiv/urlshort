@@ -362,3 +362,33 @@ describe('validateRule sale bounds', () => {
     expect(validateRuleBounds({ ...base, minSaleCents: 100, maxSaleCents: 100 })).toBeNull()
   })
 })
+
+describe('matchRule metadata coercion and ties', () => {
+  const rule = (o: Partial<RewardRule>): RewardRule => ({ id: 'r', key: 'plan', equals: ['pro'], type: 'flat', amount: 100, ...o })
+
+  it('string-compares numbers and booleans', () => {
+    expect(matchRule([rule({ key: 'seats', equals: ['5'] })], { seats: 5 })?.id).toBe('r')
+    expect(matchRule([rule({ key: 'trial', equals: ['true'] })], { trial: true })?.id).toBe('r')
+  })
+
+  it('ignores object, null and missing values', () => {
+    expect(matchRule([rule({})], { plan: { x: 1 } })).toBeNull()
+    expect(matchRule([rule({})], { plan: null })).toBeNull()
+    expect(matchRule([rule({})], {})).toBeNull()
+  })
+
+  it('is case-sensitive on values', () => {
+    expect(matchRule([rule({})], { plan: 'Pro' })).toBeNull()
+  })
+
+  it('keeps declaration order for equal priority', () => {
+    const a = rule({ id: 'a' })
+    const b = rule({ id: 'b' })
+    expect(matchRule([a, b], { plan: 'pro' })?.id).toBe('a')
+    expect(matchRule([b, a], { plan: 'pro' })?.id).toBe('b')
+  })
+
+  it('skips sale-band checks when the sale value is unknown', () => {
+    expect(matchRule([rule({ minSaleCents: 1000 })], { plan: 'pro' })?.id).toBe('r')
+  })
+})
