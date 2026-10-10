@@ -25,4 +25,10 @@ describe('analytics export', () => {
     expect(parseExportSection('nope')).toBeNull()
     expect(exportFilename('tags', { from: '2026-10-01', to: '2026-10-02' })).toBe('quicklink-tags-2026-10-01_2026-10-02.csv')
   })
+
+  it('neutralizes every formula trigger character and leaves mid-string ones alone', () => {
+    for (const c of ['=', '+', '-', '@', '\t', '\r']) expect(neutralizeFormula(`${c}x`)).toBe(`'${c}x`)
+    expect(neutralizeFormula('a=b')).toBe('a=b')
+    expect(neutralizeFormula('')).toBe('')
+  })
 })
