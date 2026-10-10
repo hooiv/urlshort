@@ -70,3 +70,19 @@ describe('link-safety heuristics v2', () => {
     expect(assessDestination('https://bit.ly./abc').reason).toContain('Chained')
   })
 })
+
+describe('embedded redirect parameters', () => {
+  it('flags a redirect parameter pointing at another host', () => {
+    const r = assessDestination('https://example.com/out?url=https%3A%2F%2Fevil.example.net%2Fx')
+    expect(r.status).toBe('review')
+    expect(r.reason).toMatch(/redirect parameter/i)
+  })
+  it('ignores same-host, relative and non-URL values', () => {
+    for (const u of ['https://example.com/a?next=https://example.com/b', 'https://example.com/a?next=/dashboard', 'https://example.com/a?q=shoes', 'https://example.com/a?utm_source=x']) {
+      expect(assessDestination(u)).toEqual({ status: 'cleared', reason: null })
+    }
+  })
+  it('ignores non-http inner schemes', () => {
+    expect(assessDestination('https://example.com/a?url=mailto:a@b.co').status).toBe('cleared')
+  })
+})

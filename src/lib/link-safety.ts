@@ -29,6 +29,20 @@ export function detectBrandImpersonation(host: string): string | null {
   return null
 }
 
+const REDIRECT_PARAMS = new Set(['url', 'u', 'redirect', 'redirect_uri', 'redirect_url', 'redir', 'return', 'returnurl', 'return_to', 'next', 'continue', 'dest', 'destination', 'goto', 'target', 'link', 'q'])
+
+/** Query parameter that carries another absolute http(s) URL on a different host: a classic open-redirect hop. */
+export function detectEmbeddedRedirect(url: URL): string | null {
+  for (const [key, value] of url.searchParams) {
+    if (!REDIRECT_PARAMS.has(key.toLowerCase())) continue
+    try {
+      const inner = new URL(value)
+      if ((inner.protocol === 'http:' || inner.protocol === 'https:') && inner.hostname.toLowerCase() !== url.hostname.toLowerCase()) return key
+    } catch { /* not an absolute URL */ }
+  }
+  return null
+}
+
 export function assessDestination(rawUrl: string): RiskAssessment {
   let url: URL
   try { url = new URL(rawUrl) } catch { return { status: 'review', reason: 'Destination URL could not be parsed' } }
@@ -49,6 +63,7 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   // otherwise score as clean.
   if (/(?:\.exe|\.scr|\.msi|\.apk|\.dmg|\.iso)(?:$|[?#/])/i.test(url.pathname + url.search + url.hash)) reasons.push('Executable file destination')
 
+  if (detectEmbeddedRedirect(url)) reasons.push('Destination forwards to another site via a redirect parameter')
   if (SHORTENER_HOSTS.has(host)) reasons.push('Chained link-shortener destination')
   const tld = host.split('.').pop() ?? ''
   if (!isIP(host) && RISKY_TLDS.has(tld)) reasons.push('High-abuse top-level domain')
