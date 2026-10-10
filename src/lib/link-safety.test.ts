@@ -210,3 +210,12 @@ describe('cloud metadata endpoints', () => {
     expect(assessDestination('https://example.com/metadata').reason).toBeNull()
   })
 })
+
+describe('disk-image downloads', () => {
+  it.each(['https://example.com/invoice.iso', 'https://example.com/a/setup.IMG?x=1', 'https://example.com/tool.vhdx'])('flags %s', (u) => {
+    expect(assessDestination(u).reason).toContain('Disk-image')
+  })
+  it('does not flag lookalike paths', () => {
+    expect(assessDestination('https://example.com/isometric-guide').reason).toBeNull()
+  })
+})
