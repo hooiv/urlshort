@@ -102,3 +102,16 @@ describe('more chained shorteners', () => {
     expect(assessDestination('https://notbit.ly.example.org/x').reason ?? '').not.toMatch(/Chained/)
   })
 })
+
+describe('encoded and numeric tricks', () => {
+  it('flags percent-encoded control characters', () => {
+    expect(assessDestination('https://example.com/a%0d%0aSet-Cookie:x').status).toBe('review')
+    expect(assessDestination('https://example.com/a%7f').status).toBe('review')
+  })
+  it('does not flag ordinary encoded text', () => {
+    expect(assessDestination('https://example.com/caf%C3%A9?q=a%20b').status).toBe('cleared')
+  })
+  it('flags numeric-only hosts that are not valid IPs', () => {
+    expect(assessDestination('https://999.999.999.999/').status).toBe('review')
+  })
+})

@@ -63,6 +63,11 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   // otherwise score as clean.
   if (/(?:\.exe|\.scr|\.msi|\.apk|\.dmg|\.iso)(?:$|[?#/])/i.test(url.pathname + url.search + url.hash)) reasons.push('Executable file destination')
 
+  // WHATWG URL normalizes 0x7f.1 / 2130706433 to dotted quads, so isIP catches
+  // those; what remains is a numeric-only final label (e.g. 10.0.0.1.example is fine,
+  // but a bare all-digit host that survived is not).
+  if (!isIP(host) && /^[\d.]+$/.test(host)) reasons.push('Numeric-only hostname')
+  if (/%(?:0[0-9a-f]|1[0-9a-f]|7f)/i.test(url.pathname + url.search)) reasons.push('Control characters encoded in the URL')
   if (url.port && !isIP(host)) reasons.push('Non-standard port on a public hostname')
   if (/(?:\.jar|\.vbs|\.ps1|\.bat|\.cmd|\.lnk|\.hta)(?:$|[?#/])/i.test(url.pathname + url.search + url.hash)) reasons.push('Script or launcher file destination')
   if (detectEmbeddedRedirect(url)) reasons.push('Destination forwards to another site via a redirect parameter')
