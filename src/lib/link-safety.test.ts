@@ -93,3 +93,12 @@ describe('embedded redirect parameters', () => {
     expect(assessDestination('https://example.com:443/x').status).toBe('cleared')
   })
 })
+
+describe('more chained shorteners', () => {
+  it.each(['https://tiny.cc/x', 'https://www.bit.ly/x', 'https://lnkd.in/abc', 'https://dub.sh/a'])('flags %s', (u) => {
+    expect(assessDestination(u).reason).toMatch(/Chained link-shortener/)
+  })
+  it('does not flag lookalike suffix hosts', () => {
+    expect(assessDestination('https://notbit.ly.example.org/x').reason ?? '').not.toMatch(/Chained/)
+  })
+})

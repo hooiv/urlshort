@@ -5,7 +5,7 @@ export type RiskAssessment = {
   reason: string | null
 }
 
-const SHORTENER_HOSTS = new Set(['bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'ow.ly', 'is.gd', 'buff.ly', 'rebrand.ly', 'cutt.ly', 'shorturl.at', 'rb.gy'])
+const SHORTENER_HOSTS = new Set(['bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'ow.ly', 'is.gd', 'buff.ly', 'rebrand.ly', 'cutt.ly', 'shorturl.at', 'rb.gy', 'tiny.cc', 'bl.ink', 'lnkd.in', 'dub.sh', 'short.io', 'v.gd', 'adf.ly', 't.ly', 'qr.ae', 'urlz.fr'])
 const RISKY_TLDS = new Set(['zip', 'mov', 'top', 'xyz', 'click', 'country', 'gq', 'tk', 'ml', 'cf', 'work', 'support'])
 const BRANDS = ['paypal', 'microsoft', 'apple', 'google', 'amazon', 'netflix', 'facebook', 'instagram', 'binance', 'coinbase', 'metamask', 'dropbox', 'docusign']
 
@@ -66,7 +66,7 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if (url.port && !isIP(host)) reasons.push('Non-standard port on a public hostname')
   if (/(?:\.jar|\.vbs|\.ps1|\.bat|\.cmd|\.lnk|\.hta)(?:$|[?#/])/i.test(url.pathname + url.search + url.hash)) reasons.push('Script or launcher file destination')
   if (detectEmbeddedRedirect(url)) reasons.push('Destination forwards to another site via a redirect parameter')
-  if (SHORTENER_HOSTS.has(host)) reasons.push('Chained link-shortener destination')
+  if (SHORTENER_HOSTS.has(host) || SHORTENER_HOSTS.has(host.replace(/^www\./, ''))) reasons.push('Chained link-shortener destination')
   const tld = host.split('.').pop() ?? ''
   if (!isIP(host) && RISKY_TLDS.has(tld)) reasons.push('High-abuse top-level domain')
   const brand = detectBrandImpersonation(host)
