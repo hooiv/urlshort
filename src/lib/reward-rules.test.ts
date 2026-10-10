@@ -392,3 +392,12 @@ describe('matchRule metadata coercion and ties', () => {
     expect(matchRule([rule({ minSaleCents: 1000 })], { plan: 'pro' })?.id).toBe('r')
   })
 })
+
+describe('computeReward bounds', () => {
+  it('never pays more than the sale value for flat rewards', () => {
+    expect(computeReward(300, {}, [], { type: 'flat', amount: 500 }).cents).toBe(300)
+  })
+  it('pays nothing for zero, negative or NaN sales', () => {
+    for (const v of [0, -5, NaN]) expect(computeReward(v, {}, [], { type: 'flat', amount: 500 })).toEqual({ cents: 0, ruleId: null })
+  })
+})
