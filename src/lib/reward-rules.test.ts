@@ -57,6 +57,10 @@ d2('parseRules', () => {
   it2('normalizes valid rules', () => {
     expect2(parseRulesFn([ok])).toEqual({ rules: [{ ...ok, equals: ['pro', '3'] }] })
   })
+  it2('bounds priority magnitude', () => {
+    expect2(parseRulesFn([{ ...ok, priority: 2_000_000 }])).toEqual({ error: 'rules[0].priority must be within ±1000000' })
+    expect2('rules' in parseRulesFn([{ ...ok, priority: -1_000_000 }])).toBe(true)
+  })
   it2('rejects bad shapes with index', () => {
     expect2(parseRulesFn('x')).toEqual({ error: 'rules must be an array' })
     expect2(parseRulesFn([ok, ok])).toEqual({ error: 'rules[1].id is duplicated' })

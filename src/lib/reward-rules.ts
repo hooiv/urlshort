@@ -136,6 +136,8 @@ export function parseRules(input: unknown): { rules: RewardRule[] } | { error: s
     if (typeof r.amount !== 'number') return { error: `rules[${i}].amount must be a number` }
     if (r.priority !== undefined && (typeof r.priority !== 'number' || !Number.isFinite(r.priority)))
       return { error: `rules[${i}].priority must be a number` }
+    if (r.priority !== undefined && Math.abs(r.priority as number) > 1_000_000)
+      return { error: `rules[${i}].priority must be within ±1000000` }
     if (r.capCents !== undefined && (typeof r.capCents !== 'number' || !Number.isSafeInteger(r.capCents) || r.capCents < 0))
       return { error: `rules[${i}].capCents must be a non-negative integer` }
     if (r.minSaleCents !== undefined && (typeof r.minSaleCents !== 'number' || !Number.isSafeInteger(r.minSaleCents) || r.minSaleCents < 0))
