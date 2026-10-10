@@ -60,4 +60,13 @@ describe('link-safety heuristics v2', () => {
   it('flags hyphen stuffing', () => {
     expect(assessDestination('https://a-b-c-d-e.example.com/').reason).toContain('hyphen')
   })
+  it('accepts brand country domains but not look-alike suffix tricks', () => {
+    expect(dbi('www.google.co.uk')).toBeNull()
+    expect(dbi('amazon.de')).toBeNull()
+    expect(dbi('paypal.com.evil.net')).toBe('paypal')
+    expect(dbi('google.com.au')).toBeNull()
+  })
+  it('treats a trailing-dot host like the bare host', () => {
+    expect(assessDestination('https://bit.ly./abc').reason).toContain('Chained')
+  })
 })

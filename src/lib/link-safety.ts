@@ -16,12 +16,15 @@ function foldLookalikes(label: string): string {
 
 /** Brand impersonation: a brand name inside a hostname that is not the brand's own registrable domain. */
 export function detectBrandImpersonation(host: string): string | null {
-  const labels = host.split('.')
+  const labels = host.replace(/\.$/, '').split('.')
   if (labels.length < 2) return null
-  const registrable = labels.slice(-2).join('.')
+  // Registrable label sits before `.com` or a country suffix (`.de`, `.co.uk`, `.com.au`).
+  const suffixLen = /^(?:co|com|org|net)$/.test(labels[labels.length - 2] ?? '') && /^[a-z]{2}$/.test(labels[labels.length - 1]) && labels.length >= 3 ? 2 : 1
+  const registrableLabel = labels[labels.length - 1 - suffixLen]
+  const ownTld = suffixLen === 2 || labels[labels.length - 1] === 'com' || /^[a-z]{2}$/.test(labels[labels.length - 1])
   for (const brand of BRANDS) {
-    if (registrable === `${brand}.com`) continue
-    if (labels.slice(0, -1).some((l) => l.includes(brand) || foldLookalikes(l).includes(brand))) return brand
+    if (registrableLabel === brand && ownTld) continue
+    if (labels.slice(0, labels.length - suffixLen).some((l) => l.includes(brand) || foldLookalikes(l).includes(brand))) return brand
   }
   return null
 }
@@ -32,7 +35,7 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   // Allowlist: only http(s) destinations are assessable. Anything else
   // (javascript:, data:, file:, ftp:, …) must never clear silently.
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return { status: 'review', reason: 'Non-HTTP(S) destination protocol' }
-  const host = url.hostname.toLowerCase()
+  const host = url.hostname.toLowerCase().replace(/\.$/, '')
   const reasons: string[] = []
 
   if (url.username || url.password) reasons.push('Credential-bearing destination')
