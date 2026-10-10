@@ -38,3 +38,17 @@ describe('previewUtmTemplate', () => {
     expect(previewUtmTemplate('https://example.com', { source: '  ' })).toEqual({ error: 'A template needs at least one UTM value' })
   })
 })
+
+describe('applyUtmTemplate edge cases', () => {
+  it('keeps hash fragments and existing utm params', async () => {
+    const { applyUtmTemplate } = await import('./utm-templates')
+    const out = applyUtmTemplate('https://a.com/p?utm_source=x#frag', { source: 'y', medium: 'email' })
+    expect(out).toContain('utm_source=x')
+    expect(out).toContain('utm_medium=email')
+    expect(out.endsWith('#frag')).toBe(true)
+  })
+  it('leaves non-http urls unchanged', async () => {
+    const { applyUtmTemplate } = await import('./utm-templates')
+    expect(applyUtmTemplate('mailto:a@b.com', { source: 'y' })).toBe('mailto:a@b.com')
+  })
+})
