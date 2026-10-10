@@ -151,4 +151,11 @@ describe('deep subdomains and script-scheme params', () => {
     expect(r.status).toBe('review')
     expect(r.reason).toMatch(/Malformed hostname/)
   })
+
+  it('flags invisible and bidi-control characters, raw or percent-encoded', () => {
+    expect(assessDestination('https://example.com/a\u202Egpj.exe').reason).toMatch(/bidirectional/)
+    expect(assessDestination('https://example.com/a%E2%80%8Bb').reason).toMatch(/Invisible/)
+    expect(assessDestination('https://example.com/%E4%B8%AD').status).toBe('cleared')
+    expect(assessDestination('https://example.com/100%zz').status).toBe('cleared')
+  })
 })

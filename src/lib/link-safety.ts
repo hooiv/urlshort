@@ -50,6 +50,10 @@ export function hasScriptSchemeParam(url: URL): boolean {
   return false
 }
 
+function decodeURIComponentSafe(v: string): string {
+  try { return decodeURIComponent(v) } catch { return v }
+}
+
 export function assessDestination(rawUrl: string): RiskAssessment {
   let url: URL
   try { url = new URL(rawUrl) } catch { return { status: 'review', reason: 'Destination URL could not be parsed' } }
@@ -83,6 +87,7 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if (SHORTENER_HOSTS.has(host) || SHORTENER_HOSTS.has(host.replace(/^www\./, ''))) reasons.push('Chained link-shortener destination')
   if (host.split('.').length >= 7) reasons.push('Unusually deep subdomain chain')
   if (hasScriptSchemeParam(url)) reasons.push('Query parameter carries a javascript:/data: payload')
+  if (/[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/.test(decodeURIComponentSafe(rawUrl))) reasons.push('Invisible or bidirectional-control characters in the URL')
   if (url.href.length > 2000) reasons.push('Unusually long URL')
   if (/\.\.|\.$/.test(url.hostname)) reasons.push('Malformed hostname (trailing or empty label)')
   const tld = host.split('.').pop() ?? ''
