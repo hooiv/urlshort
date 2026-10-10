@@ -51,6 +51,12 @@ export default function SiteHeader() {
             Webhooks
           </Link>
           <Link
+            href="/manage/utm"
+            className="text-sm font-medium text-slate-400 hover:text-white transition-colors"
+          >
+            UTM
+          </Link>
+          <Link
             href="/manage/integrations"
             className="text-sm font-medium text-slate-400 hover:text-white transition-colors"
           >

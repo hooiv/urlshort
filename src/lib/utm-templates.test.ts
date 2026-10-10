@@ -27,3 +27,14 @@ describe('utm templates', () => {
     expect(applyUtmTemplate('not a url', { source: 'x' })).toBe('not a url')
   })
 })
+
+describe('previewUtmTemplate', () => {
+  it('normalizes the draft and tags the url', async () => {
+    const { previewUtmTemplate } = await import('./utm-templates')
+    expect(previewUtmTemplate('https://example.com/a', { source: 'News Letter', medium: 'Email' })).toEqual({ url: 'https://example.com/a?utm_source=news-letter&utm_medium=email' })
+  })
+  it('returns an error rather than throwing for an empty draft', async () => {
+    const { previewUtmTemplate } = await import('./utm-templates')
+    expect(previewUtmTemplate('https://example.com', { source: '  ' })).toEqual({ error: 'A template needs at least one UTM value' })
+  })
+})

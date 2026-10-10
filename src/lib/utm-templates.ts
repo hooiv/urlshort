@@ -48,3 +48,12 @@ export function applyUtmTemplate(url: string, values: UtmValues): string {
   }
   return parsed.toString()
 }
+
+/** Live preview for the template editor: normalizes the draft like the API does and returns the tagged URL, or an error message instead of throwing. */
+export function previewUtmTemplate(url: string, draft: UtmValues): { url: string } | { error: string } {
+  try {
+    return { url: applyUtmTemplate(url, normalizeUtmValues(draft)) }
+  } catch (error) {
+    return { error: (error as Error).message }
+  }
+}
