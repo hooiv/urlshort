@@ -18,4 +18,25 @@ describe('Slug Suggestion Generator', () => {
     const suggestions = generateSlugSuggestions('API Documentation', 'https://example.com/api')
     expect(suggestions.every((s) => s !== 'api' && s !== 'admin' && s !== 'auth')).toBe(true)
   })
+
+  it('never exceeds 32 chars and returns only slug-safe characters', () => {
+    const suggestions = generateSlugSuggestions(
+      'Extraordinarily Long Marketing Campaign Title Номер 1 !!!',
+      'https://example.com/a-very-long-path-segment-that-keeps-going-and-going'
+    )
+    for (const s of suggestions) {
+      expect(s.length).toBeLessThanOrEqual(32)
+      expect(s).toMatch(/^[a-z0-9-]+$/)
+    }
+  })
+
+  it('tolerates empty, null and malformed input', () => {
+    expect(() => generateSlugSuggestions(null, undefined)).not.toThrow()
+    expect(() => generateSlugSuggestions('   ', 'http://')).not.toThrow()
+    expect(generateSlugSuggestions('', '')).toEqual([])
+  })
+
+  it('accepts schemeless destinations', () => {
+    expect(generateSlugSuggestions('', 'github.com/facebook/react')).toContain('react')
+  })
 })
