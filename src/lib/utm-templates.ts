@@ -33,7 +33,7 @@ export function normalizeUtmValues(values: UtmValues): Record<UtmKey, string | n
   return out
 }
 
-/** Appends the template's values to `url`, keeping any utm_* already present. Returns the URL string unchanged when it is not http(s). */
+/** Appends the template's values to `url`, keeping any non-empty utm_* already present (a blank `utm_x=` is filled). Returns the URL string unchanged when it is not http(s). */
 export function applyUtmTemplate(url: string, values: UtmValues): string {
   let parsed: URL
   try {
@@ -44,7 +44,7 @@ export function applyUtmTemplate(url: string, values: UtmValues): string {
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return url
   for (const k of UTM_KEYS) {
     const v = values[k]
-    if (v && !parsed.searchParams.has(`utm_${k}`)) parsed.searchParams.set(`utm_${k}`, v)
+    if (v && !parsed.searchParams.get(`utm_${k}`)) parsed.searchParams.set(`utm_${k}`, v)
   }
   return parsed.toString()
 }

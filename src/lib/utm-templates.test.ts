@@ -52,3 +52,12 @@ describe('applyUtmTemplate edge cases', () => {
     expect(applyUtmTemplate('mailto:a@b.com', { source: 'y' })).toBe('mailto:a@b.com')
   })
 })
+
+describe('applyUtmTemplate blank params', () => {
+  it('fills a blank existing utm param instead of leaving it empty', async () => {
+    const { applyUtmTemplate } = await import('./utm-templates')
+    const u = new URL(applyUtmTemplate('https://a.com/?utm_source=&utm_medium=cpc', { source: 'news', medium: 'email' }))
+    expect(u.searchParams.getAll('utm_source')).toEqual(['news'])
+    expect(u.searchParams.get('utm_medium')).toBe('cpc')
+  })
+})
