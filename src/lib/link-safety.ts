@@ -104,6 +104,8 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if (url.href.length > 2000) reasons.push('Unusually long URL')
   if (/\.\.|\.$/.test(url.hostname)) reasons.push('Malformed hostname (trailing or empty label)')
   if (hasMixedScriptLabel(rawHostUnicode(url.hostname))) reasons.push('Mixed-script hostname label (possible homoglyph spoofing)')
+  const spoofed = detectWholeScriptSpoof(rawHostUnicode(url.hostname))
+  if (spoofed) reasons.push(`Non-Latin lookalike of ${spoofed} (homoglyph spoofing)`)
   const tld = host.split('.').pop() ?? ''
   if (!isIP(host) && RISKY_TLDS.has(tld)) reasons.push('High-abuse top-level domain')
   const brand = detectBrandImpersonation(host)
@@ -121,4 +123,24 @@ function rawHostUnicode(hostname: string): string {
 export function hasMixedScriptLabel(unicodeHost: string): boolean {
   return unicodeHost.split('.').some((label) =>
     /\p{Script=Latin}/u.test(label) && /[\p{Script=Cyrillic}\p{Script=Greek}]/u.test(label))
+}
+
+const CONFUSABLES: Record<string, string> = {
+  'а': 'a', 'е': 'e', 'о': 'o', 'р': 'p', 'с': 'c', 'х': 'x', 'у': 'y', 'і': 'i', 'ј': 'j', 'ѕ': 's', 'ԁ': 'd', 'ӏ': 'l', 'һ': 'h', 'ԛ': 'q', 'ԝ': 'w',
+  'ο': 'o', 'ν': 'v', 'α': 'a', 'ρ': 'p', 'ι': 'i', 'κ': 'k', 'τ': 't', 'υ': 'u',
+}
+
+/**
+ * A label written entirely in Cyrillic/Greek letters that, once confusables
+ * are folded to Latin, spells a protected brand. Mixed-script labels are
+ * caught separately; this covers the "whole-script" spoof (e.g. "арр1е").
+ */
+export function detectWholeScriptSpoof(unicodeHost: string): string | null {
+  for (const label of unicodeHost.split('.')) {
+    if (!/[\p{Script=Cyrillic}\p{Script=Greek}]/u.test(label) || /\p{Script=Latin}/u.test(label)) continue
+    const folded = [...label.toLowerCase()].map((c) => CONFUSABLES[c] ?? c).join('')
+    const hit = BRANDS.find((b) => folded.includes(b))
+    if (hit) return hit
+  }
+  return null
 }

@@ -263,3 +263,16 @@ describe('ipfs-hosted brand phishing', () => {
     expect(assessDestination('https://paypal-login.example.com/a.png').reason).not.toContain('cloud-storage bucket')
   })
 })
+
+describe('whole-script homoglyph spoofing', () => {
+  it('flags an all-Cyrillic lookalike of a brand', async () => {
+    const { detectWholeScriptSpoof } = await import('./link-safety')
+    expect(detectWholeScriptSpoof('арр\u04CFе.com')).toBe('apple')
+    expect(assessDestination('https://аррӏе.com/').reason).toMatch(/lookalike of apple/)
+  })
+  it('does not flag plain Latin or unrelated Cyrillic hosts', async () => {
+    const { detectWholeScriptSpoof } = await import('./link-safety')
+    expect(detectWholeScriptSpoof('apple.com')).toBeNull()
+    expect(detectWholeScriptSpoof('пример.рф')).toBeNull()
+  })
+})
