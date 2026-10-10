@@ -16,9 +16,11 @@ export type RewardRule = {
   amount: number
   /** Lower number wins. */
   priority?: number
+  /** Max commission per sale in cents. */
+  capCents?: number
 }
 
-export type RewardDefault = { type: RewardType; amount: number }
+export type RewardDefault = { type: RewardType; amount: number; /** Max commission per sale in cents. */ capCents?: number }
 
 export const MAX_PERCENT_BPS = 10_000
 
@@ -55,7 +57,8 @@ export function computeReward(
   const spec = rule ?? fallback
   if (!spec) return { cents: 0, ruleId: null }
   const raw = spec.type === 'percent' ? Math.floor((saleValueCents * spec.amount) / MAX_PERCENT_BPS) : spec.amount
-  return { cents: Math.min(raw, Math.floor(saleValueCents)), ruleId: rule ? rule.id : null }
+  const cap = spec.capCents !== undefined && Number.isInteger(spec.capCents) && spec.capCents >= 0 ? spec.capCents : Infinity
+  return { cents: Math.min(raw, cap, Math.floor(saleValueCents)), ruleId: rule ? rule.id : null }
 }
 
 export type RewardScope = {
@@ -109,6 +112,8 @@ export function parseRules(input: unknown): { rules: RewardRule[] } | { error: s
     if (typeof r.amount !== 'number') return { error: `rules[${i}].amount must be a number` }
     if (r.priority !== undefined && (typeof r.priority !== 'number' || !Number.isFinite(r.priority)))
       return { error: `rules[${i}].priority must be a number` }
+    if (r.capCents !== undefined && (typeof r.capCents !== 'number' || !Number.isInteger(r.capCents) || r.capCents < 0))
+      return { error: `rules[${i}].capCents must be a non-negative integer` }
     const rule: RewardRule = {
       id: r.id,
       key: r.key,
@@ -116,6 +121,7 @@ export function parseRules(input: unknown): { rules: RewardRule[] } | { error: s
       type: r.type,
       amount: r.amount,
       ...(r.priority !== undefined ? { priority: r.priority as number } : {}),
+      ...(r.capCents !== undefined ? { capCents: r.capCents as number } : {}),
     }
     const err = validateRule(rule)
     if (err) return { error: `rules[${i}]: ${err}` }

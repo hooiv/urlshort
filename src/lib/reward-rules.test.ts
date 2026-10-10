@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { parseRules } from './reward-rules'
 import { computeReward, resolveReward, matchRule, validateRule, type RewardRule } from './reward-rules'
 
 const pro: RewardRule = { id: 'pro', key: 'plan', equals: ['pro', 'team'], type: 'percent', amount: 3000 }
@@ -85,5 +86,16 @@ describe('simulateRewards', () => {
       { cents: 2000, ruleId: 'pro', scopeIndex: 0 },
       { cents: 500, ruleId: null, scopeIndex: 1 },
     ])
+  })
+})
+
+describe('capCents', () => {
+  it('caps percent commissions and validates the cap', () => {
+    const rule = { id: 'pro', key: 'plan', equals: ['pro'], type: 'percent' as const, amount: 5000, capCents: 1500 }
+    expect(computeReward(10000, { plan: 'pro' }, [rule], null).cents).toBe(1500)
+    expect(computeReward(2000, { plan: 'pro' }, [rule], null).cents).toBe(1000)
+    expect(computeReward(10000, {}, [], { type: 'percent', amount: 5000, capCents: 100 }).cents).toBe(100)
+    expect(parseRules([{ ...rule, capCents: -1 }])).toEqual({ error: 'rules[0].capCents must be a non-negative integer' })
+    expect(parseRules([rule])).toEqual({ rules: [rule] })
   })
 })
