@@ -43,6 +43,13 @@ export function detectEmbeddedRedirect(url: URL): string | null {
   return null
 }
 
+/** Query/fragment values that smuggle an executable scheme for a downstream open-redirect or XSS sink. */
+export function hasScriptSchemeParam(url: URL): boolean {
+  const scheme = /^\s*(?:javascript|vbscript|data):/i
+  for (const [, value] of url.searchParams) if (scheme.test(value)) return true
+  return false
+}
+
 export function assessDestination(rawUrl: string): RiskAssessment {
   let url: URL
   try { url = new URL(rawUrl) } catch { return { status: 'review', reason: 'Destination URL could not be parsed' } }
@@ -74,6 +81,8 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if (/(?:\.zip|\.rar|\.7z|\.docm|\.xlsm)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Archive or macro-document download destination')
   if (detectEmbeddedRedirect(url)) reasons.push('Destination forwards to another site via a redirect parameter')
   if (SHORTENER_HOSTS.has(host) || SHORTENER_HOSTS.has(host.replace(/^www\./, ''))) reasons.push('Chained link-shortener destination')
+  if (host.split('.').length >= 7) reasons.push('Unusually deep subdomain chain')
+  if (hasScriptSchemeParam(url)) reasons.push('Query parameter carries a javascript:/data: payload')
   const tld = host.split('.').pop() ?? ''
   if (!isIP(host) && RISKY_TLDS.has(tld)) reasons.push('High-abuse top-level domain')
   const brand = detectBrandImpersonation(host)

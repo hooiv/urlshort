@@ -128,3 +128,15 @@ describe('double encoding and archives', () => {
     expect(assessDestination('https://example.com/zip-codes?q=50%25off').status).toBe('cleared')
   })
 })
+
+describe('deep subdomains and script-scheme params', () => {
+  it('flags 7+ label hosts', () => {
+    expect(assessDestination('https://a.b.c.d.e.f.example.com/').reason).toContain('deep subdomain')
+    expect(assessDestination('https://a.b.example.com/').status).toBe('cleared')
+  })
+  it('flags javascript:/data: query values', () => {
+    expect(assessDestination('https://example.com/x?cb=javascript:alert(1)').reason).toContain('payload')
+    expect(assessDestination('https://example.com/x?v=data:text/html,hi').status).toBe('review')
+    expect(assessDestination('https://example.com/x?v=metadata:1').status).toBe('cleared')
+  })
+})
