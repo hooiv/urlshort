@@ -159,3 +159,15 @@ describe('deep subdomains and script-scheme params', () => {
     expect(assessDestination('https://example.com/100%zz').status).toBe('cleared')
   })
 })
+
+describe('mixed-script hostnames', () => {
+  it('flags Latin+Cyrillic labels', () => {
+    const r = assessDestination('https://pаypal.com/')
+    expect(r.status).toBe('review')
+    expect(r.reason).toContain('Mixed-script')
+  })
+  it('does not flag pure Cyrillic or pure Latin', () => {
+    expect(assessDestination('https://пример.рф/').reason ?? '').not.toContain('Mixed-script')
+    expect(assessDestination('https://example.com/').status).toBe('cleared')
+  })
+})

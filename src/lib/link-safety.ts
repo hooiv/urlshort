@@ -1,4 +1,5 @@
 import { isIP } from 'node:net'
+import { domainToUnicode } from 'node:url'
 
 export type RiskAssessment = {
   status: 'cleared' | 'review'
@@ -90,6 +91,7 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if (/[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/.test(decodeURIComponentSafe(rawUrl))) reasons.push('Invisible or bidirectional-control characters in the URL')
   if (url.href.length > 2000) reasons.push('Unusually long URL')
   if (/\.\.|\.$/.test(url.hostname)) reasons.push('Malformed hostname (trailing or empty label)')
+  if (hasMixedScriptLabel(rawHostUnicode(url.hostname))) reasons.push('Mixed-script hostname label (possible homoglyph spoofing)')
   const tld = host.split('.').pop() ?? ''
   if (!isIP(host) && RISKY_TLDS.has(tld)) reasons.push('High-abuse top-level domain')
   const brand = detectBrandImpersonation(host)
@@ -97,4 +99,14 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if ((host.match(/-/g) ?? []).length >= 4) reasons.push('Excessively hyphenated hostname')
 
   return reasons.length ? { status: 'review', reason: reasons.join('; ') } : { status: 'cleared', reason: null }
+}
+
+function rawHostUnicode(hostname: string): string {
+  try { return domainToUnicode(hostname) || hostname } catch { return hostname }
+}
+
+/** True when a single DNS label mixes Latin with Cyrillic or Greek letters. */
+export function hasMixedScriptLabel(unicodeHost: string): boolean {
+  return unicodeHost.split('.').some((label) =>
+    /\p{Script=Latin}/u.test(label) && /[\p{Script=Cyrillic}\p{Script=Greek}]/u.test(label))
 }
