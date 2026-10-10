@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeReward, matchRule, validateRule, type RewardRule } from './reward-rules'
+import { computeReward, resolveReward, matchRule, validateRule, type RewardRule } from './reward-rules'
 
 const pro: RewardRule = { id: 'pro', key: 'plan', equals: ['pro', 'team'], type: 'percent', amount: 3000 }
 const any: RewardRule = { id: 'flat', key: 'plan', equals: ['pro'], type: 'flat', amount: 500, priority: -1 }
@@ -23,3 +23,27 @@ describe('reward rules', () => {
     expect(validateRule({ ...pro, amount: 10_001 })).toMatch(/exceeds/)
   })
 })
+
+describe('resolveReward scopes', () => {
+  const rule = { id: 'r', key: 'plan', equals: ['pro'], type: 'percent' as const, amount: 2000 }
+  it('link scope beats partner and program', () => {
+    const r = resolveReward(10000, { plan: 'pro' }, [
+      { rules: [rule] },
+      { fallback: { type: 'flat', amount: 500 } },
+      { fallback: { type: 'percent', amount: 1000 } },
+    ])
+    expect(r).toEqual({ cents: 2000, ruleId: 'r', scopeIndex: 0 })
+  })
+  it('falls through to the first scope with a fallback', () => {
+    const r = resolveReward(10000, { plan: 'free' }, [
+      { rules: [rule] },
+      { fallback: { type: 'flat', amount: 500 } },
+      { fallback: { type: 'percent', amount: 1000 } },
+    ])
+    expect(r).toEqual({ cents: 500, ruleId: null, scopeIndex: 1 })
+  })
+  it('returns zero when no scope applies', () => {
+    expect(resolveReward(10000, {}, [{ rules: [rule] }, {}])).toEqual({ cents: 0, ruleId: null, scopeIndex: null })
+  })
+})
+

@@ -57,3 +57,30 @@ export function computeReward(
   const raw = spec.type === 'percent' ? Math.floor((saleValueCents * spec.amount) / MAX_PERCENT_BPS) : spec.amount
   return { cents: Math.min(raw, Math.floor(saleValueCents)), ruleId: rule ? rule.id : null }
 }
+
+export type RewardScope = {
+  /** Rules and default for one scope; null/undefined means the scope sets nothing. */
+  rules?: RewardRule[] | null
+  fallback?: RewardDefault | null
+}
+
+/**
+ * Resolve the commission across scopes ordered most-specific first
+ * (link, then partner, then program). The first scope that either matches
+ * a rule or defines a fallback decides; less specific scopes are ignored.
+ */
+export function resolveReward(
+  saleValueCents: number,
+  metadata: Record<string, unknown>,
+  scopes: RewardScope[],
+): { cents: number; ruleId: string | null; scopeIndex: number | null } {
+  for (let i = 0; i < scopes.length; i++) {
+    const scope = scopes[i]
+    const rules = scope.rules ?? []
+    const fallback = scope.fallback ?? null
+    if (!matchRule(rules, metadata) && !fallback) continue
+    const { cents, ruleId } = computeReward(saleValueCents, metadata, rules, fallback)
+    return { cents, ruleId, scopeIndex: i }
+  }
+  return { cents: 0, ruleId: null, scopeIndex: null }
+}
