@@ -280,3 +280,16 @@ describe('parseRules equals normalisation', () => {
     expect('rules' in out && out.rules[0].equals).toEqual(['1', 'pro'])
   })
 })
+
+describe('findShadowedRules priority ordering', () => {
+  it('lets a lower priority number shadow a later-listed broader rule', () => {
+    const broad = { id: 'broad', key: 'plan', equals: ['pro', 'team'], type: 'flat' as const, amount: 100, priority: 0 }
+    const narrow = { id: 'narrow', key: 'plan', equals: ['pro'], type: 'flat' as const, amount: 500, priority: 1 }
+    expect(findShadowedRules([narrow, broad])).toEqual([{ ruleId: 'narrow', shadowedBy: 'broad' }])
+  })
+  it('does not flag a narrower rule that runs first', () => {
+    const broad = { id: 'broad', key: 'plan', equals: ['pro', 'team'], type: 'flat' as const, amount: 100, priority: 1 }
+    const narrow = { id: 'narrow', key: 'plan', equals: ['pro'], type: 'flat' as const, amount: 500, priority: 0 }
+    expect(findShadowedRules([broad, narrow])).toEqual([])
+  })
+})
