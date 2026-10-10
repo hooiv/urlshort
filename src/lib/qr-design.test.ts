@@ -84,5 +84,7 @@ describe('withScanSource', () => {
     expect(withScanSource('https://a.test/x', true)).toBe('https://a.test/x?utm_medium=qr&utm_source=qr')
     expect(withScanSource('https://a.test/x?utm_source=poster', true)).toBe('https://a.test/x?utm_source=poster&utm_medium=qr')
     expect(withScanSource('https://a.test/x', false)).toBe('https://a.test/x')
+    expect(withScanSource('not a url', true)).toBe('not a url')
+    expect(withScanSource('https://a.test/x#top', true)).toBe('https://a.test/x?utm_medium=qr&utm_source=qr#top')
   })
 })

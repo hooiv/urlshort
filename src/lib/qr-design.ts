@@ -154,7 +154,12 @@ export async function renderQrPng(text: string, d: QrDesign): Promise<Buffer> {
 /** Append a scan-source marker so QR scans are separable in analytics without a second link. */
 export function withScanSource(url: string, enabled: boolean): string {
   if (!enabled) return url
-  const u = new URL(url)
+  let u: URL
+  try {
+    u = new URL(url)
+  } catch {
+    return url
+  }
   u.searchParams.set('utm_medium', 'qr')
   if (!u.searchParams.has('utm_source')) u.searchParams.set('utm_source', 'qr')
   return u.toString()
