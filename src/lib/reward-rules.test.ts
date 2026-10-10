@@ -273,3 +273,10 @@ describe('describeDefault', () => {
     expect(describeDefault({ type: 'flat', amount: 500, capCents: 500 })).toBe('$5.00 on every other sale, capped at $5.00')
   })
 })
+
+describe('parseRules equals normalisation', () => {
+  it('dedupes equals values after string coercion', () => {
+    const out = parseRules([{ id: 'a', key: 'plan', equals: ['1', 1, 'pro', 'pro'], type: 'flat', amount: 100 }])
+    expect('rules' in out && out.rules[0].equals).toEqual(['1', 'pro'])
+  })
+})

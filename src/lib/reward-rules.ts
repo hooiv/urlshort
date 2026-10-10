@@ -147,7 +147,7 @@ export function parseRules(input: unknown): { rules: RewardRule[] } | { error: s
     const rule: RewardRule = {
       id: r.id,
       key: r.key,
-      equals: r.equals.map(String),
+      equals: [...new Set(r.equals.map(String))],
       type: r.type,
       amount: r.amount,
       ...(r.priority !== undefined ? { priority: r.priority as number } : {}),
