@@ -244,3 +244,11 @@ describe('diffRules value order', () => {
     expect(diffRules(mk(['pro', 'team']), mk(['team', 'pro']))).toEqual({ added: [], removed: [], changed: [] })
   })
 })
+
+describe('parseRules unsafe integers', () => {
+  const base = { id: 'a', key: 'plan', equals: ['pro'], type: 'flat', amount: 100 }
+  it.each(['capCents', 'minSaleCents', 'maxSaleCents', 'amount'])('rejects %s beyond the safe integer range', (field) => {
+    const res = parseRules([{ ...base, [field]: 1e300 }])
+    expect('error' in res).toBe(true)
+  })
+})

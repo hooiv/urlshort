@@ -31,7 +31,7 @@ export const MAX_PERCENT_BPS = 10_000
 export function validateRule(rule: RewardRule): string | null {
   if (!rule.key.trim()) return 'key is required'
   if (rule.equals.length === 0) return 'equals needs at least one value'
-  if (!Number.isInteger(rule.amount) || rule.amount < 0) return 'amount must be a non-negative integer'
+  if (!Number.isSafeInteger(rule.amount) || rule.amount < 0) return 'amount must be a non-negative integer'
   if (rule.type === 'percent' && rule.amount > MAX_PERCENT_BPS) return 'percent exceeds 10000 basis points'
   return null
 }
@@ -136,11 +136,11 @@ export function parseRules(input: unknown): { rules: RewardRule[] } | { error: s
     if (typeof r.amount !== 'number') return { error: `rules[${i}].amount must be a number` }
     if (r.priority !== undefined && (typeof r.priority !== 'number' || !Number.isFinite(r.priority)))
       return { error: `rules[${i}].priority must be a number` }
-    if (r.capCents !== undefined && (typeof r.capCents !== 'number' || !Number.isInteger(r.capCents) || r.capCents < 0))
+    if (r.capCents !== undefined && (typeof r.capCents !== 'number' || !Number.isSafeInteger(r.capCents) || r.capCents < 0))
       return { error: `rules[${i}].capCents must be a non-negative integer` }
-    if (r.minSaleCents !== undefined && (typeof r.minSaleCents !== 'number' || !Number.isInteger(r.minSaleCents) || r.minSaleCents < 0))
+    if (r.minSaleCents !== undefined && (typeof r.minSaleCents !== 'number' || !Number.isSafeInteger(r.minSaleCents) || r.minSaleCents < 0))
       return { error: `rules[${i}].minSaleCents must be a non-negative integer` }
-    if (r.maxSaleCents !== undefined && (typeof r.maxSaleCents !== 'number' || !Number.isInteger(r.maxSaleCents) || r.maxSaleCents < 0))
+    if (r.maxSaleCents !== undefined && (typeof r.maxSaleCents !== 'number' || !Number.isSafeInteger(r.maxSaleCents) || r.maxSaleCents < 0))
       return { error: `rules[${i}].maxSaleCents must be a non-negative integer` }
     if (r.minSaleCents !== undefined && r.maxSaleCents !== undefined && (r.minSaleCents as number) > (r.maxSaleCents as number))
       return { error: `rules[${i}].minSaleCents cannot exceed maxSaleCents` }
