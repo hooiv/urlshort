@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseRules, findShadowedRules } from './reward-rules'
-import { computeReward, describeRule, resolveReward, matchRule, validateRule, type RewardRule } from './reward-rules'
+import { describeDefault, computeReward, describeRule, resolveReward, matchRule, validateRule, type RewardRule } from './reward-rules'
 
 const pro: RewardRule = { id: 'pro', key: 'plan', equals: ['pro', 'team'], type: 'percent', amount: 3000 }
 const any: RewardRule = { id: 'flat', key: 'plan', equals: ['pro'], type: 'flat', amount: 500, priority: -1 }
@@ -264,5 +264,12 @@ describe('parseRules numeric edge cases', () => {
   })
   it('rejects empty equals', () => {
     expect('error' in parseRules([{ ...base, equals: [] }])).toBe(true)
+  })
+})
+
+describe('describeDefault', () => {
+  it('describes percent and flat defaults with optional cap', () => {
+    expect(describeDefault({ type: 'percent', amount: 1250 })).toBe('12.5% on every other sale')
+    expect(describeDefault({ type: 'flat', amount: 500, capCents: 500 })).toBe('$5.00 on every other sale, capped at $5.00')
   })
 })

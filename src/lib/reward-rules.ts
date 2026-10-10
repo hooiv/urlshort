@@ -217,6 +217,12 @@ export function describeRule(rule: RewardRule): string {
   return parts.join(', ')
 }
 
+/** Plain-English summary of the fallback commission applied when no rule matches. */
+export function describeDefault(d: RewardDefault): string {
+  const payout = d.type === 'percent' ? `${(d.amount / 100).toString()}%` : formatMoney(d.amount)
+  return d.capCents !== undefined ? `${payout} on every other sale, capped at ${formatMoney(d.capCents)}` : `${payout} on every other sale`
+}
+
 /**
  * Compare two rule sets by id so audit entries can say what an edit changed.
  * A rule counts as changed when any field differs (deep compare on its JSON form).
