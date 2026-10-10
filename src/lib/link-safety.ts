@@ -9,6 +9,7 @@ export type RiskAssessment = {
 const SHORTENER_HOSTS = new Set(['bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'ow.ly', 'is.gd', 'buff.ly', 'rebrand.ly', 'cutt.ly', 'shorturl.at', 'rb.gy', 'tiny.cc', 'bl.ink', 'lnkd.in', 'dub.sh', 'short.io', 'v.gd', 'adf.ly', 't.ly', 'qr.ae', 'urlz.fr'])
 const RISKY_TLDS = new Set(['zip', 'mov', 'top', 'xyz', 'click', 'country', 'gq', 'tk', 'ml', 'cf', 'work', 'support'])
 const TUNNEL_SUFFIXES = ['duckdns.org', 'ngrok.io', 'ngrok-free.app', 'ngrok.app', 'trycloudflare.com', 'loca.lt', 'serveo.net', 'no-ip.org', 'ddns.net', 'hopto.org', 'zapto.org']
+const FREE_HOSTING_SUFFIXES = ['weebly.com', 'wixsite.com', '000webhostapp.com', 'glitch.me', 'web.app', 'firebaseapp.com', 'pages.dev', 'workers.dev', 'netlify.app', 'herokuapp.com', 'blogspot.com']
 const BRANDS = ['paypal', 'microsoft', 'apple', 'google', 'amazon', 'netflix', 'facebook', 'instagram', 'binance', 'coinbase', 'metamask', 'dropbox', 'docusign']
 
 /** Fold common look-alike characters so `paypa1`/`g00gle` compare as the brand. */
@@ -97,6 +98,7 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if (/\.(?:iso|img|vhd|vhdx|dmg)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Disk-image download destination')
   if (/\.(?:docm|xlsm|pptm|dotm|xlam|ppam|wsf|vbs|vbe|hta|scr|lnk)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Macro-enabled document or script-file destination')
   if (TUNNEL_SUFFIXES.some((t) => host === t || host.endsWith(`.${t}`))) reasons.push('Temporary tunnel or dynamic-DNS hostname')
+  if (BRANDS.some((b) => FREE_HOSTING_SUFFIXES.some((f) => host.endsWith(`.${f}`) && host.slice(0, -f.length - 1).split('.').some((l) => l.includes(b))))) reasons.push('Brand name on a free-hosting subdomain (possible phishing page)')
   if (url.href.length > 2000) reasons.push('Unusually long URL')
   if (/\.\.|\.$/.test(url.hostname)) reasons.push('Malformed hostname (trailing or empty label)')
   if (hasMixedScriptLabel(rawHostUnicode(url.hostname))) reasons.push('Mixed-script hostname label (possible homoglyph spoofing)')

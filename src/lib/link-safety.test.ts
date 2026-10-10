@@ -238,3 +238,12 @@ describe('tunnel and dynamic-DNS hosts', () => {
     expect(assessDestination('https://myduckdns.org.example.com/').reason).toBeNull()
   })
 })
+
+describe('free-hosting brand phishing', () => {
+  it('flags brand names on free-hosting subdomains', () => {
+    expect(assessDestination('https://paypal-login.pages.dev/x').reason).toMatch(/free-hosting/)
+  })
+  it('does not flag unrelated free-hosting sites', () => {
+    expect(assessDestination('https://my-portfolio.pages.dev/').reason ?? '').not.toMatch(/free-hosting/)
+  })
+})
