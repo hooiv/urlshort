@@ -38,4 +38,14 @@ describe('audit export', () => {
     expect(a.after).toEqual({ a: 2 })
     expect(a).not.toHaveProperty('ipHash')
   })
+
+  it('applies actor, open-ended range and case-insensitive search filters', () => {
+    const from = new Date('2026-01-01T00:00:00.000Z')
+    const where = workspaceAuditWhere('w1', [], { actorUserId: 'u1', from, search: 'Delete' })
+    const and = (where as { AND: unknown[] }).AND
+    expect(and).toContainEqual({ actorUserId: 'u1' })
+    expect(and).toContainEqual({ createdAt: { gte: from } })
+    const search = and.find((c) => JSON.stringify(c).includes('insensitive')) as { OR: unknown[] }
+    expect(search.OR).toHaveLength(4)
+  })
 })
