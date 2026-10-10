@@ -91,6 +91,7 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if (/[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/.test(decodeURIComponentSafe(rawUrl))) reasons.push('Invisible or bidirectional-control characters in the URL')
   if (/\.(?:pdf|docx?|xlsx?|pptx?|jpe?g|png|txt|mp4)\.(?:exe|scr|msi|apk|bat|cmd|js|jar|vbs|ps1|lnk|hta)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Double-extension file masquerading as a document')
   if (/^#?\/*(?:https?:)?\/\/[^/]+\.[a-z]{2,}/i.test(url.hash) || /^#.*https?%3a/i.test(url.hash)) reasons.push('URL fragment mimics another destination')
+  if (/(?:\.msix|\.msixbundle|\.appx|\.appinstaller|\.pkg|\.deb|\.rpm|\.jnlp|\.reg|\.dll)(?:$|[?#/])/i.test(url.pathname + url.search + url.hash)) reasons.push('Installer or system-package file destination')
   if (url.href.length > 2000) reasons.push('Unusually long URL')
   if (/\.\.|\.$/.test(url.hostname)) reasons.push('Malformed hostname (trailing or empty label)')
   if (hasMixedScriptLabel(rawHostUnicode(url.hostname))) reasons.push('Mixed-script hostname label (possible homoglyph spoofing)')

@@ -185,4 +185,19 @@ describe('double-extension masquerade', () => {
     expect(assessDestination('https://example.com/#//paypal.com/login').reason).toContain('fragment mimics')
     expect(assessDestination('https://example.com/#section-2').status).toBe('cleared')
   })
+
+  it('flags installer and system-package file destinations', () => {
+    for (const url of [
+      'https://example.com/app.msix',
+      'https://example.com/get?f=tool.pkg',
+      'https://example.com/x.jnlp#go',
+      'https://example.com/patch.reg/',
+      'https://example.com/lib.dll',
+    ]) {
+      const r = assessDestination(url)
+      expect(r.status).toBe('review')
+      expect(r.reason).toMatch(/installer/i)
+    }
+    expect(assessDestination('https://example.com/packages/overview').status).toBe('cleared')
+  })
 })
