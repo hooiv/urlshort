@@ -255,4 +255,11 @@ describe('ipfs-hosted brand phishing', () => {
   it('allows plain IPFS content', () => {
     expect(assessDestination('https://ipfs.io/ipfs/Qm123/readme.html').reason ?? '').not.toMatch(/IPFS/)
   })
+
+  it('flags brand names in cloud-storage bucket hostnames', () => {
+    const r = assessDestination('https://paypal-login.s3.amazonaws.com/index.html')
+    expect(r.status).toBe('review')
+    expect(r.reason).toContain('cloud-storage bucket')
+    expect(assessDestination('https://assets-site.s3.amazonaws.com/a.png').status).toBe('cleared')
+  })
 })
