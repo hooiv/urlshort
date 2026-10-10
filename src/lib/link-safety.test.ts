@@ -139,4 +139,16 @@ describe('deep subdomains and script-scheme params', () => {
     expect(assessDestination('https://example.com/x?v=data:text/html,hi').status).toBe('review')
     expect(assessDestination('https://example.com/x?v=metadata:1').status).toBe('cleared')
   })
+
+  it('flags unusually long URLs', () => {
+    const r = assessDestination('https://example.com/?q=' + 'a'.repeat(2100))
+    expect(r.status).toBe('review')
+    expect(r.reason).toMatch(/long URL/)
+  })
+
+  it('flags trailing-dot hostnames', () => {
+    const r = assessDestination('https://example.com./x')
+    expect(r.status).toBe('review')
+    expect(r.reason).toMatch(/Malformed hostname/)
+  })
 })

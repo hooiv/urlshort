@@ -83,6 +83,8 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if (SHORTENER_HOSTS.has(host) || SHORTENER_HOSTS.has(host.replace(/^www\./, ''))) reasons.push('Chained link-shortener destination')
   if (host.split('.').length >= 7) reasons.push('Unusually deep subdomain chain')
   if (hasScriptSchemeParam(url)) reasons.push('Query parameter carries a javascript:/data: payload')
+  if (url.href.length > 2000) reasons.push('Unusually long URL')
+  if (/\.\.|\.$/.test(host) ) reasons.push('Malformed hostname (trailing or empty label)')
   const tld = host.split('.').pop() ?? ''
   if (!isIP(host) && RISKY_TLDS.has(tld)) reasons.push('High-abuse top-level domain')
   const brand = detectBrandImpersonation(host)
