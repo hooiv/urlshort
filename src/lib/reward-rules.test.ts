@@ -99,3 +99,19 @@ describe('capCents', () => {
     expect(parseRules([rule])).toEqual({ rules: [rule] })
   })
 })
+
+import { parseDefault as parseDefaultFn } from './reward-rules'
+describe('parseDefault', () => {
+  it('accepts null and valid defaults, dropping unknown keys', () => {
+    expect(parseDefaultFn(null)).toEqual({ fallback: null })
+    expect(parseDefaultFn({ type: 'percent', amount: 1500, capCents: 500, junk: 1 })).toEqual({
+      fallback: { type: 'percent', amount: 1500, capCents: 500 },
+    })
+  })
+  it('rejects malformed defaults', () => {
+    for (const bad of ['x', [], { type: 'x', amount: 1 }, { type: 'flat', amount: -1 }, { type: 'flat', amount: 1.5 },
+      { type: 'percent', amount: 10001 }, { type: 'flat', amount: 1, capCents: -1 }]) {
+      expect('error' in parseDefaultFn(bad)).toBe(true)
+    }
+  })
+})

@@ -90,6 +90,20 @@ export function resolveReward(
 
 export const MAX_RULES_PER_SCOPE = 25
 
+/** Parse an untrusted default commission (API body or stored column). null clears it. */
+export function parseDefault(input: unknown): { fallback: RewardDefault | null } | { error: string } {
+  if (input === null || input === undefined) return { fallback: null }
+  if (typeof input !== 'object' || Array.isArray(input)) return { error: 'default must be an object or null' }
+  const d = input as Record<string, unknown>
+  if (d.type !== 'percent' && d.type !== 'flat') return { error: 'default.type must be percent or flat' }
+  if (typeof d.amount !== 'number' || !Number.isInteger(d.amount) || d.amount < 0)
+    return { error: 'default.amount must be a non-negative integer' }
+  if (d.type === 'percent' && d.amount > MAX_PERCENT_BPS) return { error: 'default percent exceeds 10000 basis points' }
+  if (d.capCents !== undefined && (typeof d.capCents !== 'number' || !Number.isInteger(d.capCents) || d.capCents < 0))
+    return { error: 'default.capCents must be a non-negative integer' }
+  return { fallback: { type: d.type, amount: d.amount, ...(d.capCents !== undefined ? { capCents: d.capCents as number } : {}) } }
+}
+
 /**
  * Parse untrusted JSON (API body or stored column) into validated rules.
  * Returns the first error with its index so callers can reject the whole write.
