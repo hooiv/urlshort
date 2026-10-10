@@ -236,3 +236,11 @@ describe('diffRules', () => {
     expect(diffRules([{ id: 'a', ...base }], [{ id: 'a', ...base }])).toEqual({ added: [], removed: [], changed: [] })
   })
 })
+
+describe('diffRules value order', () => {
+  it('ignores reordering of equals values', async () => {
+    const { diffRules } = await import('./reward-rules')
+    const mk = (equals: string[]) => [{ id: 'a', key: 'plan', equals, type: 'percent' as const, amount: 1000 }]
+    expect(diffRules(mk(['pro', 'team']), mk(['team', 'pro']))).toEqual({ added: [], removed: [], changed: [] })
+  })
+})

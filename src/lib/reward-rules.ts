@@ -223,7 +223,7 @@ export function describeRule(rule: RewardRule): string {
  */
 export function diffRules(before: RewardRule[], after: RewardRule[]): { added: string[]; removed: string[]; changed: string[] } {
   const norm = (r: RewardRule) =>
-    JSON.stringify([r.key, r.equals, r.type, r.amount, r.priority ?? null, r.capCents ?? null, r.minSaleCents ?? null, r.maxSaleCents ?? null])
+    JSON.stringify([r.key, [...r.equals].sort(), r.type, r.amount, r.priority ?? null, r.capCents ?? null, r.minSaleCents ?? null, r.maxSaleCents ?? null])
   const b = new Map(before.map((r) => [r.id, norm(r)]))
   const a = new Map(after.map((r) => [r.id, norm(r)]))
   return {
