@@ -159,3 +159,14 @@ describe('findShadowedRules', () => {
     expect(findShadowedRules([mk('a', ['pro'], { maxSaleCents: 50 }), mk('b', ['pro'], { maxSaleCents: 500 })])).toEqual([])
   })
 })
+
+describe('resolveReward band fall-through', () => {
+  it('falls through to the next scope when the link rule band excludes the sale', () => {
+    const linkRule: RewardRule = { id: 'l', key: 'plan', equals: ['pro'], type: 'flat', amount: 500, minSaleCents: 10_000 }
+    const out = resolveReward(5_000, { plan: 'pro' }, [
+      { rules: [linkRule] },
+      { fallback: { type: 'flat', amount: 100 } },
+    ])
+    expect(out).toEqual({ cents: 100, ruleId: null, scopeIndex: 1 })
+  })
+})

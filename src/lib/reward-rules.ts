@@ -87,7 +87,7 @@ export function resolveReward(
     const scope = scopes[i]
     const rules = scope.rules ?? []
     const fallback = scope.fallback ?? null
-    if (!matchRule(rules, metadata) && !fallback) continue
+    if (!matchRule(rules, metadata, saleValueCents) && !fallback) continue
     const { cents, ruleId } = computeReward(saleValueCents, metadata, rules, fallback)
     return { cents, ruleId, scopeIndex: i }
   }
