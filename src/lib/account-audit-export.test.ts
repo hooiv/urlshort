@@ -26,4 +26,11 @@ describe('audit export', () => {
     expect(parseDateBound('nope', false)).toBeNull()
     expect(parseDateBound(null, false)).toBeNull()
   })
+
+  it('rejects impossible calendar dates and passes null/empty cells through', () => {
+    expect(parseDateBound('2026-02-31', false)).toBeNull()
+    expect(csvCell(null)).toBe('')
+    expect(csvCell('line1\nline2')).toBe('"line1\nline2"')
+    expect(auditRowsToNdjson([])).toBe('')
+  })
 })
