@@ -4,6 +4,11 @@ import { auditToCsv, auditToJson, parseAuditRange, workspaceAuditWhere, type Aud
 const row = (o: Partial<AuditRow> = {}): AuditRow => ({ id: 'e1', createdAt: new Date('2026-10-01T10:00:00Z'), action: 'link.update', actorType: 'user', actorUserId: 'u1', urlId: 'l1', resourceType: 'link', resourceId: 'l1', ipHash: 'secret', userAgent: 'UA', beforeJson: '{"a":1}', afterJson: '{"a":2}', metadataJson: null, ...o })
 
 describe('audit export', () => {
+  it('treats a same-day range as one full UTC day and accepts leap days', () => {
+    const r = parseAuditRange('2028-02-29', '2028-02-29')
+    expect(r.to!.getTime() - r.from!.getTime()).toBe(86_400_000)
+    expect(() => parseAuditRange('2027-02-29', null)).toThrow(/real date/)
+  })
   it('parses inclusive ranges into an exclusive upper bound', () => {
     const r = parseAuditRange('2026-10-01', '2026-10-02')
     expect(r.from?.toISOString()).toBe('2026-10-01T00:00:00.000Z')
