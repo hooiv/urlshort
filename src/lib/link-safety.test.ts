@@ -171,3 +171,13 @@ describe('mixed-script hostnames', () => {
     expect(assessDestination('https://example.com/').status).toBe('cleared')
   })
 })
+
+describe('double-extension masquerade', () => {
+  it('flags invoice.pdf.exe style paths', () => {
+    expect(assessDestination('https://example.com/files/invoice.pdf.exe').reason).toContain('Double-extension')
+    expect(assessDestination('https://example.com/a/report.docx.js?x=1').reason).toContain('Double-extension')
+  })
+  it('does not flag ordinary documents', () => {
+    expect(assessDestination('https://example.com/files/invoice.pdf').status).toBe('cleared')
+  })
+})
