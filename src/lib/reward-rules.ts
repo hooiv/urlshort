@@ -84,3 +84,42 @@ export function resolveReward(
   }
   return { cents: 0, ruleId: null, scopeIndex: null }
 }
+
+export const MAX_RULES_PER_SCOPE = 25
+
+/**
+ * Parse untrusted JSON (API body or stored column) into validated rules.
+ * Returns the first error with its index so callers can reject the whole write.
+ */
+export function parseRules(input: unknown): { rules: RewardRule[] } | { error: string } {
+  if (!Array.isArray(input)) return { error: 'rules must be an array' }
+  if (input.length > MAX_RULES_PER_SCOPE) return { error: `at most ${MAX_RULES_PER_SCOPE} rules per scope` }
+  const rules: RewardRule[] = []
+  const ids = new Set<string>()
+  for (let i = 0; i < input.length; i++) {
+    const r = input[i] as Record<string, unknown> | null
+    if (!r || typeof r !== 'object') return { error: `rules[${i}] must be an object` }
+    if (typeof r.id !== 'string' || !r.id) return { error: `rules[${i}].id is required` }
+    if (ids.has(r.id)) return { error: `rules[${i}].id is duplicated` }
+    ids.add(r.id)
+    if (typeof r.key !== 'string') return { error: `rules[${i}].key must be a string` }
+    if (!Array.isArray(r.equals) || !r.equals.every((v) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean'))
+      return { error: `rules[${i}].equals must be an array of scalars` }
+    if (r.type !== 'percent' && r.type !== 'flat') return { error: `rules[${i}].type must be percent or flat` }
+    if (typeof r.amount !== 'number') return { error: `rules[${i}].amount must be a number` }
+    if (r.priority !== undefined && (typeof r.priority !== 'number' || !Number.isFinite(r.priority)))
+      return { error: `rules[${i}].priority must be a number` }
+    const rule: RewardRule = {
+      id: r.id,
+      key: r.key,
+      equals: r.equals.map(String),
+      type: r.type,
+      amount: r.amount,
+      ...(r.priority !== undefined ? { priority: r.priority as number } : {}),
+    }
+    const err = validateRule(rule)
+    if (err) return { error: `rules[${i}]: ${err}` }
+    rules.push(rule)
+  }
+  return { rules }
+}

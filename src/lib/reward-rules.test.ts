@@ -47,3 +47,24 @@ describe('resolveReward scopes', () => {
   })
 })
 
+
+import { parseRules as parseRulesFn } from './reward-rules'
+import { describe as d2, it as it2, expect as expect2 } from 'vitest'
+
+d2('parseRules', () => {
+  const ok = { id: 'a', key: 'plan', equals: ['pro', 3], type: 'percent', amount: 1000 }
+  it2('normalizes valid rules', () => {
+    expect2(parseRulesFn([ok])).toEqual({ rules: [{ ...ok, equals: ['pro', '3'] }] })
+  })
+  it2('rejects bad shapes with index', () => {
+    expect2(parseRulesFn('x')).toEqual({ error: 'rules must be an array' })
+    expect2(parseRulesFn([ok, ok])).toEqual({ error: 'rules[1].id is duplicated' })
+    expect2(parseRulesFn([{ ...ok, type: 'x' }])).toEqual({ error: 'rules[0].type must be percent or flat' })
+    expect2(parseRulesFn([{ ...ok, amount: 20000 }])).toEqual({ error: 'rules[0]: percent exceeds 10000 basis points' })
+    expect2(parseRulesFn([{ ...ok, equals: [{}] }])).toEqual({ error: 'rules[0].equals must be an array of scalars' })
+  })
+  it2('caps rule count', () => {
+    const many = Array.from({ length: 26 }, (_, i) => ({ ...ok, id: `r${i}` }))
+    expect2(parseRulesFn(many)).toEqual({ error: 'at most 25 rules per scope' })
+  })
+})
