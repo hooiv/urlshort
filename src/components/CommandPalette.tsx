@@ -22,6 +22,7 @@ const ALL_ACTIONS = [
   { name: 'Bio Pages', path: '/manage/bio' },
   { name: 'Webhooks', path: '/manage/webhooks' },
   { name: 'UTM Templates', path: '/manage/utm' },
+  { name: 'Audit Log', path: '/manage/audit' },
   { name: 'Revenue Attribution', path: '/manage/integrations' },
   { name: 'Bulk Import CSV', path: '/bulk' },
 ]
