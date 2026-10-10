@@ -65,5 +65,8 @@ export function parseDateBound(raw: string | null, endOfDay: boolean): Date | nu
   if (!raw) return null
   const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(raw)
   const d = new Date(dateOnly ? `${raw}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}Z` : raw)
-  return Number.isNaN(d.getTime()) ? null : d
+  if (Number.isNaN(d.getTime())) return null
+  // Date rolls 2026-02-31 over to March; reject it instead of exporting the wrong range.
+  if (dateOnly && d.toISOString().slice(0, 10) !== raw) return null
+  return d
 }
