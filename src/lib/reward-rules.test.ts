@@ -351,3 +351,14 @@ describe('explainMatch', () => {
     expect(o.reason).toContain('not a scalar')
   })
 })
+
+import { validateRule as validateRuleBounds } from './reward-rules'
+describe('validateRule sale bounds', () => {
+  const base = { id: 'r', key: 'plan', equals: ['pro'], type: 'flat' as const, amount: 100 }
+  it('rejects min greater than max', () => {
+    expect(validateRuleBounds({ ...base, minSaleCents: 500, maxSaleCents: 100 })).toMatch(/cannot exceed/)
+  })
+  it('accepts equal bounds', () => {
+    expect(validateRuleBounds({ ...base, minSaleCents: 100, maxSaleCents: 100 })).toBeNull()
+  })
+})

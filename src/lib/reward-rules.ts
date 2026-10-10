@@ -33,6 +33,9 @@ export function validateRule(rule: RewardRule): string | null {
   if (rule.equals.length === 0) return 'equals needs at least one value'
   if (!Number.isSafeInteger(rule.amount) || rule.amount < 0) return 'amount must be a non-negative integer'
   if (rule.type === 'percent' && rule.amount > MAX_PERCENT_BPS) return 'percent exceeds 10000 basis points'
+  if (rule.minSaleCents !== undefined && rule.maxSaleCents !== undefined && rule.minSaleCents > rule.maxSaleCents) {
+    return 'minSaleCents cannot exceed maxSaleCents'
+  }
   return null
 }
 
