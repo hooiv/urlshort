@@ -2,7 +2,9 @@
  * Lightweight, zero-dependency, RFC 4180 compliant CSV parser and serializer.
  */
 
-export function parseCsv(text: string): string[][] {
+export function parseCsv(input: string): string[][] {
+  // Excel/Sheets exports prefix a UTF-8 BOM that would corrupt the first header name.
+  const text = input.charCodeAt(0) === 0xfeff ? input.slice(1) : input
   const result: string[][] = []
   let row: string[] = []
   let inQuotes = false

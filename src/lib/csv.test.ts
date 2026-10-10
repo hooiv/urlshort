@@ -35,4 +35,8 @@ describe('CSV Parser and Serializer', () => {
     const serialized = serializeCsv(data)
     expect(serialized).toBe('"URL","Title","Tags"\n"https://example.com","Acme & Co, Inc.","tag1, tag2"')
   })
+
+  it('strips a leading UTF-8 BOM so the first header is intact', () => {
+    expect(parseCsv('\uFEFFshort_url,clicks\nabc,3')[0]).toEqual(['short_url', 'clicks'])
+  })
 })
