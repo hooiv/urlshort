@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseRules, findShadowedRules } from './reward-rules'
-import { computeReward, resolveReward, matchRule, validateRule, type RewardRule } from './reward-rules'
+import { computeReward, describeRule, resolveReward, matchRule, validateRule, type RewardRule } from './reward-rules'
 
 const pro: RewardRule = { id: 'pro', key: 'plan', equals: ['pro', 'team'], type: 'percent', amount: 3000 }
 const any: RewardRule = { id: 'flat', key: 'plan', equals: ['pro'], type: 'flat', amount: 500, priority: -1 }
@@ -168,5 +168,19 @@ describe('resolveReward band fall-through', () => {
       { fallback: { type: 'flat', amount: 100 } },
     ])
     expect(out).toEqual({ cents: 100, ruleId: null, scopeIndex: 1 })
+  })
+})
+
+
+describe('describeRule', () => {
+  it('describes percent rule with band and cap', () => {
+    expect(
+      describeRule({ id: 'a', key: 'plan', equals: ['pro', 'team'], type: 'percent', amount: 2550, minSaleCents: 1000, maxSaleCents: 50000, capCents: 5000 }),
+    ).toBe('25.5% when plan is "pro" or "team", for sales of $10.00 to $500.00, capped at $50.00')
+  })
+  it('describes flat rule with only a minimum', () => {
+    expect(describeRule({ id: 'b', key: 'tier', equals: ['gold'], type: 'flat', amount: 1500, minSaleCents: 100 })).toBe(
+      '$15.00 when tier is "gold", for sales of at least $1.00',
+    )
   })
 })

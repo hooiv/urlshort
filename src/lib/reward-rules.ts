@@ -195,3 +195,20 @@ export function findShadowedRules(rules: RewardRule[]): { ruleId: string; shadow
   }
   return out
 }
+
+function formatMoney(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`
+}
+
+/** Plain-English summary of a rule for dashboards and audit entries. */
+export function describeRule(rule: RewardRule): string {
+  const payout = rule.type === 'percent' ? `${(rule.amount / 100).toString()}%` : formatMoney(rule.amount)
+  const values = rule.equals.map((v) => `"${v}"`).join(' or ')
+  const parts = [`${payout} when ${rule.key} is ${values}`]
+  if (rule.minSaleCents !== undefined && rule.maxSaleCents !== undefined)
+    parts.push(`for sales of ${formatMoney(rule.minSaleCents)} to ${formatMoney(rule.maxSaleCents)}`)
+  else if (rule.minSaleCents !== undefined) parts.push(`for sales of at least ${formatMoney(rule.minSaleCents)}`)
+  else if (rule.maxSaleCents !== undefined) parts.push(`for sales of at most ${formatMoney(rule.maxSaleCents)}`)
+  if (rule.capCents !== undefined) parts.push(`capped at ${formatMoney(rule.capCents)}`)
+  return parts.join(', ')
+}
