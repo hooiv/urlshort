@@ -61,3 +61,14 @@ describe('applyUtmTemplate blank params', () => {
     expect(u.searchParams.get('utm_medium')).toBe('cpc')
   })
 })
+
+describe('normalizeUtmValues', () => {
+  it('returns all five keys, null for missing or blank', async () => {
+    const { normalizeUtmValues, UTM_KEYS } = await import('./utm-templates')
+    const out = normalizeUtmValues({ source: '  ', medium: 'email' })
+    expect(Object.keys(out).sort()).toEqual([...UTM_KEYS].sort())
+    expect(out.source).toBeNull()
+    expect(out.term).toBeNull()
+    expect(out.medium).not.toBeNull()
+  })
+})
