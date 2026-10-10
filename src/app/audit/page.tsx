@@ -30,7 +30,17 @@ export default function AuditPage() {
               Searchable, append-only operational history. IP addresses are hashed.
             </p>
           </div>
-          <AuditSearch value={search} onChange={setSearch} onSubmit={reload} />
+          <div className="flex flex-col gap-2 sm:items-end">
+            <AuditSearch value={search} onChange={setSearch} onSubmit={reload} />
+            <div className="flex gap-3 text-xs text-slate-400">
+              <a className="underline hover:text-slate-200" href="/api/account/audit/export?format=csv" download>
+                Export CSV
+              </a>
+              <a className="underline hover:text-slate-200" href="/api/account/audit/export?format=json" download>
+                Export NDJSON
+              </a>
+            </div>
+          </div>
         </div>
         <section className="mt-8 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/70">
           <AuditList loading={loading} error={error} events={events} onRetry={reload} />
