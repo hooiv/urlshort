@@ -252,3 +252,17 @@ describe('parseRules unsafe integers', () => {
     expect('error' in res).toBe(true)
   })
 })
+
+describe('parseRules numeric edge cases', () => {
+  const base = { id: 'a', key: 'plan', equals: ['pro'], type: 'flat', amount: 100 }
+  it('rejects NaN and fractional amounts', () => {
+    expect('error' in parseRules([{ ...base, amount: NaN }])).toBe(true)
+    expect('error' in parseRules([{ ...base, amount: 1.5 }])).toBe(true)
+  })
+  it('rejects infinite priority', () => {
+    expect(parseRules([{ ...base, priority: Infinity }])).toEqual({ error: 'rules[0].priority must be a number' })
+  })
+  it('rejects empty equals', () => {
+    expect('error' in parseRules([{ ...base, equals: [] }])).toBe(true)
+  })
+})
