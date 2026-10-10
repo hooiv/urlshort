@@ -220,3 +220,19 @@ describe('parseRules equals value length', () => {
     expect('rules' in r).toBe(true)
   })
 })
+
+describe('diffRules', () => {
+  const base = { key: 'plan', equals: ['pro'], type: 'percent' as const, amount: 1000 }
+  it('reports added, removed and changed rules by id', async () => {
+    const { diffRules } = await import('./reward-rules')
+    const out = diffRules(
+      [{ id: 'a', ...base }, { id: 'b', ...base }, { id: 'c', ...base }],
+      [{ id: 'a', ...base }, { id: 'b', ...base, amount: 2000 }, { id: 'd', ...base }],
+    )
+    expect(out).toEqual({ added: ['d'], removed: ['c'], changed: ['b'] })
+  })
+  it('is empty for identical sets', async () => {
+    const { diffRules } = await import('./reward-rules')
+    expect(diffRules([{ id: 'a', ...base }], [{ id: 'a', ...base }])).toEqual({ added: [], removed: [], changed: [] })
+  })
+})

@@ -216,3 +216,19 @@ export function describeRule(rule: RewardRule): string {
   if (rule.capCents !== undefined) parts.push(`capped at ${formatMoney(rule.capCents)}`)
   return parts.join(', ')
 }
+
+/**
+ * Compare two rule sets by id so audit entries can say what an edit changed.
+ * A rule counts as changed when any field differs (deep compare on its JSON form).
+ */
+export function diffRules(before: RewardRule[], after: RewardRule[]): { added: string[]; removed: string[]; changed: string[] } {
+  const norm = (r: RewardRule) =>
+    JSON.stringify([r.key, r.equals, r.type, r.amount, r.priority ?? null, r.capCents ?? null, r.minSaleCents ?? null, r.maxSaleCents ?? null])
+  const b = new Map(before.map((r) => [r.id, norm(r)]))
+  const a = new Map(after.map((r) => [r.id, norm(r)]))
+  return {
+    added: [...a.keys()].filter((id) => !b.has(id)),
+    removed: [...b.keys()].filter((id) => !a.has(id)),
+    changed: [...a.keys()].filter((id) => b.has(id) && b.get(id) !== a.get(id)),
+  }
+}
