@@ -129,3 +129,18 @@ describe('buildQrUrl', () => {
     }).startsWith('/api/links/a%2Fb%3Fc/qr?')).toBe(true)
   })
 })
+
+describe('buildQrUrl style options', () => {
+  const base = { format: 'svg' as const, size: '600', margin: 2, dark: '#0f172a', light: '#ffffff', level: 'H' as const, icon: '' }
+  it('omits defaults and forwards non-default styles and a valid gradient end', () => {
+    expect(buildQrUrl('abc', base)).not.toMatch(/dots=|eyes=|dark2=/)
+    const url = buildQrUrl('abc', { ...base, dots: 'rounded', eyes: 'circle', dark2: '#2563EB' })
+    expect(url).toContain('dots=rounded')
+    expect(url).toContain('eyes=circle')
+    expect(url).toContain('dark2=%232563EB')
+  })
+  it('drops invalid gradient and unknown styles', () => {
+    const url = buildQrUrl('abc', { ...base, dark2: 'nope', dots: 'evil' as never })
+    expect(url).not.toMatch(/dots=|dark2=/)
+  })
+})

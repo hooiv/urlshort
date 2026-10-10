@@ -86,7 +86,16 @@ export interface QrUrlOptions {
   level: QrErrorLevel
   icon: string
   download?: boolean
+  dots?: QrDotStyle
+  eyes?: QrEyeStyle
+  /** Optional gradient end colour; ignored when invalid. */
+  dark2?: string
 }
+
+export type QrDotStyle = 'square' | 'rounded' | 'dots'
+export type QrEyeStyle = 'square' | 'rounded' | 'circle'
+export const QR_DOT_STYLES: readonly QrDotStyle[] = ['square', 'rounded', 'dots']
+export const QR_EYE_STYLES: readonly QrEyeStyle[] = ['square', 'rounded', 'circle']
 
 /**
  * Build the QR image URL with the same parameter shape the page always used:
@@ -104,5 +113,8 @@ export function buildQrUrl(shortCode: string, options: QrUrlOptions): string {
   })
   if (options.download) params.set('download', '1')
   if (options.icon) params.set('icon', options.icon)
+  if (options.dots && options.dots !== 'square' && QR_DOT_STYLES.includes(options.dots)) params.set('dots', options.dots)
+  if (options.eyes && options.eyes !== 'square' && QR_EYE_STYLES.includes(options.eyes)) params.set('eyes', options.eyes)
+  if (options.dark2 && isValidHexColor(options.dark2)) params.set('dark2', normalizeHexColor(options.dark2, DEFAULT_DARK_COLOR))
   return `/api/links/${encodeURIComponent(shortCode)}/qr?${params.toString()}`
 }

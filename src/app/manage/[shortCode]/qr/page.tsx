@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import toast, { Toaster } from 'react-hot-toast'
+import StyleControls from '@/app/manage/[shortCode]/qr/components/StyleControls'
 import ColorControls from '@/app/manage/[shortCode]/qr/components/ColorControls'
 import ExportHub from '@/app/manage/[shortCode]/qr/components/ExportHub'
 import FrameControls from '@/app/manage/[shortCode]/qr/components/FrameControls'
@@ -19,6 +20,8 @@ import {
   DEFAULT_LIGHT_COLOR,
   type ColorPreset,
   type QrErrorLevel,
+  type QrDotStyle,
+  type QrEyeStyle,
 } from '@/app/manage/[shortCode]/qr/components/qrOptions'
 
 function fallbackCopy(text: string) {
@@ -51,6 +54,9 @@ export default function QrStudioPage() {
   const [margin, setMargin] = useState(2)
   const [frameText, setFrameText] = useState('SCAN WITH CAMERA')
   const [showFrame, setShowFrame] = useState(false)
+  const [dots, setDots] = useState<QrDotStyle>('square')
+  const [eyes, setEyes] = useState<QrEyeStyle>('square')
+  const [gradientEnd, setGradientEnd] = useState('')
   const [downloadSize, setDownloadSize] = useState('1024')
 
   // Normalized for rendering: invalid typed colors fall back instead of breaking the preview.
@@ -67,8 +73,11 @@ export default function QrStudioPage() {
         light: lightColor,
         level: errorLevel,
         icon: selectedLogo,
+        dots,
+        eyes,
+        dark2: gradientEnd,
       }),
-    [shortCode, margin, darkColor, lightColor, errorLevel, selectedLogo]
+    [shortCode, margin, darkColor, lightColor, errorLevel, selectedLogo, dots, eyes, gradientEnd]
   )
 
   function getDownloadUrl(format: 'png' | 'svg', size = downloadSize) {
@@ -80,6 +89,9 @@ export default function QrStudioPage() {
       light: lightColor,
       level: errorLevel,
       icon: selectedLogo,
+      dots,
+      eyes,
+      dark2: gradientEnd,
       download: true,
     })
   }
@@ -118,6 +130,8 @@ export default function QrStudioPage() {
               onLightChange={setLightColor}
               onApplyPreset={applyPreset}
             />
+
+            <StyleControls dots={dots} eyes={eyes} gradientEnd={gradientEnd} onDots={setDots} onEyes={setEyes} onGradientEnd={setGradientEnd} />
 
             {/* Center Logo Badge Section */}
             <LogoControls
