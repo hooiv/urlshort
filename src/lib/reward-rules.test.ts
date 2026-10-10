@@ -307,3 +307,19 @@ describe('diffRules equals ordering', () => {
     expect(diffRules([a], [{ ...a, capCents: 900 }]).changed).toEqual(['x'])
   })
 })
+
+describe('computeReward bounds', () => {
+  it('never pays more than the sale value for a flat reward', async () => {
+    const { computeReward } = await import('./reward-rules')
+    expect(computeReward(300, {}, [], { type: 'flat', amount: 500 })).toEqual({ cents: 300, ruleId: null })
+  })
+  it('applies the cap to percent rewards and floors fractions', async () => {
+    const { computeReward } = await import('./reward-rules')
+    expect(computeReward(10_000, {}, [], { type: 'percent', amount: 5000, capCents: 1200 }).cents).toBe(1200)
+    expect(computeReward(999, {}, [], { type: 'percent', amount: 1000 }).cents).toBe(99)
+  })
+  it('returns zero for non-positive sales', async () => {
+    const { computeReward } = await import('./reward-rules')
+    expect(computeReward(0, {}, [], { type: 'flat', amount: 100 }).cents).toBe(0)
+  })
+})
