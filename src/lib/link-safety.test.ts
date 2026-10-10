@@ -228,3 +228,13 @@ describe('macro documents and script files', () => {
     expect(assessDestination('https://example.com/docmost-guide').reason).toBeNull()
   })
 })
+
+describe('tunnel and dynamic-DNS hosts', () => {
+  it.each(['https://abc123.ngrok-free.app/x', 'https://random-words.trycloudflare.com/', 'https://me.duckdns.org/a', 'https://ngrok.io/'])('flags %s', (u) => {
+    expect(assessDestination(u).reason).toContain('tunnel')
+  })
+  it('does not flag lookalike hosts', () => {
+    expect(assessDestination('https://notngrok.io.example.com/').reason).toBeNull()
+    expect(assessDestination('https://myduckdns.org.example.com/').reason).toBeNull()
+  })
+})
