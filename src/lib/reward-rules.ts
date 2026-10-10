@@ -126,7 +126,8 @@ export function parseRules(input: unknown): { rules: RewardRule[] } | { error: s
     if (r.id.length > 64) return { error: `rules[${i}].id must be at most 64 characters` }
     if (ids.has(r.id)) return { error: `rules[${i}].id is duplicated` }
     ids.add(r.id)
-    if (typeof r.key !== 'string') return { error: `rules[${i}].key must be a string` }
+    if (typeof r.key !== 'string' || !r.key.trim()) return { error: `rules[${i}].key must be a non-empty string` }
+    if (r.key.length > 64) return { error: `rules[${i}].key must be at most 64 characters` }
     if (!Array.isArray(r.equals) || !r.equals.every((v) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean'))
       return { error: `rules[${i}].equals must be an array of scalars` }
     if (r.equals.length > 50) return { error: `rules[${i}].equals allows at most 50 values` }

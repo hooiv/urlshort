@@ -199,3 +199,13 @@ describe('parseRules size limits', () => {
     expect('rules' in parseRules([{ ...base, id: 'x'.repeat(64), equals }])).toBe(true)
   })
 })
+
+describe('parseRules key bounds', () => {
+  const base = { id: 'a', equals: ['pro'], type: 'percent', amount: 1000 }
+  it('rejects blank keys', () => {
+    expect(parseRules([{ ...base, key: '  ' }])).toEqual({ error: 'rules[0].key must be a non-empty string' })
+  })
+  it('rejects overlong keys', () => {
+    expect(parseRules([{ ...base, key: 'k'.repeat(65) }])).toEqual({ error: 'rules[0].key must be at most 64 characters' })
+  })
+})
