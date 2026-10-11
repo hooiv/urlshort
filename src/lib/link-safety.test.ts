@@ -282,3 +282,14 @@ describe('whole-script homoglyph spoofing', () => {
     expect(assessDestination('https://example.com/files/invoice.pdf')).toEqual({ status: 'cleared', reason: null })
   })
 })
+
+describe('backslash authority confusion', () => {
+  it('flags backslashes that make parsers disagree about the host', () => {
+    expect(assessDestination('https://example.com\\@evil.test/').reason).toContain('Backslash')
+    expect(assessDestination('https:\\\\evil.test/').reason).toContain('Backslash')
+  })
+  it('does not flag normal URLs', () => {
+    expect(assessDestination('https://example.com/a/b')).toEqual({ status: 'cleared', reason: null })
+  })
+})
+

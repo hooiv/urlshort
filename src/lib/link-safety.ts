@@ -102,6 +102,7 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if (/(^|\.)(ipfs\.io|dweb\.link|cloudflare-ipfs\.com|w3s\.link|nftstorage\.link)$/.test(host) && BRANDS.some((b) => url.pathname.toLowerCase().includes(b))) reasons.push('Brand name in IPFS-hosted page (possible phishing page)')
   if (/^[^.]+\.(?:s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com|blob\.core\.windows\.net|storage\.googleapis\.com)$/.test(host) && BRANDS.some((b) => host.split('.')[0].includes(b))) reasons.push('Brand name in a cloud-storage bucket hostname (possible phishing page)')
   if (/\.(?:pdf|docx?|xlsx?|pptx?|jpe?g|png|txt|mp4|zip)\.(?:exe|scr|bat|cmd|com|msi|js|vbs|jar|lnk|hta|ps1)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Double-extension file disguise')
+  if (/^https?:(?:\\\\|\/\\|\\\/)/i.test(rawUrl.trim()) || /^https?:\/\/[^/?#]*\\/i.test(rawUrl.trim())) reasons.push('Backslash in the authority (parser-confusion host spoofing)')
   if (url.href.length > 2000) reasons.push('Unusually long URL')
   if (/\.\.|\.$/.test(url.hostname)) reasons.push('Malformed hostname (trailing or empty label)')
   if (hasMixedScriptLabel(rawHostUnicode(url.hostname))) reasons.push('Mixed-script hostname label (possible homoglyph spoofing)')
