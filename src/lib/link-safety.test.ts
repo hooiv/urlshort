@@ -293,3 +293,13 @@ describe('backslash authority confusion', () => {
   })
 })
 
+
+describe('encoded delimiter in credentials', () => {
+  it('flags %40 and %2f smuggled into userinfo', () => {
+    expect(assessDestination('https://paypal.com%40evil.test@example.org/').reason).toContain('Encoded delimiter')
+    expect(assessDestination('https://shop.com%2f@example.org/').reason).toContain('Encoded delimiter')
+  })
+  it('does not flag plain paths with encoded characters', () => {
+    expect(assessDestination('https://example.com/a%40b')).toEqual({ status: 'cleared', reason: null })
+  })
+})
