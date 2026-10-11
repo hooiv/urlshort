@@ -381,3 +381,17 @@ describe('heavy percent-encoding', () => {
     expect(assessDestination('https://example.org/my%20long%20document%20name%20here').reason ?? '').not.toContain('Heavily')
   })
 })
+
+describe('accented brand lookalikes', () => {
+  it('flags diacritic and stroked-letter spoofs of protected brands', () => {
+    for (const url of ['https://paypál.com/', 'https://amazøn.com/x', 'https://goögle.com/']) {
+      const r = assessDestination(url)
+      expect(r.status).toBe('review')
+      expect(r.reason).toMatch(/Accented lookalike/)
+    }
+  })
+  it('does not flag legitimate accented domains or plain brand-free hosts', () => {
+    expect(assessDestination('https://café.example/menu').reason).not.toMatch(/Accented lookalike/)
+    expect(assessDestination('https://münchen.example/').reason).not.toMatch(/Accented lookalike/)
+  })
+})

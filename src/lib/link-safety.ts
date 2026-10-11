@@ -132,6 +132,8 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if (hasMixedScriptLabel(rawHostUnicode(url.hostname))) reasons.push('Mixed-script hostname label (possible homoglyph spoofing)')
   const spoofed = detectWholeScriptSpoof(rawHostUnicode(url.hostname))
   if (spoofed) reasons.push(`Non-Latin lookalike of ${spoofed} (homoglyph spoofing)`)
+  const accented = detectAccentedBrandSpoof(rawHostUnicode(url.hostname))
+  if (accented) reasons.push(`Accented lookalike of ${accented} (homoglyph spoofing)`)
   const tld = host.split('.').pop() ?? ''
   if (!isIP(host) && RISKY_TLDS.has(tld)) reasons.push('High-abuse top-level domain')
   const brand = detectBrandImpersonation(host)
@@ -185,6 +187,22 @@ export function detectWholeScriptSpoof(unicodeHost: string): string | null {
   for (const label of unicodeHost.split('.')) {
     if (!/[\p{Script=Cyrillic}\p{Script=Greek}]/u.test(label) || /\p{Script=Latin}/u.test(label)) continue
     const folded = [...label.toLowerCase()].map((c) => CONFUSABLES[c] ?? c).join('')
+    const hit = BRANDS.find((b) => folded.includes(b))
+    if (hit) return hit
+  }
+  return null
+}
+
+/**
+ * A Latin-script label that only spells a protected brand once diacritics and
+ * dotless/stroked letters are folded away (e.g. "paypál", "gооgle" is caught
+ * elsewhere; "ıinkedin" and "amazøn" here). Plain ASCII labels never match.
+ */
+export function detectAccentedBrandSpoof(unicodeHost: string): string | null {
+  const LATIN_FOLD: Record<string, string> = { 'ı': 'i', 'ø': 'o', 'đ': 'd', 'ł': 'l', 'ħ': 'h', 'ŧ': 't', 'ß': 's' }
+  for (const label of unicodeHost.split('.')) {
+    if (/^[\x00-\x7f]*$/.test(label) || /[\p{Script=Cyrillic}\p{Script=Greek}]/u.test(label)) continue
+    const folded = [...label.normalize('NFD').replace(/\p{M}+/gu, '').toLowerCase()].map((c) => LATIN_FOLD[c] ?? c).join('')
     const hit = BRANDS.find((b) => folded.includes(b))
     if (hit) return hit
   }
