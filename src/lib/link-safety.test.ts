@@ -218,6 +218,13 @@ describe('disk-image downloads', () => {
   it.each(['https://example.com/a.pdf.msc','https://example.com/a.docx.msix','https://example.com/a.zip.iso'])('flags double extension %s', (u) => {
     expect(assessDestination(u).reason).not.toBeNull()
   })
+  it.each(['https://example.com/a.csv.scr','https://example.com/a.gif.js'])('flags decoy %s', (u) => {
+    expect(assessDestination(u).reason).toContain('Double-extension')
+  })
+  it('flags right-to-left override in file name', () => {
+    expect(assessDestination('https://example.com/invoice%E2%80%AEfdp.exe').reason).not.toBeNull()
+    expect(assessDestination('https://example.com/report.pdf').reason).toBeNull()
+  })
   it.each(['https://example.com/invoice.pdf.pif','https://example.com/doc.docx.wsf','https://example.com/a.txt.jse'])('flags double extension %s', (u) => {
     expect(assessDestination(u).reason).not.toBeNull()
   })
