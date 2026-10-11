@@ -360,3 +360,14 @@ describe('lookalike dot/slash characters', () => {
     expect(assessDestination('https://example.com/a.b/c').reason ?? '').not.toContain('Lookalike')
   })
 })
+
+describe('userinfo hostname spoofing', () => {
+  it('flags a domain-shaped username before the real host', () => {
+    const r = assessDestination('https://paypal.com@evil-example.org/x')
+    expect(r.status).toBe('review')
+    expect(r.reason).toContain('Hostname-lookalike in credentials')
+  })
+  it('does not flag a plain username', () => {
+    expect(assessDestination('https://bob@example.org/x').reason ?? '').not.toContain('Hostname-lookalike')
+  })
+})
