@@ -215,6 +215,9 @@ describe('disk-image downloads', () => {
   it.each(['https://example.com/invoice.iso', 'https://example.com/a/setup.IMG?x=1', 'https://example.com/tool.vhdx'])('flags %s', (u) => {
     expect(assessDestination(u).reason).toContain('Disk-image')
   })
+  it.each(['https://example.com/invoice.pdf.pif','https://example.com/doc.docx.wsf','https://example.com/a.txt.jse'])('flags double extension %s', (u) => {
+    expect(assessDestination(u).reason).not.toBeNull()
+  })
   it('does not flag lookalike paths', () => {
     expect(assessDestination('https://example.com/isometric-guide').reason).toBeNull()
   })

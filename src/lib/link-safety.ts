@@ -117,7 +117,7 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if (BRANDS.some((b) => FREE_HOSTING_SUFFIXES.some((f) => host.endsWith(`.${f}`) && host.slice(0, -f.length - 1).split('.').some((l) => l.includes(b))))) reasons.push('Brand name on a free-hosting subdomain (possible phishing page)')
   if (/(^|\.)(ipfs\.io|dweb\.link|cloudflare-ipfs\.com|w3s\.link|nftstorage\.link)$/.test(host) && BRANDS.some((b) => url.pathname.toLowerCase().includes(b))) reasons.push('Brand name in IPFS-hosted page (possible phishing page)')
   if (/^[^.]+\.(?:s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com|blob\.core\.windows\.net|storage\.googleapis\.com)$/.test(host) && BRANDS.some((b) => host.split('.')[0].includes(b))) reasons.push('Brand name in a cloud-storage bucket hostname (possible phishing page)')
-  if (/\.(?:pdf|docx?|xlsx?|pptx?|jpe?g|png|txt|mp4|zip)\.(?:exe|scr|bat|cmd|com|msi|js|vbs|jar|lnk|hta|ps1)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Double-extension file disguise')
+  if (/\.(?:pdf|docx?|xlsx?|pptx?|jpe?g|png|txt|mp4|zip)\.(?:exe|scr|bat|cmd|com|msi|js|vbs|jar|lnk|hta|ps1|pif|wsf|jse|vbe|chm)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Double-extension file disguise')
   if (/^https?:(?:\\\\|\/\\|\\\/)/i.test(rawUrl.trim()) || /^https?:\/\/[^/?#]*\\/i.test(rawUrl.trim())) reasons.push('Backslash in the authority (parser-confusion host spoofing)')
   if (/%(?:40|2f|5c|23|3f)/i.test(url.username) || /%(?:40|2f|5c)/i.test(url.password)) reasons.push('Encoded delimiter in credentials (host-spoofing trick)')
   if (/\.(?:search-ms|searchconnector-ms|library-ms|url|website|scf|pif|gadget|cpl|chm|one)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Windows shortcut or search-connector file destination')
