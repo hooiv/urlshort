@@ -10,7 +10,7 @@ const SHORTENER_HOSTS = new Set(['bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'ow.
 const RISKY_TLDS = new Set(['zip', 'mov', 'top', 'xyz', 'click', 'country', 'gq', 'tk', 'ml', 'cf', 'work', 'support'])
 const TUNNEL_SUFFIXES = ['duckdns.org', 'ngrok.io', 'ngrok-free.app', 'ngrok.app', 'trycloudflare.com', 'loca.lt', 'serveo.net', 'no-ip.org', 'ddns.net', 'hopto.org', 'zapto.org']
 const FREE_HOSTING_SUFFIXES = ['weebly.com', 'wixsite.com', '000webhostapp.com', 'glitch.me', 'web.app', 'firebaseapp.com', 'pages.dev', 'workers.dev', 'netlify.app', 'herokuapp.com', 'blogspot.com']
-const BRANDS = ['paypal', 'microsoft', 'apple', 'google', 'amazon', 'netflix', 'facebook', 'instagram', 'binance', 'coinbase', 'metamask', 'dropbox', 'docusign']
+const BRANDS = ['paypal', 'microsoft', 'apple', 'google', 'amazon', 'netflix', 'facebook', 'instagram', 'binance', 'coinbase', 'metamask', 'dropbox', 'docusign', 'chase', 'wellsfargo', 'linkedin', 'whatsapp', 'telegram', 'steam', 'adobe', 'outlook', 'icloud']
 
 /** Fold common look-alike characters so `paypa1`/`g00gle` compare as the brand. */
 function foldLookalikes(label: string): string {

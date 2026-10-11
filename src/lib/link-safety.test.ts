@@ -455,3 +455,14 @@ describe('legacy Windows script and screensaver destinations', () => {
     expect(assessDestination('https://example.com/scr-guide').status).toBe('cleared')
   })
 })
+
+import { detectBrandImpersonation as detectBrandExtra } from './link-safety'
+describe('brand impersonation (extended brand list)', () => {
+  it('flags wellsfargo and whatsapp look-alikes', () => {
+    expect(detectBrandExtra('wellsfargo-login.example.com')).toBe('wellsfargo')
+    expect(detectBrandExtra('whatsapp.verify-now.net')).toBe('whatsapp')
+  })
+  it('allows the brand own domain', () => {
+    expect(detectBrandExtra('www.linkedin.com')).toBeNull()
+  })
+})
