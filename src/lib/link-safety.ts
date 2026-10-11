@@ -78,6 +78,7 @@ export const LAUNCHER_EXTENSIONS = [
   'accde',
   'accdr',
   'ade',
+  'adp',
   'appinstaller',
   'application',
   'appref-ms',
@@ -143,6 +144,7 @@ export const LAUNCHER_EXTENSIONS = [
   'vbscript',
   'vhd',
   'vhdx',
+  'vsto',
   'wll',
   'ws',
   'wsc',
@@ -150,6 +152,7 @@ export const LAUNCHER_EXTENSIONS = [
   'wsh',
   'xbap',
   'xll',
+  'xnk',
   'xsl',
 ] as const
 const LAUNCHER_EXT_RE = new RegExp(`\\.(?:${LAUNCHER_EXTENSIONS.join('|')})(?:$|[?#/])`, 'i')
