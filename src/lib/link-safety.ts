@@ -145,6 +145,7 @@ export const LAUNCHER_EXTENSIONS = [
   'vbscript',
   'vhd',
   'vhdx',
+  'vsix',
   'vsto',
   'wll',
   'ws',
@@ -153,7 +154,8 @@ export const LAUNCHER_EXTENSIONS = [
   'wsh',
   'xbap',
   'xll',
-  'xnk','xpi',
+  'xnk',
+  'xpi',
   'xsl',
 ] as const
 const LAUNCHER_EXT_RE = new RegExp(`\\.(?:${LAUNCHER_EXTENSIONS.join('|')})(?:$|[?#/;])`, 'i')
