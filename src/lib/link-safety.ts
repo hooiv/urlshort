@@ -73,6 +73,78 @@ function isHeavilyPercentEncoded(path: string): boolean {
   return escapes * 3 / path.length > 0.5
 }
 
+/** Extensions that launch code or load payloads directly when opened. One entry per line keeps diffs reviewable. */
+const LAUNCHER_EXTENSIONS = [
+  'accde',
+  'ade',
+  'appinstaller',
+  'application',
+  'appref-ms',
+  'appx',
+  'appxbundle',
+  'bat',
+  'cab',
+  'chm',
+  'cmd',
+  'cpl',
+  'diagcab',
+  'dll',
+  'drv',
+  'gadget',
+  'hta',
+  'img',
+  'inf',
+  'iqy',
+  'iso',
+  'jar',
+  'jnlp',
+  'jse',
+  'library-ms',
+  'lnk',
+  'mde',
+  'mht',
+  'mhtml',
+  'msc',
+  'msh',
+  'msh1',
+  'msi',
+  'msix',
+  'msixbundle',
+  'msp',
+  'mst',
+  'ocx',
+  'pif',
+  'ps1',
+  'ps1xml',
+  'psc1',
+  'psd1',
+  'psm1',
+  'pyz',
+  'pyzw',
+  'reg',
+  'scr',
+  'sct',
+  'searchconnector-ms',
+  'settingcontent-ms',
+  'slk',
+  'sys',
+  'themepack',
+  'vba',
+  'vbe',
+  'vbs',
+  'vbscript',
+  'vhd',
+  'vhdx',
+  'wll',
+  'ws',
+  'wsc',
+  'wsf',
+  'xbap',
+  'xll',
+  'xsl',
+] as const
+const LAUNCHER_EXT_RE = new RegExp(`\\.(?:${LAUNCHER_EXTENSIONS.join('|')})(?:$|[?#/])`, 'i')
+
 export function assessDestination(rawUrl: string): RiskAssessment {
   let url: URL
   try { url = new URL(rawUrl) } catch { return { status: 'review', reason: 'Destination URL could not be parsed' } }
@@ -99,7 +171,7 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if (!isIP(host) && /^[\d.]+$/.test(host)) reasons.push('Numeric-only hostname')
   if (/%(?:0[0-9a-f]|1[0-9a-f]|7f)/i.test(url.pathname + url.search)) reasons.push('Control characters encoded in the URL')
   if (url.port && !isIP(host)) reasons.push('Non-standard port on a public hostname')
-  if (/(?:\.jar|\.vbs|\.ps1|\.bat|\.cmd|\.lnk|\.hta|\.wsf|\.reg|\.chm|\.msix|\.appx|\.pif|\.scr|\.vbe|\.jse|\.msi|\.wsc|\.cpl|\.jnlp|\.gadget|\.msp|\.mst|\.psm1|\.vbscript|\.appinstaller|\.application|\.xbap|\.sct|\.inf|\.ocx|\.appref-ms|\.msc|\.xll|\.wll|\.iqy|\.slk|\.psd1|\.ps1xml|\.psc1|\.diagcab|\.settingcontent-ms|\.themepack|\.mht|\.mhtml|\.library-ms|\.searchconnector-ms|\.msh|\.msh1|\.iso|\.vhd|\.vhdx|\.img|\.msixbundle|\.appxbundle|\.vbscript|\.pyz|\.pyzw|\.xsl|\.dll|\.sys|\.drv|\.cab|\.mde|\.ade|\.accde|\.ws|\.vba)(?:$|[?#/])/i.test(url.pathname + url.search + url.hash)) reasons.push('Script or launcher file destination')
+  if (LAUNCHER_EXT_RE.test(url.pathname + url.search + url.hash)) reasons.push('Script or launcher file destination')
   if (/%25(?:2[0-9a-f]|3[a-f]|5[c-f]|0[0-9a-f])/i.test(url.pathname + url.search)) reasons.push('Double-encoded characters in the URL')
   if (/(?:\.zip|\.rar|\.7z|\.docm|\.xlsm)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Archive or macro-document download destination')
   if (detectEmbeddedRedirect(url)) reasons.push('Destination forwards to another site via a redirect parameter')
