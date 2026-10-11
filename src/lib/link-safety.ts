@@ -75,15 +75,13 @@ function isHeavilyPercentEncoded(path: string): boolean {
 
 /** Extensions that launch code or load payloads directly when opened. One entry per line keeps diffs reviewable. */
 export const LAUNCHER_EXTENSIONS = [
+  'aab',
   'accde',
   'accdr',
   'ade',
   'adp',
   'apk',
   'apks',
-  'xapk',
-  'aab',
-  'flatpakref',
   'appimage',
   'appinstaller',
   'application',
@@ -101,6 +99,7 @@ export const LAUNCHER_EXTENSIONS = [
   'diagcab',
   'dll',
   'dmg',
+  'flatpakref',
   'drv',
   'gadget',
   'hta',
@@ -172,6 +171,7 @@ export const LAUNCHER_EXTENSIONS = [
   'wsh',
   'xbap',
   'xll',
+  'xapk',
   'xnk',
   'xpi',
   'xsl',
