@@ -93,6 +93,7 @@ export const LAUNCHER_EXTENSIONS = [
   'cdxml',
   'chm',
   'cmd',
+  'command',
   'cpl',
   'crx',
   'deb',
