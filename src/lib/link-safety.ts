@@ -152,6 +152,8 @@ export const LAUNCHER_EXTENSIONS = [
   'run',
   'scf',
   'scr',
+  'scpt',
+  'scptd',
   'sct',
   'searchconnector-ms',
   'settingcontent-ms',
