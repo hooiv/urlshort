@@ -395,3 +395,15 @@ describe('accented brand lookalikes', () => {
     expect(assessDestination('https://münchen.example/').reason).not.toMatch(/Accented lookalike/)
   })
 })
+
+describe('office add-in and legacy script-host files', () => {
+  it('flags .xll, .wsh and .iqy destinations', () => {
+    expect(assessDestination('https://example.com/report.xll').reason).toContain('Office add-in')
+    expect(assessDestination('https://example.com/a.wsh?x=1').status).toBe('review')
+    expect(assessDestination('https://example.com/q.iqy#f').status).toBe('review')
+  })
+  it('does not flag lookalike names', () => {
+    expect(assessDestination('https://example.com/xll-guide').status).toBe('cleared')
+    expect(assessDestination('https://example.com/news.html').status).toBe('cleared')
+  })
+})
