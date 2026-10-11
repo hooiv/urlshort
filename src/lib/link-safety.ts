@@ -158,6 +158,7 @@ export const LAUNCHER_EXTENSIONS = [
   'shs',
   'slk',
   'sys',
+  'terminal',
   'themepack',
   'url',
   'vba',
