@@ -444,3 +444,14 @@ describe('Java Web Start and PowerShell console destinations', () => {
     expect(assessDestination('https://example.com/cmd-guide').status).toBe('cleared')
   })
 })
+
+describe('legacy Windows script and screensaver destinations', () => {
+  it('flags .vbe, .wsf, .wsc, .scr, .cpl and .hta files', () => {
+    for (const f of ['a.vbe', 'b.wsf', 'c.wsc', 'd.scr?x=1', 'e.cpl', 'f.hta']) {
+      expect(assessDestination(`https://example.com/${f}`).status).toBe('review')
+    }
+  })
+  it('does not flag lookalike paths', () => {
+    expect(assessDestination('https://example.com/scr-guide').status).toBe('cleared')
+  })
+})
