@@ -89,6 +89,7 @@ export const LAUNCHER_EXTENSIONS = [
   'chm',
   'cmd',
   'cpl',
+  'crx',
   'diagcab',
   'dll',
   'drv',
@@ -152,7 +153,7 @@ export const LAUNCHER_EXTENSIONS = [
   'wsh',
   'xbap',
   'xll',
-  'xnk',
+  'xnk','xpi',
   'xsl',
 ] as const
 const LAUNCHER_EXT_RE = new RegExp(`\\.(?:${LAUNCHER_EXTENSIONS.join('|')})(?:$|[?#/;])`, 'i')
