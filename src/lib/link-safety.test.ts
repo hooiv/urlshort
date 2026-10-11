@@ -327,3 +327,15 @@ describe('obfuscated IP literals', () => {
     expect(r.reason).not.toContain('Obfuscated')
   })
 })
+
+describe('private IP destinations', () => {
+  it('flags loopback, RFC1918, CGNAT, link-local and IPv6 private ranges', () => {
+    for (const u of ['http://127.0.0.1/', 'https://10.1.2.3/', 'https://172.16.0.9/', 'https://192.168.1.1/', 'https://100.64.0.1/', 'https://169.254.1.1/', 'https://[::1]/', 'https://[fd12:3456::1]/', 'https://[fe80::1]/', 'https://[::ffff:10.0.0.1]/'])
+      expect(assessDestination(u).reason, u).toContain('Private, loopback')
+  })
+  it('does not flag public IPs as private', () => {
+    expect(assessDestination('https://8.8.8.8/').reason).not.toContain('Private')
+    expect(assessDestination('https://172.32.0.1/').reason).not.toContain('Private')
+    expect(assessDestination('https://100.128.0.1/').reason).not.toContain('Private')
+  })
+})
