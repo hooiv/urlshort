@@ -350,3 +350,13 @@ describe('base64-hidden destinations', () => {
     expect(assessDestination('https://example.com/a/abcdefghijklmnopqrstuvwxyz').reason ?? '').not.toContain('Base64')
   })
 })
+
+describe('lookalike dot/slash characters', () => {
+  it('flags fraction-slash and one-dot-leader characters', () => {
+    expect(assessDestination('https://example.com\u2215login.evil.example/').reason).toContain('Lookalike dot or slash')
+    expect(assessDestination('https://example.com/a\u2024exe').reason).toContain('Lookalike dot or slash')
+  })
+  it('does not flag plain URLs', () => {
+    expect(assessDestination('https://example.com/a.b/c').reason ?? '').not.toContain('Lookalike')
+  })
+})

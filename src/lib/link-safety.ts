@@ -117,6 +117,7 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if (isIP(host) && /^https?:\/\/(?:[^/?#@]*@)?(?!\d{1,3}(?:\.\d{1,3}){3}(?:[:/?#]|$))[0-9a-fx.]+(?:[:/?#]|$)/i.test(rawUrl.trim())) reasons.push('Obfuscated IP address (hex, octal or integer form)')
   if (isPrivateIp(host)) reasons.push('Private, loopback or link-local IP address destination')
   if (hasBase64Url(url)) reasons.push('Base64-encoded URL hidden in the destination')
+  if (/[\u2024\u2044\u2215\u29F8\uFF0E\uFF0F\u3002]/.test(decodeURIComponentSafe(rawUrl))) reasons.push('Lookalike dot or slash characters in the URL')
   if (url.href.length > 2000) reasons.push('Unusually long URL')
   if (/\.\.|\.$/.test(url.hostname)) reasons.push('Malformed hostname (trailing or empty label)')
   if (hasMixedScriptLabel(rawHostUnicode(url.hostname))) reasons.push('Mixed-script hostname label (possible homoglyph spoofing)')
