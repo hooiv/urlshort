@@ -433,3 +433,14 @@ describe('ClickOnce and Word add-in destinations', () => {
     expect(assessDestination('https://example.com/application-form').status).toBe('cleared')
   })
 })
+
+describe('Java Web Start and PowerShell console destinations', () => {
+  it('flags .jnlp, .pif, .psc1 and .cmd files', () => {
+    for (const f of ['a.jnlp', 'b.pif', 'c.psc1', 'd.cmd?x=1', 'e.ps1xml']) {
+      expect(assessDestination(`https://example.com/${f}`).status).toBe('review')
+    }
+  })
+  it('does not flag lookalike paths', () => {
+    expect(assessDestination('https://example.com/cmd-guide').status).toBe('cleared')
+  })
+})

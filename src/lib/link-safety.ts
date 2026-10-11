@@ -128,7 +128,7 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if (/[\u2024\u2044\u2215\u29F8\uFF0E\uFF0F\u3002]/.test(decodeURIComponentSafe(rawUrl))) reasons.push('Lookalike dot or slash characters in the URL')
   if (/^(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}$/i.test(decodeURIComponentSafe(url.username))) reasons.push('Hostname-lookalike in credentials (userinfo spoofing)')
   if (isHeavilyPercentEncoded(url.pathname)) reasons.push('Heavily percent-encoded path (obfuscation)')
-  if (/\.(?:xll|iqy|slk|wsh|jse|ws|msc|application|gadget|settingcontent-ms|appref-ms)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Office add-in or legacy script-host file destination')
+  if (/\.(?:xll|iqy|slk|wsh|jse|ws|msc|application|gadget|settingcontent-ms|appref-ms|jnlp|pif|ps1xml|psc1|cmd)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Office add-in or legacy script-host file destination')
   if (url.href.length > 2000) reasons.push('Unusually long URL')
   if (/\.\.|\.$/.test(url.hostname)) reasons.push('Malformed hostname (trailing or empty label)')
   if (hasMixedScriptLabel(rawHostUnicode(url.hostname))) reasons.push('Mixed-script hostname label (possible homoglyph spoofing)')
