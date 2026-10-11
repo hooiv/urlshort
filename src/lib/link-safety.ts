@@ -147,6 +147,7 @@ export const LAUNCHER_EXTENSIONS = [
   'ws',
   'wsc',
   'wsf',
+  'wsh',
   'xbap',
   'xll',
   'xsl',
