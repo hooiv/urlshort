@@ -74,7 +74,7 @@ function isHeavilyPercentEncoded(path: string): boolean {
 }
 
 /** Extensions that launch code or load payloads directly when opened. One entry per line keeps diffs reviewable. */
-const LAUNCHER_EXTENSIONS = [
+export const LAUNCHER_EXTENSIONS = [
   'accde',
   'ade',
   'appinstaller',

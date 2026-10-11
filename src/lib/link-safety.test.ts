@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assessDestination } from './link-safety'
+import { assessDestination, LAUNCHER_EXTENSIONS } from './link-safety'
 
 describe('assessDestination', () => {
   it('clears an ordinary https destination', () => {
@@ -227,6 +227,12 @@ describe('disk-image downloads', () => {
   })
   it.each(['https://example.com/invoice.pdf.pif','https://example.com/doc.docx.wsf','https://example.com/a.txt.jse'])('flags double extension %s', (u) => {
     expect(assessDestination(u).reason).not.toBeNull()
+  })
+  it('keeps the launcher extension list sorted, unique and lowercase', () => {
+    const copy = [...LAUNCHER_EXTENSIONS]
+    expect(new Set(copy).size).toBe(copy.length)
+    expect(copy).toEqual([...copy].sort())
+    expect(copy.every((e) => e === e.toLowerCase())).toBe(true)
   })
   it('does not flag lookalike paths', () => {
     expect(assessDestination('https://example.com/isometric-guide').reason).toBeNull()
