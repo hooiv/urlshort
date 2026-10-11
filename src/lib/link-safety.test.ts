@@ -224,6 +224,9 @@ describe('macro documents and script files', () => {
   it.each(['https://example.com/invoice.docm', 'https://example.com/a/run.VBS?x=1', 'https://example.com/pay.hta'])('flags %s', (u) => {
     expect(assessDestination(u).reason).toContain('Macro-enabled')
   })
+  it.each(['https://example.com/a.wsf', 'https://example.com/x.reg', 'https://example.com/h.chm', 'https://example.com/i.msix'])('flags launcher file %s', (u) => {
+    expect(assessDestination(u).reason).not.toBeNull()
+  })
   it('does not flag lookalike paths', () => {
     expect(assessDestination('https://example.com/docmost-guide').reason).toBeNull()
   })
