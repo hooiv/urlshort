@@ -53,6 +53,8 @@ export function DeliveryLog({ endpointId, isActive }: { endpointId: string; isAc
     }
   }, [endpointId, status]);
 
+  // Initial fetch on mount and on filter change; state is set after awaiting the network.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(null); }, [load]);
 
   const inspect = async (id: string) => {

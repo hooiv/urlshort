@@ -45,6 +45,8 @@ export function FolderManager({ workspaceId, members, canEdit }: { workspaceId: 
   }, [base])
 
   useEffect(() => {
+    // Initial fetch on mount; load() only sets state after awaiting the network.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void load()
   }, [load])
 
