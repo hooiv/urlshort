@@ -113,7 +113,7 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if (/(?:\.msix|\.msixbundle|\.appx|\.appinstaller|\.pkg|\.deb|\.rpm|\.jnlp|\.reg|\.dll)(?:$|[?#/])/i.test(url.pathname + url.search + url.hash)) reasons.push('Installer or system-package file destination')
   if (/^(?:metadata\.google\.internal|metadata\.goog|instance-data(?:\.ec2\.internal)?|169\.254\.169\.254|100\.100\.100\.200|\[?fd00:ec2::254\]?)$/.test(host)) reasons.push('Cloud instance-metadata endpoint destination')
   if (/\.(?:iso|img|vhd|vhdx|dmg)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Disk-image download destination')
-  if (/\.(?:docm|wll|application|xlsm|pptm|dotm|xlam|ppam|xltm|potm|ppsm|sldm|wsf|vbs|vbe|hta|scr|lnk)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Macro-enabled document or script-file destination')
+  if (/\.(?:docm|wll|application|xlsm|pptm|dotm|xlam|ppam|xltm|potm|ppsm|sldm|wsf|vbs|vbe|hta|scr|lnk|jse|wsh|wsc|cpl|msc|pif|gadget)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Macro-enabled document or script-file destination')
   if (TUNNEL_SUFFIXES.some((t) => host === t || host.endsWith(`.${t}`))) reasons.push('Temporary tunnel or dynamic-DNS hostname')
   if (BRANDS.some((b) => FREE_HOSTING_SUFFIXES.some((f) => host.endsWith(`.${f}`) && host.slice(0, -f.length - 1).split('.').some((l) => l.includes(b))))) reasons.push('Brand name on a free-hosting subdomain (possible phishing page)')
   if (/(^|\.)(ipfs\.io|dweb\.link|cloudflare-ipfs\.com|w3s\.link|nftstorage\.link)$/.test(host) && BRANDS.some((b) => url.pathname.toLowerCase().includes(b))) reasons.push('Brand name in IPFS-hosted page (possible phishing page)')
