@@ -371,3 +371,13 @@ describe('userinfo hostname spoofing', () => {
     expect(assessDestination('https://bob@example.org/x').reason ?? '').not.toContain('Hostname-lookalike')
   })
 })
+
+describe('heavy percent-encoding', () => {
+  it('flags a mostly-encoded path', () => {
+    const enc = Array.from('login-verify-account').map((c) => '%' + c.charCodeAt(0).toString(16)).join('')
+    expect(assessDestination(`https://example.org/${enc}`).reason).toContain('Heavily percent-encoded')
+  })
+  it('does not flag a normal encoded space or short path', () => {
+    expect(assessDestination('https://example.org/my%20long%20document%20name%20here').reason ?? '').not.toContain('Heavily')
+  })
+})

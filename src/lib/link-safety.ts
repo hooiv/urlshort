@@ -66,6 +66,13 @@ function hasBase64Url(url: URL): boolean {
   })
 }
 
+/** True when over a third of a 24+ char path is %XX escapes: legitimate URLs rarely encode that much. */
+function isHeavilyPercentEncoded(path: string): boolean {
+  if (path.length < 24) return false
+  const escapes = (path.match(/%[0-9a-f]{2}/gi) ?? []).length
+  return escapes * 3 / path.length > 0.33
+}
+
 export function assessDestination(rawUrl: string): RiskAssessment {
   let url: URL
   try { url = new URL(rawUrl) } catch { return { status: 'review', reason: 'Destination URL could not be parsed' } }
@@ -119,6 +126,7 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if (hasBase64Url(url)) reasons.push('Base64-encoded URL hidden in the destination')
   if (/[\u2024\u2044\u2215\u29F8\uFF0E\uFF0F\u3002]/.test(decodeURIComponentSafe(rawUrl))) reasons.push('Lookalike dot or slash characters in the URL')
   if (/^(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}$/i.test(decodeURIComponentSafe(url.username))) reasons.push('Hostname-lookalike in credentials (userinfo spoofing)')
+  if (isHeavilyPercentEncoded(url.pathname)) reasons.push('Heavily percent-encoded path (obfuscation)')
   if (url.href.length > 2000) reasons.push('Unusually long URL')
   if (/\.\.|\.$/.test(url.hostname)) reasons.push('Malformed hostname (trailing or empty label)')
   if (hasMixedScriptLabel(rawHostUnicode(url.hostname))) reasons.push('Mixed-script hostname label (possible homoglyph spoofing)')
