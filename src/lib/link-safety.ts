@@ -124,6 +124,7 @@ export const LAUNCHER_EXTENSIONS = [
   'psm1',
   'pyz',
   'pyzw',
+  'rdp',
   'reg',
   'scf',
   'scr',
