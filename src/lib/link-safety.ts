@@ -104,6 +104,7 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if (/\.(?:pdf|docx?|xlsx?|pptx?|jpe?g|png|txt|mp4|zip)\.(?:exe|scr|bat|cmd|com|msi|js|vbs|jar|lnk|hta|ps1)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Double-extension file disguise')
   if (/^https?:(?:\\\\|\/\\|\\\/)/i.test(rawUrl.trim()) || /^https?:\/\/[^/?#]*\\/i.test(rawUrl.trim())) reasons.push('Backslash in the authority (parser-confusion host spoofing)')
   if (/%(?:40|2f|5c|23|3f)/i.test(url.username) || /%(?:40|2f|5c)/i.test(url.password)) reasons.push('Encoded delimiter in credentials (host-spoofing trick)')
+  if (/\.(?:search-ms|searchconnector-ms|library-ms|url|website|scf|pif|gadget|cpl|chm|one)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Windows shortcut or search-connector file destination')
   if (url.href.length > 2000) reasons.push('Unusually long URL')
   if (/\.\.|\.$/.test(url.hostname)) reasons.push('Malformed hostname (trailing or empty label)')
   if (hasMixedScriptLabel(rawHostUnicode(url.hostname))) reasons.push('Mixed-script hostname label (possible homoglyph spoofing)')

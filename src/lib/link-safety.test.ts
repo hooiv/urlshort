@@ -303,3 +303,15 @@ describe('encoded delimiter in credentials', () => {
     expect(assessDestination('https://example.com/a%40b')).toEqual({ status: 'cleared', reason: null })
   })
 })
+
+describe('windows shortcut and search-connector files', () => {
+  it('flags .search-ms, .url and .chm destinations', () => {
+    expect(assessDestination('https://example.com/invoice.search-ms').reason).toContain('Windows shortcut')
+    expect(assessDestination('https://example.com/help.chm?x=1').status).toBe('review')
+    expect(assessDestination('https://example.com/Shortcut.URL').status).toBe('review')
+  })
+  it('does not flag lookalike path segments', () => {
+    expect(assessDestination('https://example.com/url/guide')).toEqual({ status: 'cleared', reason: null })
+    expect(assessDestination('https://example.com/a.html')).toEqual({ status: 'cleared', reason: null })
+  })
+})
