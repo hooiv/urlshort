@@ -339,3 +339,14 @@ describe('private IP destinations', () => {
     expect(assessDestination('https://100.128.0.1/').reason).not.toContain('Private')
   })
 })
+
+describe('base64-hidden destinations', () => {
+  it('flags base64 URLs in query values and path segments (std and url-safe)', () => {
+    const b = Buffer.from('http://evil.example/x').toString('base64')
+    expect(assessDestination(`https://example.com/go?u=${encodeURIComponent(b)}`).reason).toContain('Base64-encoded URL')
+    expect(assessDestination(`https://example.com/r/${Buffer.from('https://evil.example/y').toString('base64url')}`).reason).toContain('Base64-encoded URL')
+  })
+  it('ignores ordinary long tokens', () => {
+    expect(assessDestination('https://example.com/a/abcdefghijklmnopqrstuvwxyz').reason ?? '').not.toContain('Base64')
+  })
+})

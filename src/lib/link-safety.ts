@@ -57,6 +57,15 @@ function decodeURIComponentSafe(v: string): string {
   try { return decodeURIComponent(v) } catch { return v }
 }
 
+/** True when a path segment or query value is base64 that decodes to an http(s) URL (a common redirect-hiding trick). */
+function hasBase64Url(url: URL): boolean {
+  const tokens = [...url.pathname.split('/'), ...[...url.searchParams.values()]]
+  return tokens.some((t) => {
+    if (t.length < 16 || !/^[A-Za-z0-9+/_-]+={0,2}$/.test(t)) return false
+    try { return /^https?:\/\//i.test(Buffer.from(t.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8')) } catch { return false }
+  })
+}
+
 export function assessDestination(rawUrl: string): RiskAssessment {
   let url: URL
   try { url = new URL(rawUrl) } catch { return { status: 'review', reason: 'Destination URL could not be parsed' } }
@@ -107,6 +116,7 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if (/\.(?:search-ms|searchconnector-ms|library-ms|url|website|scf|pif|gadget|cpl|chm|one)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Windows shortcut or search-connector file destination')
   if (isIP(host) && /^https?:\/\/(?:[^/?#@]*@)?(?!\d{1,3}(?:\.\d{1,3}){3}(?:[:/?#]|$))[0-9a-fx.]+(?:[:/?#]|$)/i.test(rawUrl.trim())) reasons.push('Obfuscated IP address (hex, octal or integer form)')
   if (isPrivateIp(host)) reasons.push('Private, loopback or link-local IP address destination')
+  if (hasBase64Url(url)) reasons.push('Base64-encoded URL hidden in the destination')
   if (url.href.length > 2000) reasons.push('Unusually long URL')
   if (/\.\.|\.$/.test(url.hostname)) reasons.push('Malformed hostname (trailing or empty label)')
   if (hasMixedScriptLabel(rawHostUnicode(url.hostname))) reasons.push('Mixed-script hostname label (possible homoglyph spoofing)')
