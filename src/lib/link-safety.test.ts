@@ -423,3 +423,13 @@ describe('office add-in and legacy script-host files', () => {
     expect(assessDestination('https://example.com/news.html').status).toBe('cleared')
   })
 })
+
+describe('ClickOnce and Word add-in destinations', () => {
+  it('flags .application and .wll files', () => {
+    expect(assessDestination('https://example.com/setup.application').status).toBe('review')
+    expect(assessDestination('https://example.com/a.wll?x=1').status).toBe('review')
+  })
+  it('does not flag lookalike paths', () => {
+    expect(assessDestination('https://example.com/application-form').status).toBe('cleared')
+  })
+})
