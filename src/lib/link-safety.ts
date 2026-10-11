@@ -118,6 +118,7 @@ export const LAUNCHER_EXTENSIONS = [
   'mde',
   'mht',
   'mhtml',
+  'mobileconfig',
   'msc',
   'msh',
   'msh1',
