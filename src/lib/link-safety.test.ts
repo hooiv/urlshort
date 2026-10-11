@@ -275,4 +275,10 @@ describe('whole-script homoglyph spoofing', () => {
     expect(detectWholeScriptSpoof('apple.com')).toBeNull()
     expect(detectWholeScriptSpoof('пример.рф')).toBeNull()
   })
+
+  it('flags double-extension disguised executables but not plain documents', () => {
+    expect(assessDestination('https://example.com/files/invoice.pdf.exe').reason).toContain('Double-extension')
+    expect(assessDestination('https://example.com/a/report.docx.js?x=1').status).toBe('review')
+    expect(assessDestination('https://example.com/files/invoice.pdf')).toEqual({ status: 'cleared', reason: null })
+  })
 })
