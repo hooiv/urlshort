@@ -24,6 +24,7 @@ const ALL_ACTIONS = [
   { name: 'UTM Templates', path: '/manage/utm' },
   { name: 'Audit Log', path: '/manage/audit' },
   { name: 'Revenue Attribution', path: '/manage/integrations' },
+  { name: 'Rewards & Commissions', path: '/manage/rewards' },
   { name: 'Bulk Import CSV', path: '/bulk' },
 ]
 

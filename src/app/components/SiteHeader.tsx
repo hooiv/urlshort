@@ -63,6 +63,12 @@ export default function SiteHeader() {
             Revenue
           </Link>
           <Link
+            href="/manage/rewards"
+            className="text-sm font-medium text-slate-400 hover:text-white transition-colors"
+          >
+            Rewards
+          </Link>
+          <Link
             href="/account"
             className="rounded-lg border border-slate-700 bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-slate-500 hover:text-white"
           >
