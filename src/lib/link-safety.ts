@@ -162,6 +162,7 @@ export const LAUNCHER_EXTENSIONS = [
   'shb',
   'shs',
   'slk',
+  'snap',
   'sys',
   'terminal',
   'themepack',
