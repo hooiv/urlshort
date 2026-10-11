@@ -155,7 +155,14 @@ export const LAUNCHER_EXTENSIONS = [
   'xnk',
   'xsl',
 ] as const
-const LAUNCHER_EXT_RE = new RegExp(`\\.(?:${LAUNCHER_EXTENSIONS.join('|')})(?:$|[?#/])`, 'i')
+const LAUNCHER_EXT_RE = new RegExp(`\\.(?:${LAUNCHER_EXTENSIONS.join('|')})(?:$|[?#/;])`, 'i')
+
+/** Path with percent-escapes decoded, so `setup%2Eexe` and `setup.%65xe` are judged as `setup.exe`. Falls back to the raw path on malformed escapes. */
+function decodedPath(url: URL): string {
+  let p = url.pathname
+  for (let i = 0; i < 2; i++) { try { const d = decodeURIComponent(p); if (d === p) break; p = d } catch { break } }
+  return p
+}
 
 export function assessDestination(rawUrl: string): RiskAssessment {
   let url: URL
@@ -165,6 +172,7 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return { status: 'review', reason: 'Non-HTTP(S) destination protocol' }
   const host = url.hostname.toLowerCase().replace(/\.$/, '')
   const reasons: string[] = []
+  const scanPath = decodedPath(url)
 
   if (url.username || url.password) reasons.push('Credential-bearing destination')
   if (isIP(host)) reasons.push('Direct IP-address destination')
@@ -175,7 +183,7 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   // Match against path + query + fragment: `new URL` strips `?…`/`#…` from
   // `pathname`, so `evil.exe?x=1`, `evil.exe#run`, and `evil.exe/` would
   // otherwise score as clean.
-  if (/(?:\.exe|\.scr|\.msi|\.apk|\.dmg|\.iso)(?:$|[?#/])/i.test(url.pathname + url.search + url.hash)) reasons.push('Executable file destination')
+  if (/(?:\.exe|\.scr|\.msi|\.apk|\.dmg|\.iso)(?:$|[?#/;])/i.test(scanPath + url.search + url.hash)) reasons.push('Executable file destination')
 
   // WHATWG URL normalizes 0x7f.1 / 2130706433 to dotted quads, so isIP catches
   // those; what remains is a numeric-only final label (e.g. 10.0.0.1.example is fine,
@@ -183,36 +191,36 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if (!isIP(host) && /^[\d.]+$/.test(host)) reasons.push('Numeric-only hostname')
   if (/%(?:0[0-9a-f]|1[0-9a-f]|7f)/i.test(url.pathname + url.search)) reasons.push('Control characters encoded in the URL')
   if (url.port && !isIP(host)) reasons.push('Non-standard port on a public hostname')
-  if (LAUNCHER_EXT_RE.test(url.pathname + url.search + url.hash)) reasons.push('Script or launcher file destination')
+  if (LAUNCHER_EXT_RE.test(scanPath + url.search + url.hash)) reasons.push('Script or launcher file destination')
   if (/%25(?:2[0-9a-f]|3[a-f]|5[c-f]|0[0-9a-f])/i.test(url.pathname + url.search)) reasons.push('Double-encoded characters in the URL')
-  if (/(?:\.zip|\.rar|\.7z|\.docm|\.xlsm)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Archive or macro-document download destination')
+  if (/(?:\.zip|\.rar|\.7z|\.docm|\.xlsm)(?:$|[?#/;])/i.test(url.pathname)) reasons.push('Archive or macro-document download destination')
   if (detectEmbeddedRedirect(url)) reasons.push('Destination forwards to another site via a redirect parameter')
   if (SHORTENER_HOSTS.has(host) || SHORTENER_HOSTS.has(host.replace(/^www\./, ''))) reasons.push('Chained link-shortener destination')
   if (host.split('.').length >= 7) reasons.push('Unusually deep subdomain chain')
   if (hasScriptSchemeParam(url)) reasons.push('Query parameter carries a javascript:/data: payload')
   if (/[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/.test(decodeURIComponentSafe(rawUrl))) reasons.push('Invisible or bidirectional-control characters in the URL')
   if (/%E2%80%AE|\u202e/i.test(url.pathname + url.search)) reasons.push('Right-to-left override in file name')
-  if (/\.(?:pdf|docx?|xlsx?|pptx?|jpe?g|png|txt|mp4)\.(?:exe|scr|msi|apk|bat|cmd|js|jar|vbs|ps1|lnk|hta)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Double-extension file masquerading as a document')
+  if (/\.(?:pdf|docx?|xlsx?|pptx?|jpe?g|png|txt|mp4)\.(?:exe|scr|msi|apk|bat|cmd|js|jar|vbs|ps1|lnk|hta)(?:$|[?#/;])/i.test(scanPath)) reasons.push('Double-extension file masquerading as a document')
   if (/^#?\/*(?:https?:)?\/\/[^/]+\.[a-z]{2,}/i.test(url.hash) || /^#.*https?%3a/i.test(url.hash)) reasons.push('URL fragment mimics another destination')
-  if (/(?:\.msix|\.msixbundle|\.appx|\.appinstaller|\.pkg|\.deb|\.rpm|\.jnlp|\.reg|\.dll)(?:$|[?#/])/i.test(url.pathname + url.search + url.hash)) reasons.push('Installer or system-package file destination')
+  if (/(?:\.msix|\.msixbundle|\.appx|\.appinstaller|\.pkg|\.deb|\.rpm|\.jnlp|\.reg|\.dll)(?:$|[?#/;])/i.test(scanPath + url.search + url.hash)) reasons.push('Installer or system-package file destination')
   if (/^(?:metadata\.google\.internal|metadata\.goog|instance-data(?:\.ec2\.internal)?|169\.254\.169\.254|100\.100\.100\.200|\[?fd00:ec2::254\]?)$/.test(host)) reasons.push('Cloud instance-metadata endpoint destination')
-  if (/\.(?:iso|img|vhd|vhdx|dmg)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Disk-image download destination')
-  if (/\.(?:docm|wll|application|xlsm|pptm|dotm|xlam|ppam|xltm|potm|ppsm|sldm|wsf|vbs|vbe|hta|scr|lnk|jse|wsh|wsc|cpl|msc|pif|gadget)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Macro-enabled document or script-file destination')
+  if (/\.(?:iso|img|vhd|vhdx|dmg)(?:$|[?#/;])/i.test(scanPath)) reasons.push('Disk-image download destination')
+  if (/\.(?:docm|wll|application|xlsm|pptm|dotm|xlam|ppam|xltm|potm|ppsm|sldm|wsf|vbs|vbe|hta|scr|lnk|jse|wsh|wsc|cpl|msc|pif|gadget)(?:$|[?#/;])/i.test(url.pathname)) reasons.push('Macro-enabled document or script-file destination')
   if (TUNNEL_SUFFIXES.some((t) => host === t || host.endsWith(`.${t}`))) reasons.push('Temporary tunnel or dynamic-DNS hostname')
   if (BRANDS.some((b) => FREE_HOSTING_SUFFIXES.some((f) => host.endsWith(`.${f}`) && host.slice(0, -f.length - 1).split('.').some((l) => l.includes(b))))) reasons.push('Brand name on a free-hosting subdomain (possible phishing page)')
   if (/(^|\.)(ipfs\.io|dweb\.link|cloudflare-ipfs\.com|w3s\.link|nftstorage\.link)$/.test(host) && BRANDS.some((b) => url.pathname.toLowerCase().includes(b))) reasons.push('Brand name in IPFS-hosted page (possible phishing page)')
   if (/^[^.]+\.(?:s3(?:[.-][a-z0-9-]+)?\.amazonaws\.com|blob\.core\.windows\.net|storage\.googleapis\.com)$/.test(host) && BRANDS.some((b) => host.split('.')[0].includes(b))) reasons.push('Brand name in a cloud-storage bucket hostname (possible phishing page)')
-  if (/\.(?:pdf|docx?|xlsx?|pptx?|jpe?g|png|gif|txt|csv|rtf|mp3|mp4|zip)\.(?:exe|scr|bat|cmd|com|msi|js|vbs|jar|lnk|hta|ps1|pif|wsf|jse|vbe|chm|msc|cpl|reg|msp|appx|msix|iso)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Double-extension file disguise')
+  if (/\.(?:pdf|docx?|xlsx?|pptx?|jpe?g|png|gif|txt|csv|rtf|mp3|mp4|zip)\.(?:exe|scr|bat|cmd|com|msi|js|vbs|jar|lnk|hta|ps1|pif|wsf|jse|vbe|chm|msc|cpl|reg|msp|appx|msix|iso)(?:$|[?#/;])/i.test(scanPath)) reasons.push('Double-extension file disguise')
   if (/^https?:(?:\\\\|\/\\|\\\/)/i.test(rawUrl.trim()) || /^https?:\/\/[^/?#]*\\/i.test(rawUrl.trim())) reasons.push('Backslash in the authority (parser-confusion host spoofing)')
   if (/%(?:40|2f|5c|23|3f)/i.test(url.username) || /%(?:40|2f|5c)/i.test(url.password)) reasons.push('Encoded delimiter in credentials (host-spoofing trick)')
-  if (/\.(?:search-ms|searchconnector-ms|library-ms|url|website|scf|pif|gadget|cpl|chm|one)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Windows shortcut or search-connector file destination')
+  if (/\.(?:search-ms|searchconnector-ms|library-ms|url|website|scf|pif|gadget|cpl|chm|one)(?:$|[?#/;])/i.test(url.pathname)) reasons.push('Windows shortcut or search-connector file destination')
   if (isIP(host) && /^https?:\/\/(?:[^/?#@]*@)?(?!\d{1,3}(?:\.\d{1,3}){3}(?:[:/?#]|$))[0-9a-fx.]+(?:[:/?#]|$)/i.test(rawUrl.trim())) reasons.push('Obfuscated IP address (hex, octal or integer form)')
   if (isPrivateIp(host)) reasons.push('Private, loopback or link-local IP address destination')
   if (hasBase64Url(url)) reasons.push('Base64-encoded URL hidden in the destination')
   if (/[\u2024\u2044\u2215\u29F8\uFF0E\uFF0F\u3002]/.test(decodeURIComponentSafe(rawUrl))) reasons.push('Lookalike dot or slash characters in the URL')
   if (/^(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}$/i.test(decodeURIComponentSafe(url.username))) reasons.push('Hostname-lookalike in credentials (userinfo spoofing)')
   if (isHeavilyPercentEncoded(url.pathname)) reasons.push('Heavily percent-encoded path (obfuscation)')
-  if (/\.(?:xll|iqy|slk|wsh|jse|ws|msc|application|gadget|settingcontent-ms|appref-ms|jnlp|pif|ps1xml|psc1|cmd|vbe|wsf|wsc|scr|cpl|hta)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Office add-in or legacy script-host file destination')
+  if (/\.(?:xll|iqy|slk|wsh|jse|ws|msc|application|gadget|settingcontent-ms|appref-ms|jnlp|pif|ps1xml|psc1|cmd|vbe|wsf|wsc|scr|cpl|hta)(?:$|[?#/;])/i.test(url.pathname)) reasons.push('Office add-in or legacy script-host file destination')
   if (url.href.length > 2000) reasons.push('Unusually long URL')
   if (/\.\.|\.$/.test(url.hostname)) reasons.push('Malformed hostname (trailing or empty label)')
   if (hasMixedScriptLabel(rawHostUnicode(url.hostname))) reasons.push('Mixed-script hostname label (possible homoglyph spoofing)')

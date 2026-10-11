@@ -472,3 +472,18 @@ describe('brand impersonation (extended brand list)', () => {
     expect(detectBrandExtra('www.linkedin.com')).toBeNull()
   })
 })
+
+describe('encoded and parameterised executable paths', () => {
+  it.each([
+    'https://example.com/setup%2Eexe',
+    'https://example.com/a/setup.%65xe',
+    'https://example.com/setup.exe;v=1',
+    'https://example.com/invoice.pdf%2Eexe',
+    'https://example.com/tool%252Eexe',
+  ])('does not clear %s', (u) => {
+    expect(assessDestination(u).status).not.toBe('cleared')
+  })
+  it('still clears ordinary encoded paths', () => {
+    expect(assessDestination('https://example.com/caf%C3%A9/menu%20list.html').status).toBe('cleared')
+  })
+})
