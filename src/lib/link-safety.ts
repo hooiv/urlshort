@@ -66,11 +66,11 @@ function hasBase64Url(url: URL): boolean {
   })
 }
 
-/** True when over a third of a 24+ char path is %XX escapes: legitimate URLs rarely encode that much. */
+/** True when over half of a 24+ char path is %XX escapes: legitimate URLs rarely encode that much. */
 function isHeavilyPercentEncoded(path: string): boolean {
   if (path.length < 24) return false
   const escapes = (path.match(/%[0-9a-f]{2}/gi) ?? []).length
-  return escapes * 3 / path.length > 0.33
+  return escapes * 3 / path.length > 0.5
 }
 
 export function assessDestination(rawUrl: string): RiskAssessment {
