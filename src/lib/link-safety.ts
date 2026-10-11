@@ -99,7 +99,7 @@ export function assessDestination(rawUrl: string): RiskAssessment {
   if (!isIP(host) && /^[\d.]+$/.test(host)) reasons.push('Numeric-only hostname')
   if (/%(?:0[0-9a-f]|1[0-9a-f]|7f)/i.test(url.pathname + url.search)) reasons.push('Control characters encoded in the URL')
   if (url.port && !isIP(host)) reasons.push('Non-standard port on a public hostname')
-  if (/(?:\.jar|\.vbs|\.ps1|\.bat|\.cmd|\.lnk|\.hta|\.wsf|\.reg|\.chm|\.msix|\.appx|\.pif|\.scr|\.vbe|\.jse|\.msi|\.wsc|\.cpl|\.jnlp|\.gadget|\.msp|\.mst|\.psm1|\.vbscript|\.appinstaller|\.application|\.xbap|\.sct|\.inf|\.ocx|\.appref-ms|\.msc)(?:$|[?#/])/i.test(url.pathname + url.search + url.hash)) reasons.push('Script or launcher file destination')
+  if (/(?:\.jar|\.vbs|\.ps1|\.bat|\.cmd|\.lnk|\.hta|\.wsf|\.reg|\.chm|\.msix|\.appx|\.pif|\.scr|\.vbe|\.jse|\.msi|\.wsc|\.cpl|\.jnlp|\.gadget|\.msp|\.mst|\.psm1|\.vbscript|\.appinstaller|\.application|\.xbap|\.sct|\.inf|\.ocx|\.appref-ms|\.msc|\.xll|\.wll|\.iqy|\.slk)(?:$|[?#/])/i.test(url.pathname + url.search + url.hash)) reasons.push('Script or launcher file destination')
   if (/%25(?:2[0-9a-f]|3[a-f]|5[c-f]|0[0-9a-f])/i.test(url.pathname + url.search)) reasons.push('Double-encoded characters in the URL')
   if (/(?:\.zip|\.rar|\.7z|\.docm|\.xlsm)(?:$|[?#/])/i.test(url.pathname)) reasons.push('Archive or macro-document download destination')
   if (detectEmbeddedRedirect(url)) reasons.push('Destination forwards to another site via a redirect parameter')
