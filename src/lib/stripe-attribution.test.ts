@@ -10,6 +10,8 @@ const prismaMock = vi.hoisted(() => ({
   goal: { upsert: vi.fn() },
   conversionEvent: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
   conversionDaily: { upsert: vi.fn(), updateMany: vi.fn() },
+  rewardConfig: { findMany: vi.fn() },
+  commission: { findUnique: vi.fn(), create: vi.fn(), update: vi.fn() },
   $transaction: vi.fn(),
 }))
 const verifyMock = vi.hoisted(() => vi.fn())
@@ -78,7 +80,7 @@ describe('event parsing and extraction', () => {
     expect(saleFromCheckoutSession({
       id: 'cs_1', payment_status: 'paid', amount_total: 4900, currency: 'usd',
       customer: { id: 'cus_1' }, invoice: 'in_1', payment_intent: 'pi_1', metadata: { ql_attribution: ' v1.tok.sig ' },
-    })).toEqual({ saleKey: 'checkout:cs_1', token: 'v1.tok.sig', customerId: 'cus_1', amountCents: 4900, currency: 'usd', source: 'checkout', coversInvoiceId: 'in_1', paymentIntentId: 'pi_1' })
+    })).toEqual({ saleKey: 'checkout:cs_1', token: 'v1.tok.sig', customerId: 'cus_1', amountCents: 4900, currency: 'usd', source: 'checkout', coversInvoiceId: 'in_1', paymentIntentId: 'pi_1', metadata: {} })
   })
 
   it('finds tokens on invoices across Stripe API versions', () => {
@@ -114,8 +116,27 @@ describe('processStripeEvent', () => {
     prismaMock.clickEvent.findFirst.mockResolvedValue({ id: 'click_1', ruleId: 'rule_1' })
     prismaMock.goal.upsert.mockResolvedValue({ id: 'goal_1', enabled: true })
     prismaMock.conversionEvent.create.mockResolvedValue({ id: 'conv_1' })
+    prismaMock.rewardConfig.findMany.mockResolvedValue([])
+    prismaMock.commission.findUnique.mockResolvedValue(null)
     reserveMock.mockResolvedValue({ allowed: true })
     verifyMock.mockReturnValue({ urlId: 'url_1', shortCode: 'abc', clickEventId: 'click_1', visitorIdHash: 'vis', issuedAt: Date.now() })
+  })
+
+  it('creates a commission from checkout metadata using the link scope first', async () => {
+    prismaMock.rewardConfig.findMany.mockResolvedValue([
+      { scopeKey: 'account', rules: '[]', fallback: JSON.stringify({ type: 'percent', amount: 1000 }) },
+      { scopeKey: 'link:url_1', rules: JSON.stringify([{ id: 'pro', key: 'plan', equals: ['pro'], type: 'percent', amount: 3000 }]), fallback: null },
+    ])
+    prismaMock.commission.create.mockResolvedValue({ id: 'com_1', amountCents: 1470 })
+    await processStripeEvent(integration, checkoutEvent({ metadata: { ql_attribution: 'v1.tok.sig', plan: 'pro' } }))
+    expect(prismaMock.commission.create).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ userId: 'user_a', urlId: 'url_1', conversionId: 'conv_1', saleValueCents: 4900, originalCents: 1470, amountCents: 1470, ruleId: 'pro', scopeKey: 'link:url_1' }),
+    }))
+  })
+
+  it('records no commission when nothing is configured', async () => {
+    await processStripeEvent(integration, checkoutEvent())
+    expect(prismaMock.commission.create).not.toHaveBeenCalled()
   })
 
   it('records an attributed checkout with value, goal auto-creation and a customer mapping', async () => {

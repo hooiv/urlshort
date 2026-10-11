@@ -5,6 +5,7 @@ import { verifyAttributionToken } from './attribution'
 import { getPrivacyPolicy, hashWithWorkspace } from './privacy-ingestion'
 import { reserveUsageInTransaction } from './tenant-usage'
 import { dispatchWebhooksForUrl } from './webhooks'
+import { applyRefundToCommission, recordCommission, scalarMetadata } from './commissions'
 
 /**
  * Stripe sale attribution.
@@ -104,6 +105,12 @@ function tokenFromMetadata(...sources: unknown[]): string | null {
   return null
 }
 
+function saleMetadata(...sources: unknown[]): Record<string, string> {
+  const metadata = scalarMetadata(...sources)
+  for (const key of ATTRIBUTION_METADATA_KEYS) delete metadata[key]
+  return metadata
+}
+
 export type SaleCandidate = {
   /** Synthetic receipt key so a sale is counted once even if Stripe reports it twice. */
   saleKey: string
@@ -116,6 +123,8 @@ export type SaleCandidate = {
   coversInvoiceId: string | null
   /** Lets a later charge.refunded find this sale. */
   paymentIntentId: string | null
+  /** Scalar Stripe metadata (attribution tokens removed); feeds commission rules. */
+  metadata: Record<string, string>
 }
 
 export function saleFromCheckoutSession(session: Record<string, unknown>): SaleCandidate | 'unpaid' {
@@ -132,6 +141,7 @@ export function saleFromCheckoutSession(session: Record<string, unknown>): SaleC
     source: 'checkout',
     coversInvoiceId: idOf(session.invoice),
     paymentIntentId: idOf(session.payment_intent),
+    metadata: saleMetadata(session.metadata),
   }
 }
 
@@ -152,6 +162,7 @@ export function saleFromInvoice(invoice: Record<string, unknown>): SaleCandidate
     coversInvoiceId: null,
     // Pre-2025 API versions only; newer invoices refund via the covering checkout or are skipped.
     paymentIntentId: idOf(invoice.payment_intent),
+    metadata: saleMetadata(asRecord(parent?.subscription_details)?.metadata, asRecord(invoice.subscription_details)?.metadata, invoice.metadata),
   }
 }
 
@@ -351,6 +362,10 @@ export async function processStripeEvent(
         update: { conversions: { increment: 1 }, valueCents: { increment: value.valueCents ?? 0 } },
       })
       await tx.stripeEventReceipt.update({ where: { id: saleReceipt.id }, data: { conversionId: conversion.id } })
+      // Same transaction: a sale is never recorded without its commission (or vice versa).
+      if (value.valueCents) {
+        await recordCommission(tx, { userId: integration.userId, urlId: link.id, conversionId: conversion.id, saleValueCents: value.valueCents, currency: value.currency, metadata: sale.metadata, now })
+      }
       await tx.stripeEventReceipt.create({ data: { integrationId: integration.id, stripeEventId: event.id, type: event.type.slice(0, 120), outcome: 'recorded', conversionId: conversion.id } })
       if (attribution.via === 'token' && sale.customerId && integration.trackRecurring) {
         await tx.stripeCustomerAttribution.upsert({
@@ -440,6 +455,7 @@ async function processRefund(integration: StripeIntegrationRecord, event: Stripe
           data: { valueCents: { decrement: reversedCents } },
         })
       }
+      await applyRefundToCommission(tx, conversionId, refundedTotal)
       return { urlId: conversion.urlId, reversedCents, netValueCents: current - reversedCents, currency: conversion.currency }
     })
   } catch (error) {

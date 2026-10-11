@@ -98,6 +98,8 @@ model Url {
   goals            Goal[]
   conversions      ConversionEvent[]
   stripeCustomers  StripeCustomerAttribution[]
+  rewardConfigs    RewardConfig[]
+  commissions      Commission[]
   revisions        DestinationRevision[]
   healthChecks     DestinationHealthCheck[]
   domainLinks      DomainLink[]
@@ -242,6 +244,7 @@ model ConversionEvent {
   goal       Goal        @relation(fields: [goalId], references: [id], onDelete: Cascade)
   clickEvent ClickEvent? @relation(fields: [clickEventId], references: [id], onDelete: SetNull)
   rule       LinkRule?   @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  commission Commission?
 
   @@index([urlId, createdAt])
   @@index([goalId, createdAt])
@@ -286,6 +289,8 @@ model User {
   scimIdentities          ScimIdentity[]
   deletionRequests        DataDeletionRequest[]
   folderAccess            FolderAccess[]
+  rewardConfigs           RewardConfig[]
+  commissions             Commission[]
 
   @@map("users")
 }
@@ -628,25 +633,25 @@ enum WebhookStatus {
 }
 
 model WebhookEndpoint {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   workspaceId    String?
   userId         String?
   url            String
   secret         String
-  isActive       Boolean  @default(true)
+  isActive       Boolean   @default(true)
   events         String[] // Array of event names like "click", "conversion"
   /// 'all' | 'tags' | 'links' | 'folders' - which of the owner's links fire this endpoint.
   /// An endpoint has exactly one owner: a workspace (userId null, managed by
   /// owners/admins, fires for every workspace link) or a user (their own links).
-  linkScope      String   @default("all")
-  tagFilter      String[] @default([])
-  urlIdFilter    String[] @default([])
-  folderIdFilter String[] @default([])
+  linkScope      String    @default("all")
+  tagFilter      String[]  @default([])
+  urlIdFilter    String[]  @default([])
+  folderIdFilter String[]  @default([])
   /// Set when sustained delivery failures switched the endpoint off automatically.
   disabledAt     DateTime?
   disabledReason String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   workspace  Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user       User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1270,4 +1275,64 @@ model UtmTemplate {
 
   @@unique([workspaceId, name])
   @@map("utm_templates")
+}
+
+/// Commission rules for one scope: the owner's account default ("account") or
+/// a single link ("link:<urlId>"). Links resolve first, then the account.
+model RewardConfig {
+  id        String   @id @default(cuid())
+  userId    String
+  /// "account" or "link:<urlId>"; unique per owner so a PUT is an upsert.
+  scopeKey  String
+  urlId     String?
+  /// JSON RewardRule[] (validated by parseRules before every write).
+  rules     String   @default("[]")
+  /// JSON RewardDefault or null.
+  fallback  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  url  Url? @relation(fields: [urlId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, scopeKey])
+  @@index([urlId])
+  @@map("reward_configs")
+}
+
+/// One commission per attributed sale (conversionId is unique, so a retried
+/// webhook can never pay twice). Lifecycle: pending -> approved -> paid;
+/// refunds shrink amountCents, a full refund before payout reverses it, and a
+/// refund after payout is tracked as clawbackCents to net off the next payout.
+model Commission {
+  id             String    @id @default(cuid())
+  userId         String
+  urlId          String
+  conversionId   String    @unique
+  saleValueCents Int
+  /// Commission as originally computed.
+  originalCents  Int
+  /// Commission still owed after refunds.
+  amountCents    Int
+  /// Refunded after the commission was paid out; recover from the next payout.
+  clawbackCents  Int       @default(0)
+  currency       String?
+  status         String    @default("pending")
+  ruleId         String?
+  scopeKey       String?
+  /// Earliest time the commission may be approved (refund window).
+  holdUntil      DateTime?
+  approvedAt     DateTime?
+  paidAt         DateTime?
+  payoutRef      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  url        Url             @relation(fields: [urlId], references: [id], onDelete: Cascade)
+  conversion ConversionEvent @relation(fields: [conversionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status, createdAt])
+  @@index([urlId, createdAt])
+  @@map("commissions")
 }
