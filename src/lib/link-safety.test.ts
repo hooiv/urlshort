@@ -315,3 +315,15 @@ describe('windows shortcut and search-connector files', () => {
     expect(assessDestination('https://example.com/a.html')).toEqual({ status: 'cleared', reason: null })
   })
 })
+
+describe('obfuscated IP literals', () => {
+  it('flags hex, octal, integer and short-form IPs', () => {
+    for (const u of ['http://0x7f.1/', 'http://2130706433/x', 'https://0177.0.0.1/', 'https://0x7f000001:8080/a'])
+      expect(assessDestination(u).reason).toContain('Obfuscated IP')
+  })
+  it('reports plain dotted IPs only as direct IP', () => {
+    const r = assessDestination('https://8.8.8.8/x')
+    expect(r.reason).toContain('Direct IP')
+    expect(r.reason).not.toContain('Obfuscated')
+  })
+})
