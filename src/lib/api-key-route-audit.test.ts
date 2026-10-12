@@ -61,6 +61,7 @@ const KEY_REACHABLE = [
   'bulk/edit/route.ts',
   'links/expiring/route.ts',
   'links/[shortCode]/domains/connect/route.ts',
+  'links/[shortCode]/public-stats/route.ts',
   'links/[shortCode]/domains/route.ts',
   'links/[shortCode]/export/route.ts',
   'workspaces/[workspaceId]/utm-templates/route.ts',   // GET only, LINK_READ_SCOPES; writes are session-only

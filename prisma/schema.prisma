@@ -59,6 +59,8 @@ model Url {
   updatedAt                  DateTime       @updatedAt
   expiresAt                  DateTime?
   expiredUrl                 String?
+  publicStatsHash            String?        @unique
+  publicStatsEnabledAt       DateTime?
   startsAt                   DateTime?
   notStartedUrl              String?
   passwordHash               String?
