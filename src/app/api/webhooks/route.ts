@@ -5,6 +5,7 @@ import { WEBHOOK_SCOPES, resolveActor } from '@/lib/request-actor';
 import { assertDestinationSafeForStorage } from '@/lib/destination-health';
 import { rateLimit } from '@/lib/rate-limit';
 import crypto from 'crypto';
+import { isSlackWebhookUrl } from '@/lib/slack-format';
 import { parseLinkFilterInput } from '@/lib/webhook-filters';
 import { isWorkspaceAdmin, manageableEndpointWhere, resolveEndpointFilter } from '@/lib/webhook-endpoint-access';
 
@@ -95,6 +96,7 @@ export async function GET(request: NextRequest) {
       workspaceId: endpoint.workspaceId,
       workspaceName: endpoint.workspace?.name ?? null,
       url: endpoint.url,
+      format: isSlackWebhookUrl(endpoint.url) ? 'slack' : 'json',
       isActive: endpoint.isActive,
       events: endpoint.events,
       linkScope: endpoint.linkScope,
@@ -148,6 +150,9 @@ export async function POST(request: NextRequest) {
     try {
       const parsed = new URL(url.trim());
       if (parsed.protocol !== 'https:') throw new Error('Webhook URLs must use HTTPS');
+      if (parsed.hostname === 'hooks.slack.com' && !isSlackWebhookUrl(parsed.toString())) {
+        throw new Error('Slack URLs must look like https://hooks.slack.com/services/T…/B…/…')
+      }
       await assertDestinationSafeForStorage(parsed.toString());
       normalizedUrl = parsed.toString();
     } catch (error) {

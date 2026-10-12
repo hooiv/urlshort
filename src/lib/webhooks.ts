@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { assertDestinationSafeForStorage } from './destination-health';
 import { reserveUsageInTransaction } from './tenant-usage';
 import { CircuitBreaker } from './resilience';
+import { isSlackWebhookUrl, slackBodyForDelivery } from './slack-format';
 import { endpointMatchesLink, signWebhookPayload } from './webhook-filters';
 
 import { evaluateEndpointHealth } from './webhook-health';
@@ -124,7 +125,8 @@ export async function processWebhookDelivery(deliveryId: string): Promise<Webhoo
     });
     return { attempted: false, status: 'failed', responseCode: null, latencyMs: 0 };
   }
-  const payloadStr = delivery.payload;
+  const isSlack = isSlackWebhookUrl(endpoint.url);
+  const payloadStr = isSlack ? slackBodyForDelivery(delivery.event, delivery.payload) : delivery.payload;
   
   // Legacy body-only signature is kept for existing consumers; the
   // timestamped v1 signature lets receivers reject replayed deliveries.
@@ -150,7 +152,7 @@ export async function processWebhookDelivery(deliveryId: string): Promise<Webhoo
   try {
     const res = await fetch(endpoint.url, {
       method: 'POST',
-      headers: {
+      headers: isSlack ? { 'Content-Type': 'application/json' } : {
         'Content-Type': 'application/json',
         'X-QuickLink-Signature': signature,
         'X-QuickLink-Signature-256': timestampedSignature,
