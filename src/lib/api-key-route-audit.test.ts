@@ -87,6 +87,10 @@ const KEY_REACHABLE = [
   'webhooks/[id]/test/route.ts',
   'webhooks/route.ts',
   'workspaces/route.ts',
+  'zapier/hooks/[id]/route.ts',
+  'zapier/hooks/route.ts',
+  'zapier/me/route.ts',
+  'zapier/triggers/[trigger]/route.ts',
 ]
 
 describe('API key route audit', () => {

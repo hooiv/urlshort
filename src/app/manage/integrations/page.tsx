@@ -27,6 +27,37 @@ await stripe.checkout.sessions.create({
   // For subscriptions, renewals are credited automatically via the customer.
 });`;
 
+const ZAPIER_ENDPOINTS: { label: string; method: string; path: string; note: string }[] = [
+  { label: 'Test authentication', method: 'GET', path: '/api/zapier/me', note: 'Send the API key as a Bearer token.' },
+  { label: 'Subscribe (REST hook)', method: 'POST', path: '/api/zapier/hooks', note: '{ "target_url": "https://hooks.zapier.com/…", "event": "new_sale" } → { "id" }' },
+  { label: 'Unsubscribe', method: 'DELETE', path: '/api/zapier/hooks/{id}', note: 'Use the id returned by subscribe.' },
+  { label: 'Poll: new links', method: 'GET', path: '/api/zapier/triggers/new_link', note: 'Newest first, ?limit=1..100' },
+  { label: 'Poll: new clicks', method: 'GET', path: '/api/zapier/triggers/new_click', note: 'Human traffic only; no IPs or user agents.' },
+  { label: 'Poll: new sales', method: 'GET', path: '/api/zapier/triggers/new_sale', note: 'Includes commission amount and status.' },
+];
+
+function ZapierPanel() {
+  const origin = typeof window === 'undefined' ? '' : window.location.origin;
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 space-y-3">
+      <h2 className="text-lg font-semibold">Zapier, Make and n8n</h2>
+      <p className="text-sm text-slate-400">
+        Create an API key with the <code>links:write</code>, <code>webhooks:write</code> and <code>analytics:read</code> scopes, then point your automation at these endpoints. Hook subscriptions appear on the Webhooks page with the usual signing, retries and delivery log.
+      </p>
+      <ul className="space-y-2">
+        {ZAPIER_ENDPOINTS.map((e) => (
+          <li key={e.path} className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="w-40 text-slate-300">{e.label}</span>
+            <code className="rounded bg-slate-950 px-2 py-1 font-mono text-xs text-slate-200">{e.method} {origin}{e.path}</code>
+            <CopyButton value={`${origin}${e.path}`} />
+            <span className="w-full text-xs text-slate-500 sm:w-auto">{e.note}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function CopyButton({ value, label = 'Copy' }: { value: string; label?: string }) {
   const [copied, setCopied] = useState(false);
   return (
@@ -206,6 +237,8 @@ export default function IntegrationsPage() {
         </div>
         <pre className="overflow-x-auto rounded-xl bg-slate-950 p-4 text-xs text-slate-300"><code>{CHECKOUT_SNIPPET}</code></pre>
       </div>
+
+      <ZapierPanel />
 
       <div className="space-y-4">
         {loading && <p className="text-slate-500 text-sm">Loading…</p>}
