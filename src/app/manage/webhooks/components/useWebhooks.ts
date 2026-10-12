@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Webhook, WebhookLinkFilter, WebhookLinkScope } from './types';
 import { DEFAULT_WEBHOOK_EVENTS, getWebhookUrlError } from './validateWebhook';
+import { describeTestResult } from './slackSettings';
 
 type RawWebhook = {
   id: string;
@@ -134,8 +135,8 @@ export function useWebhooks() {
     }
   }, []);
 
-  const deleteWebhook = useCallback(async (id: string) => {
-    if (!confirm('Are you sure you want to delete this webhook?')) return;
+  const deleteWebhook = useCallback(async (id: string, skipConfirm = false) => {
+    if (!skipConfirm && !confirm('Are you sure you want to delete this webhook?')) return;
     let snapshot: Webhook[] = [];
     setWebhooks((prev) => {
       snapshot = prev;
@@ -150,7 +151,49 @@ export function useWebhooks() {
     }
   }, []);
 
+  const connectSlack = useCallback(async (url: string, events: string[]): Promise<boolean> => {
+    setError(null);
+    const res = await fetch('/api/webhooks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, events }),
+    });
+    const data: unknown = await res.json().catch(() => null);
+    if (!res.ok) {
+      setError(typeof data === 'object' && data !== null && 'error' in data && typeof data.error === 'string' ? data.error : 'Failed to connect Slack');
+      return false;
+    }
+    setWebhooks((prev) => [normalizeWebhook(data as RawWebhook), ...prev]);
+    return true;
+  }, []);
+
+  const updateWebhook = useCallback(async (id: string, patch: { events?: string[]; isActive?: boolean }): Promise<boolean> => {
+    const res = await fetch(`/api/webhooks/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) {
+      const data: unknown = await res.json().catch(() => null);
+      setError(typeof data === 'object' && data !== null && 'error' in data && typeof data.error === 'string' ? data.error : 'Update failed');
+      return false;
+    }
+    setWebhooks((prev) => prev.map((w) => (w.id === id ? { ...w, ...patch } : w)));
+    return true;
+  }, []);
+
+  const testWebhook = useCallback(async (id: string): Promise<string> => {
+    try {
+      const res = await fetch(`/api/webhooks/${id}/test`, { method: 'POST' });
+      const data = (await res.json().catch(() => ({}))) as { success?: boolean; statusCode?: number | null; responseSnippet?: string | null; error?: string };
+      if (!res.ok) return data.error ?? 'Test failed';
+      return describeTestResult(data);
+    } catch {
+      return 'Test failed: network error';
+    }
+  }, []);
+
   const clearSecret = useCallback(() => setCreatedSecret(null), []);
 
-  return { webhooks, loading, loadError, adding, error, createdSecret, clearSecret, addWebhook, deleteWebhook };
+  return { webhooks, loading, loadError, adding, error, createdSecret, clearSecret, addWebhook, deleteWebhook, connectSlack, updateWebhook, testWebhook };
 }

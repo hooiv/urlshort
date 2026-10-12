@@ -3,6 +3,7 @@
 import { Server } from 'lucide-react';
 import { AddWebhookForm } from './components/AddWebhookForm';
 import { WebhookList } from './components/WebhookList';
+import { SlackSettings } from './components/SlackSettings';
 import { useWebhooks } from './components/useWebhooks';
 
 export default function WebhooksPage() {
@@ -16,7 +17,12 @@ export default function WebhooksPage() {
     clearSecret,
     addWebhook,
     deleteWebhook,
+    connectSlack,
+    updateWebhook,
+    testWebhook,
   } = useWebhooks();
+
+  const deleteSlack = (id: string) => deleteWebhook(id, true);
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -31,6 +37,14 @@ export default function WebhooksPage() {
           </p>
         </div>
       </div>
+
+      <SlackSettings
+        webhooks={webhooks}
+        onConnect={connectSlack}
+        onUpdate={updateWebhook}
+        onTest={testWebhook}
+        onDisconnect={deleteSlack}
+      />
 
       <AddWebhookForm
         adding={adding}
