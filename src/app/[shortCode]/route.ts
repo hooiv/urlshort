@@ -10,6 +10,7 @@ import { admitBillableClick, returnAdmittedClick } from '@/lib/click-admission'
 import { resolveIpGeolocation } from '@/lib/ip-geolocation'
 import { verifyUnlockToken } from '@/lib/password-gate'
 import { activePixels, pixelConsentGranted, pixelContentSecurityPolicy, renderPixelRedirectPage } from '@/lib/retargeting-pixels'
+import { buildOgMetaTags } from '@/lib/og-preview'
 import { escapeHtml, forwardQueryParams, isBillableTraffic, jsString, resolveDestination } from '@/lib/redirect'
 
 function utcDateKey(date: Date): string { return date.toISOString().slice(0, 10) }
@@ -214,13 +215,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
       }).catch(err => console.error('Queue push failed:', err))
     })
 
-    const escapedOgImage = url.ogImage ? escapeHtml(url.ogImage) : ''
     const dynamicOgImage = `${baseUrl}/api/links/${url.shortCode}/og`
-    const finalOgImage = escapedOgImage || dynamicOgImage
 
     if (deviceType === 'bot') {
-      const escapedTitle = escapeHtml(url.title || 'Link')
-      const escapedDescription = escapeHtml(url.description || '')
       const escapedUrl = escapeHtml(finalDestination)
       const scriptUrl = jsString(finalDestination)
 
@@ -228,16 +225,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>${escapedTitle}</title>
-    ${url.description ? `<meta name="description" content="${escapedDescription}" />` : ''}
-    <meta property="og:title" content="${escapedTitle}" />
-    ${url.description ? `<meta property="og:description" content="${escapedDescription}" />` : ''}
-    <meta property="og:image" content="${finalOgImage}" />
-    <meta property="og:url" content="${escapedUrl}" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="${escapedTitle}" />
-    ${url.description ? `<meta name="twitter:description" content="${escapedDescription}" />` : ''}
-    <meta name="twitter:image" content="${finalOgImage}" />
+    ${buildOgMetaTags({ title: url.title, description: url.description, image: url.ogImage || dynamicOgImage, canonical: finalDestination })}
     <meta http-equiv="refresh" content="0; url=${escapedUrl}" />
   </head>
   <body>

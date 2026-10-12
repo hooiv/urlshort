@@ -1,3 +1,4 @@
+import { validateOgFields } from '@/lib/og-preview'
 import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
 import { normalizePixelId, PixelValidationError, type PixelProvider } from '@/lib/retargeting-pixels';
 import { NextRequest, NextResponse } from 'next/server'
@@ -66,15 +67,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
     const body = (await request.json()) as Record<string, unknown>
     const data: Record<string, unknown> = {}
 
-    if (body.title !== undefined) {
-      data.title = typeof body.title === 'string' ? body.title.trim().slice(0, 200) || null : null
-    }
-    if (body.description !== undefined) {
-      data.description = typeof body.description === 'string' ? body.description.trim().slice(0, 1000) || null : null
-    }
-    if (body.ogImage !== undefined) {
-      data.ogImage = typeof body.ogImage === 'string' ? body.ogImage.trim() || null : null
-    }
+    Object.assign(data, validateOgFields({ title: body.title, description: body.description, ogImage: body.ogImage }))
 
     if (body.isActive !== undefined) {
       data.isActive = Boolean(body.isActive)
