@@ -7,7 +7,7 @@ export default function robots(): MetadataRoute.Robots {
         userAgent: '*',
         allow: '/',
         // Don't crawl private per-link pages or API routes.
-        disallow: ['/api/', '/manage/', '/analytics/', '/account', '/workspaces'],
+        disallow: ['/api/', '/manage/', '/analytics/', '/account', '/workspaces', '/stats/'],
       },
     ],
   }
