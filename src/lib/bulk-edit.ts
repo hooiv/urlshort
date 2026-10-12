@@ -21,6 +21,8 @@ export const bulkEditSchema = z.object({
     folderId: z.string().min(1).max(64).nullable().optional(),
     /** null clears the expiry. */
     expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
+    /** null clears the go-live time. */
+    startsAt: z.string().datetime({ offset: true }).nullable().optional(),
     archived: z.boolean().optional(),
     utm: z.object(Object.fromEntries(UTM_KEYS.map((k) => [k, z.string().max(120).nullable().optional()])) as Record<(typeof UTM_KEYS)[number], z.ZodOptional<z.ZodNullable<z.ZodString>>>).optional(),
     utmTemplateId: z.string().min(1).max(64).optional(),
@@ -30,6 +32,7 @@ export const bulkEditSchema = z.object({
   if (!Object.values(c).some((v) => v !== undefined)) ctx.addIssue({ code: 'custom', message: 'Choose at least one change' })
   if (c.setTags && (c.addTags || c.removeTags)) ctx.addIssue({ code: 'custom', message: 'setTags cannot be combined with addTags/removeTags' })
   if (c.utm && c.utmTemplateId) ctx.addIssue({ code: 'custom', message: 'Send utm or utmTemplateId, not both' })
+  if (c.startsAt && c.expiresAt && new Date(c.startsAt).getTime() >= new Date(c.expiresAt).getTime()) ctx.addIssue({ code: 'custom', message: 'startsAt must be before expiresAt' })
   if (c.expiresAt && new Date(c.expiresAt).getTime() <= Date.now()) ctx.addIssue({ code: 'custom', message: 'expiresAt must be in the future' })
 })
 
@@ -54,7 +57,7 @@ export function nextTags(current: string[], c: Pick<BulkEditChanges, 'addTags' |
 
 type LinkRow = {
   id: string; shortCode: string; originalUrl: string; tags: string[]; isActive: boolean
-  expiresAt: Date | null; folderId: string | null; workspaceId: string | null; userId: string | null
+  expiresAt: Date | null; startsAt: Date | null; folderId: string | null; workspaceId: string | null; userId: string | null
 }
 
 export type BulkEditFailure = { link: string; reason: string }
@@ -73,7 +76,7 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
   const c = input.changes
   const rows: LinkRow[] = await prisma.url.findMany({
     where: { AND: [{ deletedAt: null, OR: [{ id: { in: keys } }, { shortCode: { in: keys } }] }, visibleUrlWhere(userId)] },
-    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, folderId: true, workspaceId: true, userId: true },
+    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, startsAt: true, folderId: true, workspaceId: true, userId: true },
   })
   const found = new Set(rows.flatMap((r) => [r.id, r.shortCode]))
   const failures: BulkEditFailure[] = keys.filter((k) => !found.has(k)).map((link) => ({ link, reason: 'Link not found' }))
@@ -134,6 +137,18 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
     if (c.expiresAt !== undefined) {
       const next = c.expiresAt ? new Date(c.expiresAt) : null
       if ((next?.getTime() ?? null) !== (r.expiresAt?.getTime() ?? null)) { data.expiresAt = next; before.expiresAt = r.expiresAt; after.expiresAt = next }
+    }
+    if (c.startsAt !== undefined) {
+      const next = c.startsAt ? new Date(c.startsAt) : null
+      if ((next?.getTime() ?? null) !== (r.startsAt?.getTime() ?? null)) { data.startsAt = next; before.startsAt = r.startsAt; after.startsAt = next }
+    }
+    {
+      const effStart = (data.startsAt !== undefined ? data.startsAt : r.startsAt) as Date | null
+      const effEnd = (data.expiresAt !== undefined ? data.expiresAt : r.expiresAt) as Date | null
+      if (effStart && effEnd && effStart.getTime() >= effEnd.getTime()) {
+        failures.push({ link: r.shortCode, reason: 'startsAt must be before expiresAt' })
+        continue
+      }
     }
     if (c.archived !== undefined && c.archived === r.isActive) {
       data.isActive = !c.archived; before.isActive = r.isActive; after.isActive = !c.archived

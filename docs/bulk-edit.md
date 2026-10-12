@@ -22,6 +22,7 @@
 | `addTags` / `removeTags` | lowercased, deduped; max 20 tags per link |
 | `setTags` | replace all tags (not combinable with add/remove) |
 | `folderId` | move into a folder; `null` removes from folder. All links must be in one workspace and you need editor rights on the folder |
+| `startsAt` | ISO datetime go-live time, or `null` to clear; must be before the effective `expiresAt` per link |
 | `expiresAt` | future ISO datetime, or `null` to clear |
 | `archived` | `true` pauses the link, `false` restores it |
 | `utm` or `utmTemplateId` | fill `utm_*` on the destination. Existing non-empty values are kept. Creates a destination revision. Template must belong to the links' workspace |
