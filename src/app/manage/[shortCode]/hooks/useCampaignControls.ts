@@ -57,6 +57,8 @@ export function useCampaignControls(shortCode: string) {
   // Expiration and protection states
   const [expiresAt, setExpiresAt] = useState('')
   const [expiredUrl, setExpiredUrl] = useState('')
+  const [startsAt, setStartsAt] = useState('')
+  const [notStartedUrl, setNotStartedUrl] = useState('')
   const [maxClicks, setMaxClicks] = useState('')
   const [password, setPassword] = useState('')
   const [hasPassword, setHasPassword] = useState(false)
@@ -117,6 +119,8 @@ export function useCampaignControls(shortCode: string) {
 
       setExpiresAt(toDatetimeLocalValue(linkPayload.expiresAt ?? null))
       setExpiredUrl(linkPayload.expiredUrl || '')
+      setStartsAt(toDatetimeLocalValue(linkPayload.startsAt ?? null))
+      setNotStartedUrl(linkPayload.notStartedUrl || '')
       setMaxClicks(linkPayload.maxClicks ? String(linkPayload.maxClicks) : '')
       setHasPassword(Boolean(linkPayload.passwordHash))
 
@@ -285,12 +289,17 @@ export function useCampaignControls(shortCode: string) {
       return
     }
     if (expiredUrl.trim() && !isHttpUrl(expiredUrl)) return toast.error('Enter a valid URL')
+    if (notStartedUrl.trim() && !isHttpUrl(notStartedUrl)) return toast.error('Enter a valid pre-launch URL')
+    const parsedStartsAt = startsAt ? parseExpirationInput(startsAt) : null
+    if (parsedStartsAt && parsedExpiresAt && new Date(parsedStartsAt) >= new Date(parsedExpiresAt)) return toast.error('Start must be before expiration')
     try {
       await request('', {
         method: 'PATCH',
         body: JSON.stringify({
           expiresAt: parsedExpiresAt,
           expiredUrl: expiredUrl || null,
+          startsAt: parsedStartsAt,
+          notStartedUrl: notStartedUrl || null,
           maxClicks: parsedMaxClicks,
         }),
       })
@@ -440,6 +449,8 @@ export function useCampaignControls(shortCode: string) {
     socialTab, setSocialTab,
     expiresAt, setExpiresAt,
     expiredUrl, setExpiredUrl,
+    startsAt, setStartsAt,
+    notStartedUrl, setNotStartedUrl,
     maxClicks, setMaxClicks,
     password, setPassword,
     hasPassword,

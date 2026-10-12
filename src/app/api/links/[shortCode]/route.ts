@@ -1,4 +1,5 @@
 import { validateOgFields } from '@/lib/og-preview'
+import { assertValidWindow, parseStartsAt } from '@/lib/link-schedule'
 import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
 import { normalizePixelId, PixelValidationError, type PixelProvider } from '@/lib/retargeting-pixels';
 import { NextRequest, NextResponse } from 'next/server'
@@ -47,7 +48,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     where: { id: link.id },
     select: {
       id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, tags: true, clicks: true,
-      createdAt: true, updatedAt: true, expiresAt: true, expiredUrl: true, passwordHash: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, isActive: true,
+      createdAt: true, updatedAt: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, passwordHash: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, isActive: true,
       riskStatus: true, healthStatus: true,
       deepLinkApp: { select: { id: true, name: true, environment: true, appVersion: true, minimumAppVersion: true, enabled: true, resolverEnabled: true } },
       _count: { select: { clickEvents: true, rules: true, goals: true, revisions: true } },
@@ -100,6 +101,23 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
       }
     }
     
+    if (body.startsAt !== undefined) data.startsAt = parseStartsAt(body.startsAt)
+    if (body.notStartedUrl !== undefined) {
+      if (body.notStartedUrl === null || body.notStartedUrl === '') {
+        data.notStartedUrl = null
+      } else {
+        const parsed = normalizeSafeUrl(String(body.notStartedUrl))
+        await assertDestinationSafeForStorage(parsed)
+        data.notStartedUrl = parsed
+      }
+    }
+    if (body.startsAt !== undefined || body.expiresAt !== undefined) {
+      assertValidWindow(
+        (data.startsAt !== undefined ? data.startsAt : link.startsAt) as Date | null,
+        (data.expiresAt !== undefined ? data.expiresAt : link.expiresAt) as Date | null,
+      )
+    }
+
     if (body.expiredUrl !== undefined) {
       if (body.expiredUrl === null || body.expiredUrl === '') {
         data.expiredUrl = null
@@ -160,7 +178,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
         })
         data.originalUrl = newDestination
       }
-      return tx.url.update({ where: { id: link.id }, data, select: { id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, tags: true, isActive: true, expiresAt: true, expiredUrl: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, updatedAt: true } })
+      return tx.url.update({ where: { id: link.id }, data, select: { id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, tags: true, isActive: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, updatedAt: true } })
     })
 
     await invalidateLink(updated.shortCode, updated.id)

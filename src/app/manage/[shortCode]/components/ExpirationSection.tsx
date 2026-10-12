@@ -6,6 +6,10 @@ import Field from '@/app/manage/[shortCode]/components/Field'
 interface ExpirationSectionProps {
   expiresAt: string
   expiredUrl: string
+  startsAt: string
+  notStartedUrl: string
+  onStartsAtChange: (value: string) => void
+  onNotStartedUrlChange: (value: string) => void
   maxClicks: string
   password: string
   hasPassword: boolean
@@ -20,6 +24,10 @@ interface ExpirationSectionProps {
 export default function ExpirationSection({
   expiresAt,
   expiredUrl,
+  startsAt,
+  notStartedUrl,
+  onStartsAtChange,
+  onNotStartedUrlChange,
   maxClicks,
   password,
   hasPassword,
@@ -40,6 +48,23 @@ export default function ExpirationSection({
       <div className="mt-5 grid gap-6 md:grid-cols-2">
         {/* Expiration Controls */}
         <div className="space-y-4">
+          <Field label="Go-live Date & Time (optional)">
+            <input
+              type="datetime-local"
+              value={startsAt}
+              onChange={(e) => onStartsAtChange(e.target.value)}
+              className="input"
+            />
+          </Field>
+          <Field label="Pre-launch Destination (before go-live)">
+            <input
+              type="url"
+              value={notStartedUrl}
+              onChange={(e) => onNotStartedUrlChange(e.target.value)}
+              placeholder="https://example.com/teaser"
+              className="input"
+            />
+          </Field>
           <Field label="Expiration Date & Time">
             <input
               type="datetime-local"

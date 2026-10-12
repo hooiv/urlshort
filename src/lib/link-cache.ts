@@ -47,6 +47,8 @@ export type CachedLink = {
   riskStatus: string
   expiresAt: Date | null
   expiredUrl: string | null
+  startsAt: Date | null
+  notStartedUrl: string | null
   passwordHash: string | null
   metaPixelId: string | null
   googleTagId: string | null
@@ -274,6 +276,8 @@ const linkSelect = {
   riskStatus: true,
   expiresAt: true,
   expiredUrl: true,
+  startsAt: true,
+  notStartedUrl: true,
   passwordHash: true,
   metaPixelId: true,
   googleTagId: true,

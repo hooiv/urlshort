@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse, after } from 'next/server'
+import { linkWindowState, notStartedTarget } from '@/lib/link-schedule'
 import { prisma } from '@/lib/prisma'
 import { appendAttribution, createAttributionToken, hashVisitorId } from '@/lib/attribution'
 import { chooseSmartRule, getAiAgent, getBrowser, getCountry, getDeviceType, getLanguage, getOperatingSystem, getReferrerHost, getTrafficType, getTrafficConfidence, getVisitorId } from '@/lib/smart-routing'
@@ -72,6 +73,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
       if (!unlocked) {
         return NextResponse.redirect(new URL(`/protected/${url.shortCode}`, baseUrl), 307)
       }
+    }
+
+    if (linkWindowState(url) === 'scheduled') {
+      return NextResponse.redirect(notStartedTarget(url, baseUrl), 307)
     }
 
     if (url.expiresAt && new Date() > url.expiresAt) {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { assertValidWindow, parseStartsAt } from '@/lib/link-schedule'
 import { normalizePixelId, PixelValidationError } from '@/lib/retargeting-pixels'
 import { folderWriteError, visibleUrlWhere } from '@/lib/folders'
 import { z } from 'zod'
@@ -30,6 +31,8 @@ export const shortenExtrasSchema = z.object({
   password: z.string().min(1).max(128).optional().nullable(),
   expiresAt: z.string().max(100).optional().nullable(),
   expiredUrl: z.string().trim().max(2048).optional().nullable(),
+  startsAt: z.string().max(100).optional().nullable(),
+  notStartedUrl: z.string().trim().max(2048).optional().nullable(),
   maxClicks: z.union([z.string(), z.number()]).optional().nullable(),
   ogImage: z.string().trim().max(2048).optional().nullable(),
   metaPixelId: z.string().max(50).optional().nullable(),
@@ -93,9 +96,12 @@ export async function POST(request: NextRequest) {
     }
     let maxClicks: number | null = null
     let expiresAt: Date | null = null
+    let startsAt: Date | null = null
     try {
       maxClicks = parseShortenMaxClicks(extras.data.maxClicks)
       expiresAt = parseShortenExpiresAt(extras.data.expiresAt)
+      startsAt = parseStartsAt(extras.data.startsAt)
+      assertValidWindow(startsAt, expiresAt)
     } catch (error) {
       return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid link options' }, { status: 400 })
     }
@@ -110,6 +116,19 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'ogImage must be a valid HTTP or HTTPS URL' }, { status: 400 })
       }
       ogImage = candidate || null
+    }
+    let notStartedUrl: string | null = null
+    if (extras.data.notStartedUrl) {
+      const candidate = normalizeUrl(extras.data.notStartedUrl.trim())
+      if (!isValidUrl(candidate)) {
+        return NextResponse.json({ error: 'Not-started URL must be a valid HTTP or HTTPS URL' }, { status: 400 })
+      }
+      try {
+        await assertDestinationSafeForStorage(candidate)
+      } catch (error) {
+        return NextResponse.json({ error: error instanceof Error ? error.message : 'Pre-launch destination is not allowed' }, { status: 400 })
+      }
+      notStartedUrl = candidate
     }
     let expiredUrl: string | null = null
     if (extras.data.expiredUrl) {
@@ -242,6 +261,8 @@ export async function POST(request: NextRequest) {
             passwordHash: rawPassword ? hashGatePassword(rawPassword) : null,
             expiresAt,
             expiredUrl,
+            startsAt,
+            notStartedUrl,
             maxClicks,
             ...pixelData,
             cloaked: body.cloaked === true,

@@ -59,6 +59,8 @@ model Url {
   updatedAt                  DateTime       @updatedAt
   expiresAt                  DateTime?
   expiredUrl                 String?
+  startsAt                   DateTime?
+  notStartedUrl              String?
   passwordHash               String?
   metaPixelId                String?
   googleTagId                String?

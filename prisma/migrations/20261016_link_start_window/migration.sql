@@ -1,0 +1,2 @@
+ALTER TABLE "urls" ADD COLUMN "startsAt" TIMESTAMP(3);
+ALTER TABLE "urls" ADD COLUMN "notStartedUrl" TEXT;

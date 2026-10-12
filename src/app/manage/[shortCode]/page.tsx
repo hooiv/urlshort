@@ -126,6 +126,10 @@ export default function ManageLink() {
         <ExpirationSection
           expiresAt={controls.expiresAt}
           expiredUrl={controls.expiredUrl}
+          startsAt={controls.startsAt}
+          notStartedUrl={controls.notStartedUrl}
+          onStartsAtChange={controls.setStartsAt}
+          onNotStartedUrlChange={controls.setNotStartedUrl}
           maxClicks={controls.maxClicks}
           password={controls.password}
           hasPassword={controls.hasPassword}
