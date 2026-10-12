@@ -51,9 +51,11 @@ function handlerBody(source: string, method: string): string {
 const KEY_REACHABLE = [
   'analytics/[shortCode]/route.ts',
   'analytics/[shortCode]/heatmap/route.ts',
+  'analytics/[shortCode]/utm/route.ts',
   'analytics/route.ts',
   'bulk/route.ts',
   'bulk/edit/route.ts',
+  'links/expiring/route.ts',
   'links/[shortCode]/domains/connect/route.ts',
   'links/[shortCode]/domains/route.ts',
   'links/[shortCode]/export/route.ts',

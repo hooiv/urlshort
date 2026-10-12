@@ -27,6 +27,7 @@ import {
 import toast, { Toaster } from 'react-hot-toast'
 import { formatCurrency, formatNumber } from '@/lib/format'
 import ClickHeatmap from './components/ClickHeatmap'
+import UtmBreakdown from './components/UtmBreakdown'
 import BreakdownCard, { TechBar } from './components/BreakdownCard'
 import ExperimentDecisionHub from './components/ExperimentDecisionHub'
 import KpiCard from './components/KpiCard'
@@ -740,6 +741,8 @@ export default function AnalyticsPage() {
         </section>
 
         <ClickHeatmap shortCode={shortCode} />
+
+        <UtmBreakdown shortCode={shortCode} />
 
         {/* Real-time Click Stream */}
         <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
