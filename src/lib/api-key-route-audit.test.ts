@@ -52,6 +52,7 @@ const KEY_REACHABLE = [
   'analytics/[shortCode]/route.ts',
   'analytics/route.ts',
   'bulk/route.ts',
+  'bulk/edit/route.ts',
   'links/[shortCode]/domains/connect/route.ts',
   'links/[shortCode]/domains/route.ts',
   'links/[shortCode]/export/route.ts',

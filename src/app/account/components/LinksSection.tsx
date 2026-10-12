@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { CheckCircle2 } from 'lucide-react'
 import LinkCard from '@/app/account/components/LinkCard'
+import BulkEditBar from '@/app/account/components/BulkEditBar'
 import TagFilter from '@/app/account/components/TagFilter'
 import type { Url } from '@/app/account/components/types'
 
@@ -27,6 +28,11 @@ export default function LinksSection({
   onLoadMore: () => void
 }) {
   const searchInputRef = useRef<HTMLInputElement>(null)
+  const [selected, setSelected] = useState<string[]>([])
+  const visibleIds = new Set(links.map((l) => l.id))
+  const chosen = links.filter((l) => selected.includes(l.id) && visibleIds.has(l.id))
+  const workspaces = new Set(chosen.map((l) => l.workspaceId ?? ''))
+  const toggle = (id: string) => setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]))
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -83,7 +89,7 @@ export default function LinksSection({
       {links.length ? (
         <div className="grid gap-3 md:grid-cols-2">
           {links.map((link) => (
-            <LinkCard key={link.id} link={link} onChanged={onRefresh} onSelectTag={onSelectTag} />
+            <LinkCard key={link.id} link={link} onChanged={onRefresh} onSelectTag={onSelectTag} selected={selected.includes(link.id)} onToggleSelect={() => toggle(link.id)} />
           ))}
         </div>
       ) : (
@@ -91,6 +97,13 @@ export default function LinksSection({
           {search || activeTag ? 'No links match your filters.' : 'No account-owned links yet. Create one from the home page.'}
         </p>
       )}
+      <BulkEditBar
+        selected={chosen.map((l) => l.id)}
+        workspaceId={chosen[0]?.workspaceId ?? null}
+        sameWorkspace={workspaces.size === 1 && Boolean(chosen[0]?.workspaceId)}
+        onClear={() => setSelected([])}
+        onDone={onRefresh}
+      />
       {nextCursor && (
         <div className="mt-5 text-center">
           <button

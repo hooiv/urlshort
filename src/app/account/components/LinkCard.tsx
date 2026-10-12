@@ -17,10 +17,14 @@ export default function LinkCard({
   link,
   onChanged,
   onSelectTag,
+  selected = false,
+  onToggleSelect,
 }: {
   link: Url
   onChanged: () => void
   onSelectTag?: (tag: string) => void
+  selected?: boolean
+  onToggleSelect?: () => void
 }) {
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -124,6 +128,9 @@ export default function LinkCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
+            {onToggleSelect && (
+              <input type="checkbox" checked={selected} onChange={onToggleSelect} aria-label={`Select /${link.shortCode}`} className="h-4 w-4 accent-blue-500" />
+            )}
             <span className="truncate font-medium">{link.title || `/${link.shortCode}`}</span>
             {statusBadge}
           </div>

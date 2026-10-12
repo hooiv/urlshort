@@ -1,0 +1,40 @@
+export type BulkEditForm = {
+  addTags: string
+  removeTags: string
+  folder: '' | 'none' | string
+  expiry: '' | 'clear' | string // yyyy-mm-dd, interpreted as end of that day in the browser's zone
+  state: '' | 'archive' | 'restore'
+  utmSource: string
+  utmMedium: string
+  utmCampaign: string
+}
+
+export const emptyBulkEditForm: BulkEditForm = { addTags: '', removeTags: '', folder: '', expiry: '', state: '', utmSource: '', utmMedium: '', utmCampaign: '' }
+
+const splitTags = (v: string) => v.split(',').map((t) => t.trim()).filter(Boolean)
+
+/** Turns the form into the `changes` object for PATCH /api/bulk/edit, or an error to show. */
+export function buildBulkEditChanges(form: BulkEditForm, now = new Date()): { changes: Record<string, unknown> } | { error: string } {
+  const changes: Record<string, unknown> = {}
+  const add = splitTags(form.addTags)
+  const remove = splitTags(form.removeTags)
+  if (add.length) changes.addTags = add
+  if (remove.length) changes.removeTags = remove
+  if (form.folder) changes.folderId = form.folder === 'none' ? null : form.folder
+  if (form.expiry === 'clear') changes.expiresAt = null
+  else if (form.expiry) {
+    const [y, m, d] = form.expiry.split('-').map(Number)
+    const end = new Date(y, (m ?? 1) - 1, d ?? 1, 23, 59, 59)
+    if (!y || Number.isNaN(end.getTime())) return { error: 'Choose a valid expiry date' }
+    if (end.getTime() <= now.getTime()) return { error: 'Expiry must be in the future' }
+    changes.expiresAt = end.toISOString()
+  }
+  if (form.state) changes.archived = form.state === 'archive'
+  const utm: Record<string, string> = {}
+  if (form.utmSource.trim()) utm.source = form.utmSource.trim()
+  if (form.utmMedium.trim()) utm.medium = form.utmMedium.trim()
+  if (form.utmCampaign.trim()) utm.campaign = form.utmCampaign.trim()
+  if (Object.keys(utm).length) changes.utm = utm
+  if (!Object.keys(changes).length) return { error: 'Choose at least one change' }
+  return { changes }
+}
