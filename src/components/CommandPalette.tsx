@@ -22,6 +22,7 @@ const ALL_ACTIONS = [
   { name: 'Bio Pages', path: '/manage/bio' },
   { name: 'Webhooks', path: '/manage/webhooks' },
   { name: 'UTM Templates', path: '/manage/utm' },
+  { name: 'Expiring Links', path: '/manage/expiring' },
   { name: 'Audit Log', path: '/manage/audit' },
   { name: 'Revenue Attribution', path: '/manage/integrations' },
   { name: 'Rewards & Commissions', path: '/manage/rewards' },

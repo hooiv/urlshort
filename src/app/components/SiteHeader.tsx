@@ -51,6 +51,12 @@ export default function SiteHeader() {
             Webhooks
           </Link>
           <Link
+            href="/manage/expiring"
+            className="text-sm font-medium text-slate-400 hover:text-white transition-colors"
+          >
+            Expiring
+          </Link>
+          <Link
             href="/manage/utm"
             className="text-sm font-medium text-slate-400 hover:text-white transition-colors"
           >
