@@ -31,6 +31,10 @@
     {
       "path": "/api/cron/expiry-digest",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-digest",
+      "schedule": "0 8 * * 1"
     }
   ]
 }

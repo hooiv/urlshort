@@ -30,6 +30,12 @@ export default function AccountHeader({ onLogout }: { onLogout: () => void }) {
             Trust &amp; Safety
           </Link>
           <Link
+            href="/account/notifications"
+            className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-300 hover:border-slate-500"
+          >
+            Notifications
+          </Link>
+          <Link
             href="/workspaces"
             className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-300 hover:border-slate-500"
           >

@@ -1,0 +1,2 @@
+ALTER TABLE "users" ADD COLUMN "weeklyDigest" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "users" ADD COLUMN "weeklyDigestSentAt" TIMESTAMP(3);
