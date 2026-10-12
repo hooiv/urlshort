@@ -1,0 +1,25 @@
+import { describe, expect, it } from 'vitest'
+import { bulkEditSchema, nextTags } from './bulk-edit'
+
+describe('nextTags', () => {
+  it('adds, dedupes and lowercases', () => expect(nextTags(['a'], { addTags: ['A', 'b', 'B'] })).toEqual(['a', 'b']))
+  it('removes after adding', () => expect(nextTags(['a', 'b'], { removeTags: ['B'] })).toEqual(['a']))
+  it('replaces with setTags', () => expect(nextTags(['a'], { setTags: ['x'] })).toEqual(['x']))
+  it('enforces the per-link cap', () => {
+    const many = Array.from({ length: 20 }, (_, i) => `t${i}`)
+    expect(() => nextTags(many, { addTags: ['extra'] })).toThrow(/at most 20/)
+  })
+})
+
+describe('bulkEditSchema', () => {
+  const links = ['abc']
+  it('needs a change', () => expect(bulkEditSchema.safeParse({ links, changes: {} }).success).toBe(false))
+  it('rejects setTags with addTags', () => expect(bulkEditSchema.safeParse({ links, changes: { setTags: ['a'], addTags: ['b'] } }).success).toBe(false))
+  it('rejects utm with template', () => expect(bulkEditSchema.safeParse({ links, changes: { utm: { source: 'x' }, utmTemplateId: 't' } }).success).toBe(false))
+  it('rejects past expiry', () => expect(bulkEditSchema.safeParse({ links, changes: { expiresAt: '2020-01-01T00:00:00Z' } }).success).toBe(false))
+  it('accepts null expiry and folder', () => expect(bulkEditSchema.safeParse({ links, changes: { expiresAt: null, folderId: null } }).success).toBe(true))
+  it('rejects unknown keys and >500 links', () => {
+    expect(bulkEditSchema.safeParse({ links, changes: { nope: 1 } }).success).toBe(false)
+    expect(bulkEditSchema.safeParse({ links: Array.from({ length: 501 }, (_, i) => `c${i}`), changes: { archived: true } }).success).toBe(false)
+  })
+})

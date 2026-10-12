@@ -1,0 +1,176 @@
+import { z } from 'zod'
+import type { Prisma } from '@prisma/client'
+import { prisma } from '@/lib/prisma'
+import { EDIT_ROLES } from '@/lib/workspaces'
+import { folderWriteError, visibleUrlWhere } from '@/lib/folders'
+import { applyUtmTemplate, normalizeUtmValues, UTM_KEYS, type UtmValues } from '@/lib/utm-templates'
+import { invalidateLinks } from '@/lib/link-cache'
+
+export const MAX_BULK_EDIT_LINKS = 500
+export const MAX_TAGS_PER_LINK = 20
+const TAG = z.string().trim().min(1).max(40)
+
+export const bulkEditSchema = z.object({
+  /** Link ids or short codes. */
+  links: z.array(z.string().min(1).max(128)).min(1).max(MAX_BULK_EDIT_LINKS),
+  changes: z.object({
+    addTags: z.array(TAG).max(MAX_TAGS_PER_LINK).optional(),
+    removeTags: z.array(TAG).max(MAX_TAGS_PER_LINK).optional(),
+    setTags: z.array(TAG).max(MAX_TAGS_PER_LINK).optional(),
+    /** null removes the link from its folder. */
+    folderId: z.string().min(1).max(64).nullable().optional(),
+    /** null clears the expiry. */
+    expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
+    archived: z.boolean().optional(),
+    utm: z.object(Object.fromEntries(UTM_KEYS.map((k) => [k, z.string().max(120).nullable().optional()])) as Record<(typeof UTM_KEYS)[number], z.ZodOptional<z.ZodNullable<z.ZodString>>>).optional(),
+    utmTemplateId: z.string().min(1).max(64).optional(),
+  }).strict(),
+}).superRefine((body, ctx) => {
+  const c = body.changes
+  if (!Object.values(c).some((v) => v !== undefined)) ctx.addIssue({ code: 'custom', message: 'Choose at least one change' })
+  if (c.setTags && (c.addTags || c.removeTags)) ctx.addIssue({ code: 'custom', message: 'setTags cannot be combined with addTags/removeTags' })
+  if (c.utm && c.utmTemplateId) ctx.addIssue({ code: 'custom', message: 'Send utm or utmTemplateId, not both' })
+  if (c.expiresAt && new Date(c.expiresAt).getTime() <= Date.now()) ctx.addIssue({ code: 'custom', message: 'expiresAt must be in the future' })
+})
+
+export type BulkEditInput = z.infer<typeof bulkEditSchema>
+export type BulkEditChanges = BulkEditInput['changes']
+
+export function normalizeTags(tags: string[]): string[] {
+  return [...new Set(tags.map((t) => t.trim().toLowerCase()).filter(Boolean))]
+}
+
+/** Pure: the tag list a link ends up with. Throws when it would exceed the per-link cap. */
+export function nextTags(current: string[], c: Pick<BulkEditChanges, 'addTags' | 'removeTags' | 'setTags'>): string[] {
+  let tags: string[]
+  if (c.setTags) tags = normalizeTags(c.setTags)
+  else {
+    const remove = new Set(normalizeTags(c.removeTags ?? []))
+    tags = normalizeTags([...current, ...(c.addTags ?? [])]).filter((t) => !remove.has(t))
+  }
+  if (tags.length > MAX_TAGS_PER_LINK) throw new Error(`A link can have at most ${MAX_TAGS_PER_LINK} tags`)
+  return tags
+}
+
+type LinkRow = {
+  id: string; shortCode: string; originalUrl: string; tags: string[]; isActive: boolean
+  expiresAt: Date | null; folderId: string | null; workspaceId: string | null; userId: string | null
+}
+
+export type BulkEditFailure = { link: string; reason: string }
+export type BulkEditResult =
+  | { ok: true; updated: Array<{ id: string; shortCode: string }>; unchanged: number; audit: Array<{ id: string; before: Record<string, unknown>; after: Record<string, unknown> }> }
+  | { ok: false; status: 400 | 403 | 404; error: string; failures: BulkEditFailure[] }
+
+/**
+ * Applies the same changes to many links atomically: every link is checked
+ * first (visibility, edit rights, folder rights, tag cap, UTM template scope)
+ * and nothing is written unless every link passes, so a partial edit never
+ * leaves a table half-tagged.
+ */
+export async function applyBulkEdit(userId: string, input: BulkEditInput): Promise<BulkEditResult> {
+  const keys = [...new Set(input.links)]
+  const c = input.changes
+  const rows: LinkRow[] = await prisma.url.findMany({
+    where: { AND: [{ deletedAt: null, OR: [{ id: { in: keys } }, { shortCode: { in: keys } }] }, visibleUrlWhere(userId)] },
+    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, folderId: true, workspaceId: true, userId: true },
+  })
+  const found = new Set(rows.flatMap((r) => [r.id, r.shortCode]))
+  const failures: BulkEditFailure[] = keys.filter((k) => !found.has(k)).map((link) => ({ link, reason: 'Link not found' }))
+  if (failures.length) return { ok: false, status: 404, error: `${failures.length} link(s) not found`, failures }
+
+  const workspaceIds = [...new Set(rows.flatMap((r) => (r.workspaceId ? [r.workspaceId] : [])))]
+  const memberships = workspaceIds.length
+    ? await prisma.membership.findMany({ where: { userId, workspaceId: { in: workspaceIds } }, select: { workspaceId: true, role: true } })
+    : []
+  const roles = new Map(memberships.map((m) => [m.workspaceId, m.role]))
+  for (const r of rows) {
+    const role = r.workspaceId ? roles.get(r.workspaceId) : undefined
+    const canEdit = r.workspaceId ? Boolean(role && EDIT_ROLES.includes(role)) : r.userId === userId
+    if (!canEdit) failures.push({ link: r.shortCode, reason: 'Editor permission is required' })
+  }
+
+  // Destination folder must be writable and in the same workspace as every link.
+  if (c.folderId) {
+    if (workspaceIds.length !== 1 || rows.some((r) => !r.workspaceId)) {
+      return { ok: false, status: 400, error: 'Links must all belong to one workspace to move them into a folder', failures: [] }
+    }
+    const err = await folderWriteError(userId, workspaceIds[0], roles.get(workspaceIds[0])!, c.folderId)
+    if (err) return { ok: false, status: err === 'Folder not found' ? 404 : 403, error: err, failures: [] }
+  }
+
+  let utm: UtmValues | null = null
+  try {
+    if (c.utm) utm = normalizeUtmValues(c.utm)
+    else if (c.utmTemplateId) {
+      const tpl = await prisma.utmTemplate.findUnique({ where: { id: c.utmTemplateId } })
+      if (!tpl || !workspaceIds.includes(tpl.workspaceId) || workspaceIds.length !== 1) {
+        return { ok: false, status: 404, error: 'UTM template not found in these links\u2019 workspace', failures: [] }
+      }
+      utm = normalizeUtmValues(tpl)
+    }
+  } catch (error) {
+    return { ok: false, status: 400, error: (error as Error).message, failures: [] }
+  }
+
+  const plans: Array<{ row: LinkRow; data: Prisma.UrlUpdateInput; newUrl: string | null; before: Record<string, unknown>; after: Record<string, unknown> }> = []
+  for (const r of rows) {
+    const data: Prisma.UrlUpdateInput = {}
+    const before: Record<string, unknown> = {}
+    const after: Record<string, unknown> = {}
+    try {
+      if (c.addTags || c.removeTags || c.setTags) {
+        const tags = nextTags(r.tags, c)
+        if (tags.join('\u0000') !== r.tags.join('\u0000')) { data.tags = tags; before.tags = r.tags; after.tags = tags }
+      }
+    } catch (error) {
+      failures.push({ link: r.shortCode, reason: (error as Error).message })
+      continue
+    }
+    if (c.folderId !== undefined && c.folderId !== r.folderId) {
+      data.folder = c.folderId ? { connect: { id: c.folderId } } : { disconnect: true }
+      before.folderId = r.folderId; after.folderId = c.folderId
+    }
+    if (c.expiresAt !== undefined) {
+      const next = c.expiresAt ? new Date(c.expiresAt) : null
+      if ((next?.getTime() ?? null) !== (r.expiresAt?.getTime() ?? null)) { data.expiresAt = next; before.expiresAt = r.expiresAt; after.expiresAt = next }
+    }
+    if (c.archived !== undefined && c.archived === r.isActive) {
+      data.isActive = !c.archived; before.isActive = r.isActive; after.isActive = !c.archived
+    }
+    let newUrl: string | null = null
+    if (utm) {
+      const tagged = applyUtmTemplate(r.originalUrl, utm)
+      if (tagged !== r.originalUrl) { newUrl = tagged; data.originalUrl = tagged; before.originalUrl = r.originalUrl; after.originalUrl = tagged }
+    }
+    if (Object.keys(data).length) plans.push({ row: r, data, newUrl, before, after })
+  }
+  if (failures.length) return { ok: false, status: 403, error: `${failures.length} link(s) cannot be edited; nothing was changed`, failures }
+
+  const now = new Date()
+  await prisma.$transaction(async (tx) => {
+    for (const p of plans) {
+      await tx.url.update({ where: { id: p.row.id }, data: p.data, select: { id: true } })
+    }
+    const revisions = plans.filter((p) => p.newUrl)
+    if (revisions.length) {
+      await tx.destinationRevision.createMany({
+        data: revisions.map((p) => ({ urlId: p.row.id, destinationUrl: p.newUrl!, reason: 'Bulk UTM edit', effectiveAt: now })),
+      })
+    }
+    await tx.auditEvent.createMany({
+      data: plans.map((p) => ({
+        action: 'link.bulk_edit', actorType: 'user', actorUserId: userId, urlId: p.row.id, resourceType: 'url', resourceId: p.row.id,
+        beforeJson: JSON.stringify(p.before), afterJson: JSON.stringify(p.after),
+        metadataJson: JSON.stringify({ batchSize: rows.length }),
+      })),
+    })
+  }, { timeout: 30_000 })
+  await invalidateLinks(plans.map((p) => p.row))
+  return {
+    ok: true,
+    updated: plans.map((p) => ({ id: p.row.id, shortCode: p.row.shortCode })),
+    unchanged: rows.length - plans.length,
+    audit: plans.map((p) => ({ id: p.row.id, before: p.before, after: p.after })),
+  }
+}
