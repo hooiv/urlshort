@@ -11,3 +11,7 @@ API: `POST /api/shorten` and `PATCH /api/links/:code` accept `startsAt` (ISO 860
 UI: Manage → Access Protection & Expiration → Go-live Date & Time / Pre-launch Destination.
 
 Not covered: the edge-runtime redirect (`/edge/:code`) does not yet read `startsAt`.
+
+## Owner email digest
+
+`/api/cron/expiry-digest` (daily 09:00 UTC, CRON_SECRET-protected) emails each owner the links expiring in ~7 days and ~1 day. Each link falls in one 24h window per threshold, so daily runs never repeat a link.

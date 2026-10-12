@@ -27,6 +27,10 @@
     {
       "path": "/api/cron/domains",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/expiry-digest",
+      "schedule": "0 9 * * *"
     }
   ]
 }
