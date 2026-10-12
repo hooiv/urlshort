@@ -5,6 +5,7 @@ import { invalidateLink } from '@/lib/link-cache'
 import { publishRealtime } from '@/lib/realtime'
 import { prepareClicks, dedupeClickIds } from '@/lib/click-ingestion'
 import { dispatchWebhooksForUrls } from '@/lib/webhooks'
+import { aggregateDimensions, applyDimensionRollups } from '@/lib/click-dimensions'
 
 export type ClickData = {
   clickEventId: string
@@ -159,6 +160,8 @@ async function persistBatch(parsedItems: ClickData[]): Promise<void> {
         update: { clicks: { increment: entry.count } },
       })
     }
+    // 5. Country/device/referrer rollups that back the analytics breakdown cards.
+    await applyDimensionRollups(tx, aggregateDimensions(insertedItems))
   })
   publishRealtime('click.batch', { count: uniqueItems.length, urlIds: [...perUrl.keys()] })
   // Analytics webhooks are durable DB deliveries; dispatch is intentionally outside

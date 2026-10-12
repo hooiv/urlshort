@@ -1,11 +1,12 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
+import type { ClickDimension } from './click-dimensions'
 
 /**
  * Aggregated analytics across many links: everything a user owns, a whole
  * workspace, or one tag within either. Totals and the time series read the
  * pre-aggregated daily tables, so cost scales with links × days, not clicks.
- * Breakdowns scan raw click events and are therefore capped to 90 days.
+ * Breakdowns read the click_dimension_daily rollup (human traffic only) and stay capped to 90 days.
  */
 
 export const MAX_RANGE_DAYS = 366
@@ -95,13 +96,14 @@ export async function getAggregatedAnalytics(scope: AnalyticsScope, window: Anal
     new Date(`${window.from}T00:00:00Z`).getTime(),
     new Date(`${window.to}T00:00:00Z`).getTime() - (MAX_BREAKDOWN_DAYS - 1) * DAY_MS,
   ))
-  const breakdownTo = new Date(new Date(`${window.to}T00:00:00Z`).getTime() + DAY_MS)
+  const breakdownTo = new Date(`${window.to}T00:00:00Z`)
 
-  const breakdown = (column: Prisma.Sql) => prisma.$queryRaw<BreakdownRow[]>(Prisma.sql`
-    SELECT ${column} AS "key", COUNT(*)::bigint AS "clicks"
-    FROM "click_events" c JOIN "urls" u ON u."id" = c."urlId"
-    WHERE ${where} AND c."createdAt" >= ${breakdownFrom} AND c."createdAt" < ${breakdownTo} AND c."trafficType" = 'human'
-    GROUP BY 1 ORDER BY 2 DESC LIMIT 10
+  const breakdown = (dimension: ClickDimension) => prisma.$queryRaw<BreakdownRow[]>(Prisma.sql`
+    SELECT r."key" AS "key", SUM(r."clicks")::bigint AS "clicks"
+    FROM "click_dimension_daily" r JOIN "urls" u ON u."id" = r."urlId"
+    WHERE ${where} AND r."dimension" = ${dimension}
+      AND r."dateKey" BETWEEN ${toKey(breakdownFrom)} AND ${toKey(breakdownTo)}
+    GROUP BY 1 ORDER BY 2 DESC, 1 ASC LIMIT 10
   `)
 
   const windowStart = new Date(`${window.from}T00:00:00Z`)
@@ -160,9 +162,9 @@ export async function getAggregatedAnalytics(scope: AnalyticsScope, window: Anal
         WHERE ${where}
         GROUP BY t."tag" ORDER BY 3 DESC, 1 ASC LIMIT 20
       `),
-    breakdown(Prisma.sql`c."country"`),
-    breakdown(Prisma.sql`c."deviceType"::text`),
-    breakdown(Prisma.sql`c."referrerHost"`),
+    breakdown('country'),
+    breakdown('device'),
+    breakdown('referrer'),
     // The daily rollups carry no currency; split revenue by currency from the
     // (low-volume) conversion events so mixed-currency sales aren't summed blindly.
     prisma.$queryRaw<Array<{ currency: string | null; valueCents: bigint | number }>>(Prisma.sql`

@@ -96,6 +96,7 @@ model Url {
 
   clickEvents      ClickEvent[]
   clickDaily       ClickDaily[]
+  clickDimensions  ClickDimensionDaily[]
   rules            LinkRule[]
   goals            Goal[]
   conversions      ConversionEvent[]
@@ -210,6 +211,24 @@ model ClickDaily {
   @@unique([urlId, dateKey])
   @@index([urlId, dateKey])
   @@map("click_daily")
+}
+
+/// Per-link, per-day human click counts split by country / device / referrer.
+/// Lets analytics breakdowns read a few thousand rollup rows instead of scanning
+/// every click_events row in the window (see docs/performance.md).
+model ClickDimensionDaily {
+  urlId     String
+  dateKey   String
+  dimension String
+  key       String
+  clicks    Int      @default(0)
+  updatedAt DateTime @default(now()) @updatedAt
+
+  url Url @relation(fields: [urlId], references: [id], onDelete: Cascade)
+
+  @@id([urlId, dateKey, dimension, key])
+  @@index([dimension, dateKey])
+  @@map("click_dimension_daily")
 }
 
 model Goal {

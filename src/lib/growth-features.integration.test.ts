@@ -94,6 +94,12 @@ describe('real database: growth features', () => {
         { urlId: l1.id, country: 'US', deviceType: 'desktop' },
         { urlId: l2.id, country: 'IN', deviceType: 'mobile', trafficType: 'bot' },
       ] })
+      const { aggregateDimensions, applyDimensionRollups } = await import('./click-dimensions')
+      await db.$transaction((tx) => applyDimensionRollups(tx, aggregateDimensions([
+        { urlId: l1.id, dateKey: today, country: 'US', deviceType: 'mobile', referrerHost: 'x.com' },
+        { urlId: l1.id, dateKey: today, country: 'US', deviceType: 'desktop' },
+        { urlId: l2.id, dateKey: today, country: 'IN', deviceType: 'mobile', trafficType: 'bot' },
+      ])))
       const goal = await db.goal.create({ data: { urlId: l1.id, name: 'Purchase', eventKey: 'purchase' } })
       await db.conversionDaily.create({ data: { goalId: goal.id, dateKey: today, conversions: 3, valueCents: 900 } })
 
