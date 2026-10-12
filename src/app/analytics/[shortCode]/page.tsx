@@ -29,6 +29,7 @@ import { formatCurrency, formatNumber } from '@/lib/format'
 import ClickHeatmap from './components/ClickHeatmap'
 import UtmBreakdown from './components/UtmBreakdown'
 import TrafficChannels from './components/TrafficChannels'
+import VisitorRetention from './components/VisitorRetention'
 import PeriodCompare from './components/PeriodCompare'
 import BreakdownCard, { TechBar } from './components/BreakdownCard'
 import ExperimentDecisionHub from './components/ExperimentDecisionHub'
@@ -747,6 +748,7 @@ export default function AnalyticsPage() {
         <PeriodCompare shortCode={shortCode} />
         <UtmBreakdown shortCode={shortCode} />
         <TrafficChannels shortCode={shortCode} />
+        <VisitorRetention shortCode={shortCode} />
 
         {/* Real-time Click Stream */}
         <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">

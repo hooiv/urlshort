@@ -53,6 +53,7 @@ const KEY_REACHABLE = [
   'analytics/[shortCode]/heatmap/route.ts',
   'analytics/[shortCode]/utm/route.ts',
   'analytics/[shortCode]/channels/route.ts',
+  'analytics/[shortCode]/visitors/route.ts',
   'analytics/[shortCode]/compare/route.ts',
   'analytics/route.ts',
   'bulk/route.ts',
