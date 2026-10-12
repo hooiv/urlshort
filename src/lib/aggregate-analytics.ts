@@ -75,7 +75,7 @@ function workspaceFilter(scope: Extract<AnalyticsScope, { kind: 'workspace' }>):
   return filter
 }
 
-function scopeFilter(scope: AnalyticsScope): Prisma.Sql {
+export function scopeFilter(scope: AnalyticsScope): Prisma.Sql {
   const owner = scope.kind === 'user'
     ? Prisma.sql`u."userId" = ${scope.userId} AND u."workspaceId" IS NULL`
     : workspaceFilter(scope)

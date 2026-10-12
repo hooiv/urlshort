@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ArrowDownRight, ArrowUpRight, BarChart3, DollarSign, Link2, MousePointerClick, Target } from 'lucide-react'
 import { formatCurrency, formatNumber } from '@/lib/format'
+import TrendingLinks from './TrendingLinks'
 import KpiCard from './[shortCode]/components/KpiCard'
 import TimeSeriesChart from './[shortCode]/components/TimeSeriesChart'
 import { TechBar } from './[shortCode]/components/BreakdownCard'
@@ -189,6 +190,8 @@ export default function AnalyticsOverviewPage() {
               </div>
               <TimeSeriesChart clicksByDate={series.clicks} conversionByDate={series.conversions} revenueByDate={series.revenue} metric={metric} isHourly={false} />
             </div>
+
+            <TrendingLinks workspaceId={workspaceId} />
 
             <div className="grid gap-4 lg:grid-cols-3">
               <div className="lg:col-span-2 rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
