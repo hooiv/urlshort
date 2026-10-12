@@ -6,6 +6,10 @@ interface PixelsCloakingSectionProps {
   metaPixelId: string
   googleTagId: string
   xPixelId: string
+  linkedinPartnerId: string
+  tiktokPixelId: string
+  onLinkedinPartnerIdChange: (value: string) => void
+  onTiktokPixelIdChange: (value: string) => void
   onMetaPixelIdChange: (value: string) => void
   onGoogleTagIdChange: (value: string) => void
   onXPixelIdChange: (value: string) => void
@@ -18,6 +22,10 @@ export default function PixelsCloakingSection({
   metaPixelId,
   googleTagId,
   xPixelId,
+  linkedinPartnerId,
+  tiktokPixelId,
+  onLinkedinPartnerIdChange,
+  onTiktokPixelIdChange,
   onMetaPixelIdChange,
   onGoogleTagIdChange,
   onXPixelIdChange,
@@ -33,7 +41,7 @@ export default function PixelsCloakingSection({
       </p>
 
       <div className="mt-5 space-y-4">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <Field label="Meta Pixel ID">
             <input
               value={metaPixelId}
@@ -58,7 +66,27 @@ export default function PixelsCloakingSection({
               className="input"
             />
           </Field>
+          <Field label="LinkedIn Partner ID">
+            <input
+              value={linkedinPartnerId}
+              onChange={(e) => onLinkedinPartnerIdChange(e.target.value)}
+              placeholder="1234567"
+              inputMode="numeric"
+              className="input"
+            />
+          </Field>
+          <Field label="TikTok Pixel ID">
+            <input
+              value={tiktokPixelId}
+              onChange={(e) => onTiktokPixelIdChange(e.target.value)}
+              placeholder="C4ABCDEFGHIJ"
+              className="input"
+            />
+          </Field>
         </div>
+        <p className="text-[11px] text-slate-500">
+          Pixels fire in an invisible redirect (250 ms cap) and are skipped for visitors sending Global Privacy Control, Do Not Track, or a ql_consent=denied cookie.
+        </p>
 
         <div className="flex items-center justify-between rounded-xl border border-slate-800 bg-slate-950 p-3">
           <div>

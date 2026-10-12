@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { normalizePixelId, PixelValidationError } from '@/lib/retargeting-pixels'
 import { folderWriteError, visibleUrlWhere } from '@/lib/folders'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
@@ -34,6 +35,8 @@ export const shortenExtrasSchema = z.object({
   metaPixelId: z.string().max(50).optional().nullable(),
   googleTagId: z.string().max(50).optional().nullable(),
   xPixelId: z.string().max(50).optional().nullable(),
+  linkedinPartnerId: z.string().max(50).optional().nullable(),
+  tiktokPixelId: z.string().max(50).optional().nullable(),
 })
 
 export function parseShortenMaxClicks(input: unknown): number | null {
@@ -204,6 +207,15 @@ export async function POST(request: NextRequest) {
       destinationUrl = applyUtmTemplate(normalizedUrl, template)
       if (destinationUrl.length > 2048) return NextResponse.json({ error: 'Destination URL is too long after applying the UTM template' }, { status: 400 })
     }
+    const pixelData: Record<string, string | null> = {}
+    try {
+      for (const [provider, field] of [['meta', 'metaPixelId'], ['google', 'googleTagId'], ['x', 'xPixelId'], ['linkedin', 'linkedinPartnerId'], ['tiktok', 'tiktokPixelId']] as const) {
+        pixelData[field] = normalizePixelId(provider, extras.data[field])
+      }
+    } catch (err) {
+      if (err instanceof PixelValidationError) return NextResponse.json({ error: `${err.message}` }, { status: 400 })
+      throw err
+    }
     let idempotency: Awaited<ReturnType<typeof getIdempotentResponse>> = null
     try {
       idempotency = membership?.workspaceId ? await getIdempotentResponse(request, membership.workspaceId, body) : null
@@ -231,9 +243,7 @@ export async function POST(request: NextRequest) {
             expiresAt,
             expiredUrl,
             maxClicks,
-            metaPixelId: typeof extras.data.metaPixelId === 'string' && extras.data.metaPixelId.trim() ? extras.data.metaPixelId.trim() : null,
-            googleTagId: typeof extras.data.googleTagId === 'string' && extras.data.googleTagId.trim() ? extras.data.googleTagId.trim() : null,
-            xPixelId: typeof extras.data.xPixelId === 'string' && extras.data.xPixelId.trim() ? extras.data.xPixelId.trim() : null,
+            ...pixelData,
             cloaked: body.cloaked === true,
             managementTokenHash: hashManagementToken(managementToken),
             userId: user?.id || null,

@@ -63,6 +63,8 @@ model Url {
   metaPixelId                String?
   googleTagId                String?
   xPixelId                   String?
+  linkedinPartnerId          String?
+  tiktokPixelId              String?
   cloaked                    Boolean        @default(false)
   webhookUrl                 String?
   maxClicks                  Int?

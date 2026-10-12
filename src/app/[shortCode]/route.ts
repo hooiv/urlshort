@@ -9,6 +9,7 @@ import { chooseWeightedVariant, getRunningCampaignForUrl } from '@/lib/campaigns
 import { admitBillableClick, returnAdmittedClick } from '@/lib/click-admission'
 import { resolveIpGeolocation } from '@/lib/ip-geolocation'
 import { verifyUnlockToken } from '@/lib/password-gate'
+import { activePixels, pixelConsentGranted, pixelContentSecurityPolicy, renderPixelRedirectPage } from '@/lib/retargeting-pixels'
 import { escapeHtml, forwardQueryParams, isBillableTraffic, jsString, resolveDestination } from '@/lib/redirect'
 
 function utcDateKey(date: Date): string { return date.toISOString().slice(0, 10) }
@@ -258,71 +259,39 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
       return response
     }
 
-    if (url.metaPixelId || url.googleTagId || url.xPixelId || url.cloaked) {
-      const escapedUrl = escapeHtml(finalDestination)
-      const scriptUrl = jsString(finalDestination)
-      const escapedTitle = escapeHtml(url.title || 'Link')
+    const pixels = pixelConsentGranted({
+      gpc: request.headers.get('sec-gpc'),
+      dnt: request.headers.get('dnt'),
+      cookie: request.headers.get('cookie'),
+    }) ? activePixels(url) : []
 
+    if (url.cloaked) {
+      const escapedUrl = escapeHtml(finalDestination)
       const html = `<!DOCTYPE html>
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>${url.cloaked ? escapedTitle : 'Redirecting...'}</title>
-    ${url.cloaked ? `<style>body,html{margin:0;padding:0;height:100%;overflow:hidden;} iframe{width:100%;height:100%;border:none;}</style>` : ''}
-    ${url.metaPixelId ? `
-    <!-- Meta Pixel Code -->
-    <script>
-    !function(f,b,e,v,n,t,s)
-    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-    n.queue=[];t=b.createElement(e);t.async=!0;
-    t.src=v;s=b.getElementsByTagName(e)[0];
-    s.parentNode.insertBefore(t,s)}(window, document,'script',
-    'https://connect.facebook.net/en_US/fbevents.js');
-    fbq('init', '${escapeHtml(url.metaPixelId)}');
-    fbq('track', 'PageView');
-    </script>
-    <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=${escapeHtml(url.metaPixelId)}&ev=PageView&noscript=1" /></noscript>
-    ` : ''}
-    ${url.googleTagId ? `
-    <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=${escapeHtml(url.googleTagId)}"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', '${escapeHtml(url.googleTagId)}');
-    </script>
-    ` : ''}
-    ${url.xPixelId ? `
-    <!-- X Pixel Code -->
-    <script>
-    !function(e,t,n,s,u,a){e.twq||(s=e.twq=function(){s.exe?s.exe.apply(s,arguments):s.queue.push(arguments);
-    },s.version='1.1',s.queue=[],u=t.createElement(n),u.async=!0,u.src='https://static.ads-twitter.com/uwt.js',
-    a=t.getElementsByTagName(n)[0],a.parentNode.insertBefore(u,a))}(window,document,'script');
-    twq('config','${escapeHtml(url.xPixelId)}');
-    </script>
-    ` : ''}
-    ${!url.cloaked ? `<meta http-equiv="refresh" content="1; url=${escapedUrl}" />` : ''}
+    <title>${escapeHtml(url.title || 'Link')}</title>
+    <style>body,html{margin:0;padding:0;height:100%;overflow:hidden;} iframe{width:100%;height:100%;border:none;}</style>
   </head>
-  <body>
-    ${url.cloaked
-      ? `<iframe src="${escapedUrl}" allow="fullscreen"></iframe>`
-      : `<script>
-          setTimeout(function() {
-            window.location.replace(${scriptUrl});
-          }, 500);
-         </script>`
-    }
-  </body>
+  <body><iframe src="${escapedUrl}" allow="fullscreen"></iframe></body>
 </html>`
-
       const response = new NextResponse(html, {
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'private, no-store' },
+      })
+      if (visitor.isNew) setVisitorCookie(response, visitor.id)
+      return response
+    }
+
+    if (pixels.length > 0) {
+      const response = new NextResponse(renderPixelRedirectPage({ destination: finalDestination, pixels }), {
         status: 200,
         headers: {
           'Content-Type': 'text/html; charset=utf-8',
           'Cache-Control': 'private, no-store',
+          'Content-Security-Policy': pixelContentSecurityPolicy(),
+          'Referrer-Policy': 'origin',
         },
       })
       if (visitor.isNew) setVisitorCookie(response, visitor.id)

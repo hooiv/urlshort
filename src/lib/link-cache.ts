@@ -51,6 +51,8 @@ export type CachedLink = {
   metaPixelId: string | null
   googleTagId: string | null
   xPixelId: string | null
+  linkedinPartnerId: string | null
+  tiktokPixelId: string | null
   cloaked: boolean
   webhookUrl: string | null
   maxClicks: number | null
@@ -276,6 +278,8 @@ const linkSelect = {
   metaPixelId: true,
   googleTagId: true,
   xPixelId: true,
+  linkedinPartnerId: true,
+  tiktokPixelId: true,
   cloaked: true,
   webhookUrl: true,
   maxClicks: true,

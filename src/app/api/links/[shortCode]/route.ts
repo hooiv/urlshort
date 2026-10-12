@@ -1,4 +1,5 @@
 import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
+import { normalizePixelId, PixelValidationError, type PixelProvider } from '@/lib/retargeting-pixels';
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { recordAudit } from '@/lib/audit'
@@ -11,6 +12,8 @@ import { hashGatePassword } from '@/lib/password-gate'
 type UrlRow = NonNullable<Awaited<ReturnType<typeof getManageableUrl>>['url']>
 
 const MAX_TAGS = 10
+
+const PIXEL_FIELDS: Array<[PixelProvider, 'metaPixelId' | 'googleTagId' | 'xPixelId' | 'linkedinPartnerId' | 'tiktokPixelId']> = [['meta', 'metaPixelId'], ['google', 'googleTagId'], ['x', 'xPixelId'], ['linkedin', 'linkedinPartnerId'], ['tiktok', 'tiktokPixelId']];
 
 export function parseMaxClicks(input: unknown): number | null {
   if (input === null || input === '' || input === undefined) return null
@@ -43,7 +46,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     where: { id: link.id },
     select: {
       id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, tags: true, clicks: true,
-      createdAt: true, updatedAt: true, expiresAt: true, expiredUrl: true, passwordHash: true, metaPixelId: true, googleTagId: true, xPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, isActive: true,
+      createdAt: true, updatedAt: true, expiresAt: true, expiredUrl: true, passwordHash: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, isActive: true,
       riskStatus: true, healthStatus: true,
       deepLinkApp: { select: { id: true, name: true, environment: true, appVersion: true, minimumAppVersion: true, enabled: true, resolverEnabled: true } },
       _count: { select: { clickEvents: true, rules: true, goals: true, revisions: true } },
@@ -123,14 +126,16 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
       }
     }
     
-    if (body.metaPixelId !== undefined) {
-      data.metaPixelId = typeof body.metaPixelId === 'string' ? body.metaPixelId.trim().slice(0, 50) || null : null;
-    }
-    if (body.googleTagId !== undefined) {
-      data.googleTagId = typeof body.googleTagId === 'string' ? body.googleTagId.trim().slice(0, 50) || null : null;
-    }
-    if (body.xPixelId !== undefined) {
-      data.xPixelId = typeof body.xPixelId === 'string' ? body.xPixelId.trim().slice(0, 50) || null : null;
+    for (const [provider, field] of PIXEL_FIELDS) {
+      if (body[field] === undefined) continue;
+      try {
+        data[field] = normalizePixelId(provider, body[field]);
+      } catch (err) {
+        if (err instanceof PixelValidationError) {
+          return NextResponse.json({ error: `${field} ${err.message}` }, { status: 400 });
+        }
+        throw err;
+      }
     }
     if (body.webhookUrl !== undefined) {
       if (body.webhookUrl === null || body.webhookUrl === '') {
@@ -162,7 +167,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
         })
         data.originalUrl = newDestination
       }
-      return tx.url.update({ where: { id: link.id }, data, select: { id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, tags: true, isActive: true, expiresAt: true, expiredUrl: true, metaPixelId: true, googleTagId: true, xPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, updatedAt: true } })
+      return tx.url.update({ where: { id: link.id }, data, select: { id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, tags: true, isActive: true, expiresAt: true, expiredUrl: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, updatedAt: true } })
     })
 
     await invalidateLink(updated.shortCode, updated.id)
