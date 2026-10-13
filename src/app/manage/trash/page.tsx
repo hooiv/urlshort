@@ -46,10 +46,30 @@ export default function TrashPage() {
     }
   }
 
+  async function bulk(action: 'restore_all' | 'empty') {
+    if (action === 'empty' && !window.confirm(`Erase all ${links.length} trashed links and their analytics forever?`)) return
+    setBusy('*')
+    try {
+      const r = await fetch('/api/links/trash', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) })
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Action failed')
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Action failed')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   return (
     <main className="mx-auto max-w-4xl p-6">
       <h1 className="mb-1 flex items-center gap-2 text-xl font-semibold"><Trash2 size={20} /> Trash</h1>
       <p className="mb-4 text-sm opacity-70">Deleted links stay recoverable for {retention} days, then are erased with their analytics.</p>
+      {links.length > 0 && (
+        <div className="mb-3 flex gap-2">
+          <button disabled={busy !== null} onClick={() => void bulk('restore_all')} className="rounded border px-3 py-1 text-sm">Restore all</button>
+          <button disabled={busy !== null} onClick={() => void bulk('empty')} className="rounded border px-3 py-1 text-sm text-red-500">Empty trash</button>
+        </div>
+      )}
       {error && <p role="alert" className="mb-2 text-sm text-red-500">{error}</p>}
       {loading ? <p className="text-sm opacity-70">Loading…</p> : links.length === 0 && !error ? (
         <p className="text-sm opacity-70">Trash is empty.</p>

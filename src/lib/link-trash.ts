@@ -75,3 +75,30 @@ export async function purgeExpiredTrash(now = new Date(), batch = 500): Promise<
   await invalidateLinks(rows)
   return res.count
 }
+
+async function ownedTrashRows(userId: string, now: Date, withinWindow: boolean) {
+  const cutoff = new Date(now.getTime() - TRASH_RETENTION_DAYS * DAY_MS)
+  return prisma.url.findMany({
+    where: { AND: [{ deletedAt: withinWindow ? { not: null, gt: cutoff } : { not: null } }, { userId }] },
+    select: { id: true, shortCode: true },
+    take: 1000,
+  })
+}
+
+/** Restores every trashed link the user owns that is still inside the window. Returns the count. */
+export async function restoreAllTrash(userId: string, now = new Date()): Promise<number> {
+  const rows = await ownedTrashRows(userId, now, true)
+  if (rows.length === 0) return 0
+  const res = await prisma.url.updateMany({ where: { id: { in: rows.map((r) => r.id) }, deletedAt: { not: null } }, data: { deletedAt: null } })
+  await invalidateLinks(rows)
+  return res.count
+}
+
+/** Permanently erases every trashed link the user owns (cascades analytics). Returns the count. */
+export async function emptyTrash(userId: string, now = new Date()): Promise<number> {
+  const rows = await ownedTrashRows(userId, now, false)
+  if (rows.length === 0) return 0
+  const res = await prisma.url.deleteMany({ where: { id: { in: rows.map((r) => r.id) }, deletedAt: { not: null }, userId } })
+  await invalidateLinks(rows)
+  return res.count
+}
