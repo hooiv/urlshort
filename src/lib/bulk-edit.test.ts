@@ -27,6 +27,11 @@ describe('bulkEditSchema', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { expiredUrl: 'javascript:alert(1)' } }).success).toBe(false)
     expect(bulkEditSchema.safeParse({ links, changes: { expiredUrl: 'ftp://example.com/x' } }).success).toBe(false)
   })
+  it('accepts an http(s) notStartedUrl or null, rejects other schemes', () => {
+    expect(bulkEditSchema.safeParse({ links, changes: { notStartedUrl: 'https://example.com/soon' } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { notStartedUrl: null } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { notStartedUrl: 'javascript:alert(1)' } }).success).toBe(false)
+  })
   it('rejects non-positive or fractional maxClicks', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { maxClicks: 0 } }).success).toBe(false)
     expect(bulkEditSchema.safeParse({ links, changes: { maxClicks: 1.5 } }).success).toBe(false)
