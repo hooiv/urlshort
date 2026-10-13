@@ -79,7 +79,9 @@ export function scopeFilter(scope: AnalyticsScope): Prisma.Sql {
   const owner = scope.kind === 'user'
     ? Prisma.sql`u."userId" = ${scope.userId} AND u."workspaceId" IS NULL`
     : workspaceFilter(scope)
-  return scope.tag ? Prisma.sql`${owner} AND u."tags" @> ARRAY[${scope.tag}]::text[]` : owner
+  // Trashed links stay out of every aggregate until restored.
+  const live = Prisma.sql`${owner} AND u."deletedAt" IS NULL`
+  return scope.tag ? Prisma.sql`${live} AND u."tags" @> ARRAY[${scope.tag}]::text[]` : live
 }
 
 type SeriesRow = { dateKey: string; clicks: bigint | number | null; conversions: bigint | number | null; valueCents: bigint | number | null }
