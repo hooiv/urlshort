@@ -39,6 +39,18 @@ describe('real database: bulk edit', () => {
       expect((await db.url.findUniqueOrThrow({ where: { id: a.id } })).expiresAt?.toISOString()).toBe(new Date(new Date(exp).getTime() + 10 * 86_400_000).toISOString())
       expect((await db.url.findUniqueOrThrow({ where: { id: noExp.id } })).expiresAt).toBeNull()
 
+      // Bulk password: set, verify, audit without leaking, then remove.
+      const pw = await applyBulkEdit(editor.id, { links: [a.shortCode, b.id], changes: { password: 'hunter22' } })
+      expect(pw.ok && pw.updated.length).toBe(2)
+      const { verifyGatePassword } = await import('./password-gate')
+      const locked = await db.url.findUniqueOrThrow({ where: { id: a.id } })
+      expect(verifyGatePassword('hunter22', locked.passwordHash!)).toBe(true)
+      const pwAudit = await db.auditEvent.findFirstOrThrow({ where: { urlId: a.id, action: 'link.bulk_edit' }, orderBy: { createdAt: 'desc' } })
+      expect(pwAudit.afterJson).not.toContain('hunter22'); expect(pwAudit.afterJson).not.toContain('scrypt$')
+      const rm = await applyBulkEdit(editor.id, { links: [a.shortCode, noExp.shortCode], changes: { password: null } })
+      expect(rm.ok && rm.updated.length).toBe(1)
+      expect((await db.url.findUniqueOrThrow({ where: { id: a.id } })).passwordHash).toBeNull()
+
       // A viewer is rejected and nothing is written.
       const denied = await applyBulkEdit(viewer.id, { links: [a.shortCode], changes: { addTags: ['zzz'] } })
       expect(denied.ok).toBe(false)

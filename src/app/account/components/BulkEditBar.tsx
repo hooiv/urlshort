@@ -96,6 +96,14 @@ export default function BulkEditBar({
               <option value="restore">Restore</option>
             </select>
           </label>
+          <label className="text-xs text-slate-400">Password
+            <div className="mt-1 flex gap-2">
+              <input type="password" autoComplete="new-password" className="input w-full" placeholder="Set one password" value={form.password === 'remove' ? '' : form.password} onChange={(e) => set({ password: e.target.value })} />
+              <button type="button" className="whitespace-nowrap rounded-lg border border-slate-700 px-2 text-slate-300" onClick={() => set({ password: form.password === 'remove' ? '' : 'remove' })}>
+                {form.password === 'remove' ? 'Will remove' : 'Remove'}
+              </button>
+            </div>
+          </label>
           <div className="grid grid-cols-3 gap-2 text-xs text-slate-400">
             <label>utm_source<input className="input mt-1 w-full" value={form.utmSource} onChange={(e) => set({ utmSource: e.target.value })} /></label>
             <label>utm_medium<input className="input mt-1 w-full" value={form.utmMedium} onChange={(e) => set({ utmMedium: e.target.value })} /></label>

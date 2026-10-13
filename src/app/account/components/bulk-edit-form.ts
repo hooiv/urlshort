@@ -5,12 +5,13 @@ export type BulkEditForm = {
   expiry: '' | 'clear' | string // yyyy-mm-dd, interpreted as end of that day in the browser's zone
   extendDays: string // whole days to push existing expiries out
   state: '' | 'archive' | 'restore'
+  password: '' | 'remove' | string // '' leaves as is, 'remove' clears, anything else sets
   utmSource: string
   utmMedium: string
   utmCampaign: string
 }
 
-export const emptyBulkEditForm: BulkEditForm = { addTags: '', removeTags: '', folder: '', expiry: '', extendDays: '', state: '', utmSource: '', utmMedium: '', utmCampaign: '' }
+export const emptyBulkEditForm: BulkEditForm = { addTags: '', removeTags: '', folder: '', expiry: '', extendDays: '', state: '', password: '', utmSource: '', utmMedium: '', utmCampaign: '' }
 
 const splitTags = (v: string) => v.split(',').map((t) => t.trim()).filter(Boolean)
 
@@ -37,6 +38,11 @@ export function buildBulkEditChanges(form: BulkEditForm, now = new Date()): { ch
     changes.extendExpiryDays = n
   }
   if (form.state) changes.archived = form.state === 'archive'
+  if (form.password === 'remove') changes.password = null
+  else if (form.password) {
+    if (form.password.length < 4 || form.password.length > 128) return { error: 'Password must be 4 to 128 characters' }
+    changes.password = form.password
+  }
   const utm: Record<string, string> = {}
   if (form.utmSource.trim()) utm.source = form.utmSource.trim()
   if (form.utmMedium.trim()) utm.medium = form.utmMedium.trim()

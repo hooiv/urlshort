@@ -5,6 +5,7 @@ import { EDIT_ROLES } from '@/lib/workspaces'
 import { folderWriteError, visibleUrlWhere } from '@/lib/folders'
 import { applyUtmTemplate, normalizeUtmValues, UTM_KEYS, type UtmValues } from '@/lib/utm-templates'
 import { invalidateLinks } from '@/lib/link-cache'
+import { hashGatePassword } from '@/lib/password-gate'
 
 export const MAX_BULK_EDIT_LINKS = 500
 export const MAX_TAGS_PER_LINK = 20
@@ -33,6 +34,8 @@ export const bulkEditSchema = z.object({
     notStartedUrl: z.string().trim().url().max(2048).refine((u) => /^https?:\/\//i.test(u), 'notStartedUrl must be http(s)').nullable().optional(),
     archived: z.boolean().optional(),
     cloaked: z.boolean().optional(),
+    /** String sets the same gate password on every link; null removes it. Never echoed back or audited. */
+    password: z.string().min(4).max(128).nullable().optional(),
     utm: z.object(Object.fromEntries(UTM_KEYS.map((k) => [k, z.string().max(120).nullable().optional()])) as Record<(typeof UTM_KEYS)[number], z.ZodOptional<z.ZodNullable<z.ZodString>>>).optional(),
     utmTemplateId: z.string().min(1).max(64).optional(),
   }).strict(),
@@ -67,7 +70,7 @@ export function nextTags(current: string[], c: Pick<BulkEditChanges, 'addTags' |
 
 type LinkRow = {
   id: string; shortCode: string; originalUrl: string; tags: string[]; isActive: boolean
-  expiresAt: Date | null; startsAt: Date | null; maxClicks: number | null; expiredUrl: string | null; notStartedUrl: string | null; cloaked: boolean; folderId: string | null; workspaceId: string | null; userId: string | null
+  expiresAt: Date | null; startsAt: Date | null; maxClicks: number | null; expiredUrl: string | null; notStartedUrl: string | null; cloaked: boolean; passwordHash: string | null; folderId: string | null; workspaceId: string | null; userId: string | null
 }
 
 export type BulkEditFailure = { link: string; reason: string }
@@ -86,7 +89,7 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
   const c = input.changes
   const rows: LinkRow[] = await prisma.url.findMany({
     where: { AND: [{ deletedAt: null, OR: [{ id: { in: keys } }, { shortCode: { in: keys } }] }, visibleUrlWhere(userId)] },
-    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, startsAt: true, maxClicks: true, expiredUrl: true, notStartedUrl: true, cloaked: true, folderId: true, workspaceId: true, userId: true },
+    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, startsAt: true, maxClicks: true, expiredUrl: true, notStartedUrl: true, cloaked: true, passwordHash: true, folderId: true, workspaceId: true, userId: true },
   })
   const found = new Set(rows.flatMap((r) => [r.id, r.shortCode]))
   const failures: BulkEditFailure[] = keys.filter((k) => !found.has(k)).map((link) => ({ link, reason: 'Link not found' }))
@@ -126,6 +129,8 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
     return { ok: false, status: 400, error: (error as Error).message, failures: [] }
   }
 
+  // One scrypt per batch (not per link) keeps a 500-link edit from blocking the event loop.
+  const passwordHash = typeof c.password === 'string' ? hashGatePassword(c.password) : null
   const plans: Array<{ row: LinkRow; data: Prisma.UrlUpdateInput; newUrl: string | null; before: Record<string, unknown>; after: Record<string, unknown> }> = []
   for (const r of rows) {
     const data: Prisma.UrlUpdateInput = {}
@@ -176,6 +181,11 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
     }
     if (c.cloaked !== undefined && c.cloaked !== r.cloaked) {
       data.cloaked = c.cloaked; before.cloaked = r.cloaked; after.cloaked = c.cloaked
+    }
+    if (c.password !== undefined) {
+      const protectedNow = Boolean(r.passwordHash)
+      if (passwordHash) { data.passwordHash = passwordHash; before.passwordProtected = protectedNow; after.passwordProtected = true; after.passwordChanged = true }
+      else if (protectedNow) { data.passwordHash = null; before.passwordProtected = true; after.passwordProtected = false }
     }
     if (c.archived !== undefined && c.archived === r.isActive) {
       data.isActive = !c.archived; before.isActive = r.isActive; after.isActive = !c.archived

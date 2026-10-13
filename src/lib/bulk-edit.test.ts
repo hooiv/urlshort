@@ -42,6 +42,12 @@ describe('bulkEditSchema', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { extendExpiryDays: 3651 } }).success).toBe(false)
     expect(bulkEditSchema.safeParse({ links, changes: { extendExpiryDays: 5, expiresAt: null } }).success).toBe(false)
   })
+  it('validates bulk password length and null', () => {
+    expect(bulkEditSchema.safeParse({ links, changes: { password: 'abcd' } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { password: null } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { password: 'abc' } }).success).toBe(false)
+  })
+
   it('accepts cloaked boolean only', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { cloaked: true } }).success).toBe(true)
     expect(bulkEditSchema.safeParse({ links, changes: { cloaked: 'yes' } }).success).toBe(false)
