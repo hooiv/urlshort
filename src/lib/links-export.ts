@@ -1,0 +1,71 @@
+import { Prisma } from '@prisma/client'
+import { prisma } from './prisma'
+import { scopeFilter, type AnalyticsScope } from './aggregate-analytics'
+import { serializeCsv } from './csv'
+import { neutralizeFormula } from './analytics-export'
+
+/**
+ * Link inventory export (Bitly/Dub "export links"): every non-trashed link in
+ * a scope as CSV or JSON. The CSV header matches what /api/bulk imports, so a
+ * round trip between workspaces works. Capped so a request cannot pull an
+ * unbounded table into memory.
+ */
+export const LINKS_EXPORT_MAX = 50_000
+export const LINKS_EXPORT_FORMATS = ['csv', 'json'] as const
+export type LinksExportFormat = (typeof LINKS_EXPORT_FORMATS)[number]
+
+export type ExportedLink = {
+  shortCode: string
+  originalUrl: string
+  title: string | null
+  tags: string[]
+  folderId: string | null
+  clicks: number
+  isActive: boolean
+  passwordProtected: boolean
+  createdAt: string
+  startsAt: string | null
+  expiresAt: string | null
+}
+
+type Row = Omit<ExportedLink, 'createdAt' | 'startsAt' | 'expiresAt' | 'passwordProtected'> & {
+  passwordHash: string | null
+  createdAt: Date
+  startsAt: Date | null
+  expiresAt: Date | null
+}
+
+export function parseExportFormat(raw: string | null): LinksExportFormat | null {
+  if (raw === null || raw === '') return 'csv'
+  return (LINKS_EXPORT_FORMATS as readonly string[]).includes(raw) ? (raw as LinksExportFormat) : null
+}
+
+export function toExportedLink(r: Row): ExportedLink {
+  return {
+    shortCode: r.shortCode, originalUrl: r.originalUrl, title: r.title, tags: r.tags ?? [], folderId: r.folderId,
+    clicks: r.clicks, isActive: r.isActive, passwordProtected: r.passwordHash !== null,
+    createdAt: r.createdAt.toISOString(), startsAt: r.startsAt?.toISOString() ?? null, expiresAt: r.expiresAt?.toISOString() ?? null,
+  }
+}
+
+const CSV_HEADER = ['shortCode', 'originalUrl', 'title', 'tags', 'folderId', 'clicks', 'active', 'passwordProtected', 'createdAt', 'startsAt', 'expiresAt']
+
+export function linksToCsv(links: ExportedLink[]): string {
+  const safe = (v: string | null) => (v == null ? '' : neutralizeFormula(v))
+  return serializeCsv([
+    CSV_HEADER,
+    ...links.map((l) => [l.shortCode, l.originalUrl, safe(l.title), l.tags.map(neutralizeFormula).join(';'), l.folderId ?? '', l.clicks, l.isActive, l.passwordProtected, l.createdAt, l.startsAt ?? '', l.expiresAt ?? '']),
+  ])
+}
+
+export async function exportLinks(scope: AnalyticsScope): Promise<{ links: ExportedLink[]; truncated: boolean }> {
+  const rows = await prisma.$queryRaw<Row[]>(Prisma.sql`
+    SELECT u."shortCode", u."originalUrl", u."title", u."tags", u."folderId", u."clicks", u."isActive",
+           u."passwordHash", u."createdAt", u."startsAt", u."expiresAt"
+    FROM "urls" u
+    WHERE ${scopeFilter(scope)}
+    ORDER BY u."createdAt" DESC, u."id"
+    LIMIT ${LINKS_EXPORT_MAX + 1}`)
+  const truncated = rows.length > LINKS_EXPORT_MAX
+  return { links: (truncated ? rows.slice(0, LINKS_EXPORT_MAX) : rows).map(toExportedLink), truncated }
+}
