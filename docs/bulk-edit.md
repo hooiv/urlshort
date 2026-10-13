@@ -26,6 +26,7 @@
 | `expiresAt` | future ISO datetime, or `null` to clear |
 | `expiredUrl` | http(s) fallback URL for expired or click-capped links, or `null` to clear it |
 | `notStartedUrl` | http(s) URL visitors see before the link's `startsAt`, or `null` to clear it |
+| `cloaked` | `true` to serve the destination inside a masked frame (URL cloaking), `false` to turn it off |
 | `maxClicks` | integer 1-1,000,000,000, or `null` to remove the click limit |
 | `extendExpiryDays` | integer 1-3650; moves each link's own expiry out by N days from the later of its expiry and now. Links with no expiry are left unchanged. Cannot be combined with `expiresAt` |
 | `archived` | `true` pauses the link, `false` restores it |

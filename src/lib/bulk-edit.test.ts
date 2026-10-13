@@ -42,6 +42,10 @@ describe('bulkEditSchema', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { extendExpiryDays: 3651 } }).success).toBe(false)
     expect(bulkEditSchema.safeParse({ links, changes: { extendExpiryDays: 5, expiresAt: null } }).success).toBe(false)
   })
+  it('accepts cloaked boolean only', () => {
+    expect(bulkEditSchema.safeParse({ links, changes: { cloaked: true } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { cloaked: 'yes' } }).success).toBe(false)
+  })
   it('accepts null expiry and folder', () => expect(bulkEditSchema.safeParse({ links, changes: { expiresAt: null, folderId: null } }).success).toBe(true))
   it('accepts startsAt and null', () => { expect(bulkEditSchema.safeParse({ links, changes: { startsAt: '2030-01-01T00:00:00Z' } }).success).toBe(true); expect(bulkEditSchema.safeParse({ links, changes: { startsAt: null } }).success).toBe(true) })
   it('rejects startsAt after expiresAt', () => expect(bulkEditSchema.safeParse({ links, changes: { startsAt: '2031-01-01T00:00:00Z', expiresAt: '2030-06-01T00:00:00Z' } }).success).toBe(false))
