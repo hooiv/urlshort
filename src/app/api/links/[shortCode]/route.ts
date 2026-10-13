@@ -192,7 +192,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
       urlId: updated.id,
       resourceType: 'url',
       resourceId: updated.id,
-      before: { title: link.title, isActive: link.isActive },
+      before: { title: link.title, isActive: link.isActive, expiresAt: link.expiresAt },
       after: { title: updated.title, isActive: updated.isActive, expiresAt: updated.expiresAt, destinationChanged: Boolean(newDestination) },
     })
     return NextResponse.json(updated)

@@ -34,6 +34,26 @@ export default function LinkActivity({ shortCode }: { shortCode: string }) {
     }
   }, [shortCode])
 
+  const [undoing, setUndoing] = useState<string | null>(null)
+  const undo = async (eventId: string) => {
+    setUndoing(eventId)
+    setError(null)
+    try {
+      const res = await fetch(`/api/links/${encodeURIComponent(shortCode)}/revert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) throw new Error(data?.error || 'Could not undo this change')
+      await load(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not undo this change')
+    } finally {
+      setUndoing(null)
+    }
+  }
+
   // Initial fetch on mount; load() sets loading state before awaiting the network.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(null) }, [load])
@@ -48,6 +68,11 @@ export default function LinkActivity({ shortCode }: { shortCode: string }) {
             <p className="text-slate-300">
               <span className="font-medium">{it.action}</span> by {it.actorType.replace('_', ' ')} · <time dateTime={it.createdAt}>{new Date(it.createdAt).toLocaleString()}</time>
             </p>
+            {(it.action === 'link.update' || it.action === 'link.rename') && it.changes.length > 0 && (
+              <button type="button" disabled={undoing === it.id} onClick={() => void undo(it.id)} className="pl-3 text-slate-400 hover:text-white disabled:opacity-50">
+                {undoing === it.id ? 'Undoing…' : 'Undo'}
+              </button>
+            )}
             {it.changes.slice(0, 5).map((c) => (
               <p key={c.field} className="pl-3 text-slate-500">{c.field}: {show(c.before)} → {show(c.after)}</p>
             ))}
