@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { normalizeNewTag } from '@/app/manage/[shortCode]/components/campaign-utils'
 
@@ -8,9 +9,24 @@ interface TagsSectionProps {
   tagInput: string
   onTagInputChange: (value: string) => void
   onUpdateTags: (tags: string[]) => void
+  destinationUrl?: string
 }
 
-export default function TagsSection({ tags, tagInput, onTagInputChange, onUpdateTags }: TagsSectionProps) {
+export default function TagsSection({ tags, tagInput, onTagInputChange, onUpdateTags, destinationUrl }: TagsSectionProps) {
+  const [suggestions, setSuggestions] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!destinationUrl) return
+    const controller = new AbortController()
+    fetch(`/api/tags/suggest?url=${encodeURIComponent(destinationUrl)}&limit=6`, { signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : { suggestions: [] }))
+      .then((data: { suggestions?: { tag: string }[] }) => setSuggestions((data.suggestions ?? []).map((item) => item.tag)))
+      .catch(() => setSuggestions([]))
+    return () => controller.abort()
+  }, [destinationUrl])
+
+  const available = suggestions.filter((tag) => !tags.includes(tag))
+
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
       <h2 className="font-semibold text-white">Campaign Tags</h2>
@@ -60,6 +76,22 @@ export default function TagsSection({ tags, tagInput, onTagInputChange, onUpdate
           Add Tag
         </button>
       </form>
+
+      {available.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-2" aria-label="Suggested tags">
+          <span className="text-xs text-slate-500">Used on similar links:</span>
+          {available.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => onUpdateTags([...tags, tag])}
+              className="rounded-full border border-slate-700 px-3 py-1 text-xs text-slate-300 hover:border-blue-500/50 hover:text-white"
+            >
+              + #{tag}
+            </button>
+          ))}
+        </div>
+      )}
     </section>
   )
 }

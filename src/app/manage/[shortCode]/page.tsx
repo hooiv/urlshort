@@ -147,6 +147,7 @@ export default function ManageLink() {
         <TagsSection
           tags={controls.tags}
           tagInput={controls.tagInput}
+          destinationUrl={controls.liveRevision?.destinationUrl}
           onTagInputChange={controls.setTagInput}
           onUpdateTags={(tags) => void controls.updateTags(tags)}
         />
