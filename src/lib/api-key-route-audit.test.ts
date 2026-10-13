@@ -61,6 +61,7 @@ const KEY_REACHABLE = [
   'analytics/tags/route.ts',
   'analytics/folders/route.ts',
   'analytics/countries/route.ts',
+  'analytics/tech/route.ts',
   'analytics/traffic-quality/route.ts',
   'links/duplicates/route.ts',
   'bulk/route.ts',
