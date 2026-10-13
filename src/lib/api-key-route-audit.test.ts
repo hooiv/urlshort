@@ -73,6 +73,7 @@ const KEY_REACHABLE = [
   'analytics/languages/route.ts',
   'links/[shortCode]/clone/route.ts',
   'links/[shortCode]/rename/route.ts',
+  'links/[shortCode]/activity/route.ts',
   'links/[shortCode]/restore/route.ts',
   'links/trash/route.ts',
   'bulk/route.ts',

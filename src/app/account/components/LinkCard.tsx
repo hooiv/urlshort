@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Copy } from 'lucide-react'
 import toast from 'react-hot-toast'
 import CardAction from '@/app/account/components/CardAction'
+import LinkActivity from '@/app/account/components/LinkActivity'
 import Field from '@/app/account/components/Field'
 import type { Url } from '@/app/account/components/types'
 import { useWritableFolders } from '@/components/FolderPicker'
@@ -33,6 +34,7 @@ export default function LinkCard({
   const [destination, setDestination] = useState(link.originalUrl)
   const [tagsInput, setTagsInput] = useState((link.tags ?? []).join(', '))
   const [choosingFolder, setChoosingFolder] = useState(false)
+  const [showActivity, setShowActivity] = useState(false)
   const folders = useWritableFolders(choosingFolder ? link.workspaceId : null)
   const currentFolder = folders.find((f) => f.id === link.folderId)
 
@@ -332,8 +334,10 @@ export default function LinkCard({
           </a>
           <CardAction disabled={busy} onClick={() => void clone()} label="Clone" />
           <CardAction disabled={busy} onClick={() => void rename()} label="Rename" />
+          <CardAction onClick={() => setShowActivity((v) => !v)} label={showActivity ? 'Hide activity' : 'Activity'} />
           <CardAction disabled={busy} onClick={() => void remove()} label="Delete" danger />
         </div>
+        {showActivity && <LinkActivity shortCode={link.shortCode} />}
       </div>
     </article>
   )
