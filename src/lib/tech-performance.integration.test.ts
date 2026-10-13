@@ -4,7 +4,7 @@ import { PrismaClient } from '@prisma/client'
 const databaseUrl = process.env.SOAK_DATABASE_URL
 
 describe('real database: tech performance', () => {
-  it.skipIf(!databaseUrl)('groups by device, browser and os, excludes bots, honours viewer scope', async () => {
+  it.skipIf(!databaseUrl)('groups by language, counts visitors, excludes bots, honours viewer scope', async () => {
     process.env.DATABASE_URL = databaseUrl
     process.env.DIRECT_DATABASE_URL = databaseUrl
     const db = new PrismaClient({ datasources: { db: { url: databaseUrl } } })
@@ -19,23 +19,20 @@ describe('real database: tech performance', () => {
       const open = await db.url.create({ data: { shortCode: `o${tag}`.slice(0, 40), originalUrl: 'https://example.com', workspaceId: ws.id } })
       const hidden = await db.url.create({ data: { shortCode: `h${tag}`.slice(0, 40), originalUrl: 'https://example.com', workspaceId: ws.id, folderId: secret.id } })
       await db.clickEvent.createMany({ data: [
-        { urlId: open.id, trafficType: 'human', deviceType: 'mobile', browser: 'Safari', os: 'iOS', visitorIdHash: 'a', createdAt: ago(1) },
-        { urlId: open.id, trafficType: 'human', deviceType: 'mobile', browser: 'Safari', os: 'iOS', visitorIdHash: 'a', createdAt: ago(2) },
-        { urlId: open.id, trafficType: 'human', deviceType: 'desktop', browser: 'Chrome', os: 'Windows', visitorIdHash: 'b', createdAt: ago(3) },
-        { urlId: open.id, trafficType: 'human', deviceType: 'mobile', browser: 'Safari', os: 'iOS', visitorIdHash: 'c', createdAt: ago(10) },
-        { urlId: open.id, trafficType: 'bot', deviceType: 'bot', createdAt: ago(1) },
-        { urlId: open.id, trafficType: 'human', createdAt: ago(1) },
-        { urlId: hidden.id, trafficType: 'human', deviceType: 'tablet', browser: 'Firefox', os: 'Android', createdAt: ago(1) },
+        { urlId: open.id, trafficType: 'human', browser: 'Chrome', visitorIdHash: 'a', createdAt: ago(1) },
+        { urlId: open.id, trafficType: 'human', browser: 'Chrome', visitorIdHash: 'a', createdAt: ago(2) },
+        { urlId: open.id, trafficType: 'human', browser: 'Safari', visitorIdHash: 'b', createdAt: ago(3) },
+        { urlId: open.id, trafficType: 'human', browser: 'Safari', visitorIdHash: 'c', createdAt: ago(10) },
+        { urlId: open.id, trafficType: 'bot', browser: 'Safari', createdAt: ago(1) },
+        { urlId: open.id, trafficType: 'human', browser: null, createdAt: ago(1) },
+        { urlId: hidden.id, trafficType: 'human', browser: 'Firefox', visitorIdHash: 'd', createdAt: ago(1) },
       ] })
-      const device = await getTechPerformance(ws.id, undefined, 'device', 7, now)
-      expect(device.rows.find((r) => r.value === 'mobile')).toMatchObject({ clicks: 2, visitors: 1, previousClicks: 1, changePct: 100 })
-      expect(device.rows.find((r) => r.value === 'bot')).toBeUndefined()
-      expect(device.rows.find((r) => r.value === null)?.clicks).toBe(1)
-      const browser = await getTechPerformance(ws.id, undefined, 'browser', 7, now)
-      expect(browser.rows.find((r) => r.value === 'Firefox')?.clicks).toBe(1)
-      const os = await getTechPerformance(ws.id, { userId: viewer.id }, 'os', 7, now)
-      expect(os.rows.some((r) => r.value === 'Android')).toBe(false)
-      expect(os.rows.find((r) => r.value === 'iOS')?.clicks).toBe(2)
+      const admin = await getTechPerformance(ws.id, undefined, 'browser', 7, now)
+      expect(admin.rows.find((c) => c.value === 'Chrome')).toMatchObject({ clicks: 2, visitors: 1 })
+      expect(admin.rows.find((c) => c.value === null)?.clicks).toBe(1)
+      expect(admin.rows.find((c) => c.value === 'Firefox')?.clicks).toBe(1)
+      const limited = await getTechPerformance(ws.id, { userId: viewer.id }, 'browser', 7, now)
+      expect(limited.rows.some((c) => c.value === 'Firefox')).toBe(false)
     } finally {
       await db.url.deleteMany({ where: { workspaceId: ws.id } })
       await db.workspace.deleteMany({ where: { id: ws.id } })

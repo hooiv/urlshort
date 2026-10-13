@@ -7,8 +7,8 @@ import { canAdministerFolders } from '@/lib/folders'
 import { getTechPerformance, parseTechDimension, parseTechWindow } from '@/lib/tech-performance'
 
 /**
- * GET /api/analytics/tech?workspaceId=&dimension=device|browser|os&days=7|30|90
- * Human clicks per device, browser or OS vs the previous window. Session auth or API key with analytics:read / links:read.
+ * GET /api/analytics/tech?workspaceId=&dimension=browser|os|device&days=7|30|90
+ * Human clicks per browser, OS or device vs the previous window. Session auth or API key with analytics:read / links:read.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     if (days === null) return NextResponse.json({ error: 'days must be one of 7, 30, 90' }, { status: 400 })
 
     const dimension = parseTechDimension(params.get('dimension'))
-    if (dimension === null) return NextResponse.json({ error: 'dimension must be one of device, browser, os' }, { status: 400 })
+    if (dimension === null) return NextResponse.json({ error: 'dimension must be one of browser, os, device' }, { status: 400 })
 
     const workspaceId = params.get('workspaceId')
     if (!workspaceId) return NextResponse.json({ error: 'workspaceId is required' }, { status: 400 })

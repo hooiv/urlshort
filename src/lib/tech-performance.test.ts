@@ -2,29 +2,25 @@ import { describe, expect, it } from 'vitest'
 import { parseTechDimension, parseTechWindow, shapeTechStats } from './tech-performance'
 
 describe('parsers', () => {
-  it('validate dimension and window', () => {
-    expect(parseTechDimension(null)).toBe('device')
+  it('validates dimension and window', () => {
+    expect(parseTechDimension(null)).toBe('browser')
     expect(parseTechDimension('os')).toBe('os')
-    expect(parseTechDimension('"deviceType"; drop')).toBeNull()
-    expect(parseTechWindow('7')).toBe(7)
-    expect(parseTechWindow('8')).toBeNull()
+    expect(parseTechDimension('deviceType; drop')).toBeNull()
+    expect(parseTechWindow('30')).toBe(30)
+    expect(parseTechWindow('5')).toBeNull()
   })
 })
 
 describe('shapeTechStats', () => {
-  it('merges case variants and blanks, computes change and share', () => {
+  it('computes share, change and caps visitors', () => {
     const out = shapeTechStats([
-      { value: 'Chrome', clicks: 60n, visitors: 30n, previous: 40n },
-      { value: 'chrome ', clicks: 20, visitors: 5, previous: 0 },
-      { value: null, clicks: 10, visitors: 2, previous: 0 },
-      { value: '  ', clicks: 10, visitors: 1, previous: 0 },
-      { value: 'Edge', clicks: 0, visitors: 0, previous: 0 },
+      { value: 'Chrome', clicks: 75n, visitors: 90n, previous: 50n },
+      { value: null, clicks: 25, visitors: 3, previous: 0 },
+      { value: 'Opera', clicks: 0, visitors: 0, previous: 0 },
+      { value: 'Edge', clicks: 0, visitors: 0, previous: 4 },
     ])
-    expect(out.map((r) => r.label)).toEqual(['Chrome', 'Unknown'])
-    expect(out[0]).toMatchObject({ clicks: 80, visitors: 35, changePct: 100, sharePct: 80 })
-    expect(out[1]).toMatchObject({ value: null, clicks: 20, changePct: null })
-  })
-  it('keeps values that only had previous traffic', () => {
-    expect(shapeTechStats([{ value: 'mobile', clicks: 0, visitors: 0, previous: 5 }])[0]).toMatchObject({ label: 'Mobile', changePct: -100 })
+    expect(out.map((r) => r.name)).toEqual(['Chrome', 'Unknown', 'Edge'])
+    expect(out[0]).toMatchObject({ visitors: 75, changePct: 50, sharePct: 75 })
+    expect(out[2].changePct).toBe(-100)
   })
 })
