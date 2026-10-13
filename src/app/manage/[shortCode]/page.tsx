@@ -17,6 +17,7 @@ import WebhookSection from '@/app/manage/[shortCode]/components/WebhookSection'
 import PixelsCloakingSection from '@/app/manage/[shortCode]/components/PixelsCloakingSection'
 import ExpirationSection from '@/app/manage/[shortCode]/components/ExpirationSection'
 import TagsSection from '@/app/manage/[shortCode]/components/TagsSection'
+import NotesSection from '@/app/manage/[shortCode]/components/NotesSection'
 import DangerZone from '@/app/manage/[shortCode]/components/DangerZone'
 import AccessDenied from '@/app/manage/[shortCode]/components/AccessDenied'
 
@@ -66,6 +67,8 @@ export default function ManageLink() {
           onSocialTabChange={controls.setSocialTab}
           onSave={() => void controls.saveMetadata()}
         />
+
+        <NotesSection notes={controls.notes} onChange={controls.setNotes} onSave={() => void controls.saveNotes()} />
 
         <UtmBuilder
           utmSource={controls.utmSource}

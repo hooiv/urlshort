@@ -45,6 +45,7 @@ export function cloneUrlData(source: Url, shortCode: string): Prisma.UrlUnchecke
     deepLinkAppId: source.deepLinkAppId,
     autoFailoverEnabled: source.autoFailoverEnabled,
     tags: source.tags,
+    notes: source.notes,
   }
 }
 

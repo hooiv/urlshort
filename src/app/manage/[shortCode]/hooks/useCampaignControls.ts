@@ -52,6 +52,7 @@ export function useCampaignControls(shortCode: string) {
   const [ogTitle, setOgTitle] = useState('')
   const [ogDesc, setOgDesc] = useState('')
   const [ogImage, setOgImage] = useState('')
+  const [notes, setNotes] = useState('')
   const [socialTab, setSocialTab] = useState<SocialPlatform>('twitter')
 
   // Expiration and protection states
@@ -116,6 +117,7 @@ export function useCampaignControls(shortCode: string) {
       setOgTitle(linkPayload.title || '')
       setOgDesc(linkPayload.description || '')
       setOgImage(linkPayload.ogImage || '')
+      setNotes(linkPayload.notes || '')
 
       setExpiresAt(toDatetimeLocalValue(linkPayload.expiresAt ?? null))
       setExpiredUrl(linkPayload.expiredUrl || '')
@@ -275,6 +277,15 @@ export function useCampaignControls(shortCode: string) {
       toast.success('Social metadata updated')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Update failed')
+    }
+  }
+
+  async function saveNotes() {
+    try {
+      await request('', { method: 'PATCH', body: JSON.stringify({ notes: notes || null }) })
+      toast.success('Notes saved')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not save notes')
     }
   }
 
@@ -476,6 +487,8 @@ export function useCampaignControls(shortCode: string) {
     updateTags,
     publishRelease,
     rollback,
+    notes, setNotes,
+    saveNotes,
     saveMetadata,
     saveExpiration,
     savePassword,

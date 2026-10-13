@@ -97,6 +97,8 @@ model Url {
   riskReason                 String?
   riskCheckedAt              DateTime?
   deletedAt                  DateTime?
+  /// Private internal note; never rendered on redirect, OG, public stats or bio pages.
+  notes                      String?
   tags                       String[]
 
   clickEvents      ClickEvent[]

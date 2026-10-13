@@ -1,3 +1,4 @@
+import { validateLinkNotes } from '@/lib/link-notes'
 import { trashLink, TRASH_RETENTION_DAYS } from '@/lib/link-trash'
 import { validateOgFields } from '@/lib/og-preview'
 import { assertValidWindow, parseStartsAt } from '@/lib/link-schedule'
@@ -48,7 +49,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
   const url = await prisma.url.findUnique({
     where: { id: link.id },
     select: {
-      id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, tags: true, clicks: true,
+      id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, notes: true, tags: true, clicks: true,
       createdAt: true, updatedAt: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, passwordHash: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, isActive: true,
       riskStatus: true, healthStatus: true,
       deepLinkApp: { select: { id: true, name: true, environment: true, appVersion: true, minimumAppVersion: true, enabled: true, resolverEnabled: true } },
@@ -70,6 +71,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
     const data: Record<string, unknown> = {}
 
     Object.assign(data, validateOgFields({ title: body.title, description: body.description, ogImage: body.ogImage }))
+
+    if (body.notes !== undefined) data.notes = validateLinkNotes(body.notes)
 
     if (body.isActive !== undefined) {
       data.isActive = Boolean(body.isActive)
@@ -179,7 +182,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
         })
         data.originalUrl = newDestination
       }
-      return tx.url.update({ where: { id: link.id }, data, select: { id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, tags: true, isActive: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, updatedAt: true } })
+      return tx.url.update({ where: { id: link.id }, data, select: { id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, notes: true, tags: true, isActive: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, updatedAt: true } })
     })
 
     await invalidateLink(updated.shortCode, updated.id)
