@@ -1,3 +1,4 @@
+import { MAX_PINNED_LINKS, pinnedFirst } from '@/lib/link-pins'
 import { NextRequest, NextResponse } from 'next/server'
 import { assertValidWindow, parseStartsAt } from '@/lib/link-schedule'
 import { normalizePixelId, PixelValidationError } from '@/lib/retargeting-pixels'
@@ -335,6 +336,24 @@ export async function POST(request: NextRequest) {
   }
 }
 
+const LINK_LIST_SELECT = {
+  id: true,
+  originalUrl: true,
+  shortCode: true,
+  title: true,
+  tags: true,
+  workspaceId: true,
+  folderId: true,
+  clicks: true,
+  createdAt: true,
+  pinnedAt: true,
+  expiresAt: true,
+  isActive: true,
+  riskStatus: true,
+  healthStatus: true,
+  _count: { select: { clickEvents: true, rules: true } },
+} as const
+
 export async function GET(request: NextRequest) {
   try {
     const resolved = await resolveActor(request, LINK_READ_SCOPES)
@@ -348,6 +367,7 @@ export async function GET(request: NextRequest) {
     // ?folder=<id> or ?folder=none for links outside any folder.
     const folderFilter = (params.get('folder') || '').trim().slice(0, 40)
     const take = Math.min(Math.max(Number(params.get('take')) || 25, 1), 100)
+    const pinnedOnly = params.get('pinned') === '1'
     const cursorParam = params.get('cursor')
     const cursor = cursorParam ? new Date(cursorParam) : null
     if (cursorParam && (cursor === null || Number.isNaN(cursor.getTime()))) {
@@ -370,34 +390,33 @@ export async function GET(request: NextRequest) {
               }]
             : []),
           ...(tagFilter ? [{ tags: { has: tagFilter } }] : []),
-          ...(cursor ? [{ createdAt: { lt: cursor } }] : []),
+          ...(pinnedOnly ? [{ pinnedAt: { not: null } }] : []),
+          ...(cursor && !pinnedOnly ? [{ createdAt: { lt: cursor } }] : []),
         ],
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: pinnedOnly ? { pinnedAt: 'desc' } : { createdAt: 'desc' },
       // Fetch one extra row to detect whether a next page exists.
       take: take + 1,
-      select: {
-        id: true,
-        originalUrl: true,
-        shortCode: true,
-        title: true,
-        tags: true,
-        workspaceId: true,
-        folderId: true,
-        clicks: true,
-        createdAt: true,
-        expiresAt: true,
-        isActive: true,
-        riskStatus: true,
-        healthStatus: true,
-        _count: { select: { clickEvents: true, rules: true } },
-      },
+      select: LINK_LIST_SELECT,
     })
-    const hasMore = urls.length > take
-    const page = hasMore ? urls.slice(0, take) : urls
+    const hasMore = !pinnedOnly && urls.length > take
+    let page = hasMore ? urls.slice(0, take) : urls
+    // Unfiltered first page: surface pinned links on top. The cursor still follows
+    // createdAt of the regular rows, so pagination is unaffected.
+    const unfiltered = !cursor && !pinnedOnly && !search && !tagFilter && !folderFilter
+    const nextCursor = hasMore && page.length ? page[page.length - 1].createdAt.toISOString() : null
+    if (unfiltered) {
+      const pinned = await prisma.url.findMany({
+        where: { deletedAt: null, pinnedAt: { not: null }, AND: [visibleUrlWhere(user.id)] },
+        orderBy: { pinnedAt: 'desc' },
+        take: MAX_PINNED_LINKS,
+        select: LINK_LIST_SELECT,
+      })
+      if (pinned.length) page = pinnedFirst(pinned, page, take)
+    }
     return NextResponse.json({
       links: page,
-      nextCursor: hasMore && page.length ? page[page.length - 1].createdAt.toISOString() : null,
+      nextCursor,
     })
   } catch (error) {
     console.error('Error fetching URLs:', error)

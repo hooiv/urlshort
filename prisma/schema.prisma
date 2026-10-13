@@ -99,6 +99,7 @@ model Url {
   deletedAt                  DateTime?
   /// Private internal note; never rendered on redirect, OG, public stats or bio pages.
   notes                      String?
+  pinnedAt                   DateTime?
   tags                       String[]
 
   clickEvents      ClickEvent[]
@@ -124,6 +125,7 @@ model Url {
   @@index([folderId, createdAt])
   /// Owner listings and aggregated analytics scope by owner.
   @@index([userId, createdAt])
+  @@index([userId, pinnedAt])
   @@index([workspaceId, createdAt])
   @@map("urls")
 }

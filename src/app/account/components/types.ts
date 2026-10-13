@@ -11,6 +11,7 @@ export type Url = {
   clicks: number
   createdAt: string
   isActive: boolean
+  pinnedAt?: string | null
   riskStatus: string
   _count?: { rules: number }
 }

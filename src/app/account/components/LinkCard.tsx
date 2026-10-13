@@ -166,6 +166,9 @@ export default function LinkCard({
     }
   }
 
+  const pinBadge = link.pinnedAt ? (
+    <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-[10px] text-indigo-300">pinned</span>
+  ) : null
   const statusBadge = !link.isActive ? (
     <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">paused</span>
   ) : link.riskStatus === 'review' ? (
@@ -181,7 +184,7 @@ export default function LinkCard({
               <input type="checkbox" checked={selected} onChange={onToggleSelect} aria-label={`Select /${link.shortCode}`} className="h-4 w-4 accent-blue-500" />
             )}
             <span className="truncate font-medium">{link.title || `/${link.shortCode}`}</span>
-            {statusBadge}
+            {pinBadge}{statusBadge}
           </div>
           <button
             onClick={() => void copyShortUrl()}
@@ -332,6 +335,11 @@ export default function LinkCard({
           >
             Manage
           </a>
+          <CardAction
+            disabled={busy}
+            onClick={() => void patch({ pinned: !link.pinnedAt }, link.pinnedAt ? 'Link unpinned' : 'Link pinned to top')}
+            label={link.pinnedAt ? 'Unpin' : 'Pin'}
+          />
           <CardAction disabled={busy} onClick={() => void clone()} label="Clone" />
           <CardAction disabled={busy} onClick={() => void rename()} label="Rename" />
           <CardAction onClick={() => setShowActivity((v) => !v)} label={showActivity ? 'Hide activity' : 'Activity'} />

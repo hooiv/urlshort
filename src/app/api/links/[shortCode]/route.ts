@@ -1,4 +1,5 @@
 import { validateLinkNotes } from '@/lib/link-notes'
+import { parsePinned } from '@/lib/link-pins'
 import { trashLink, TRASH_RETENTION_DAYS } from '@/lib/link-trash'
 import { validateOgFields } from '@/lib/og-preview'
 import { assertValidWindow, parseStartsAt } from '@/lib/link-schedule'
@@ -73,6 +74,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
     Object.assign(data, validateOgFields({ title: body.title, description: body.description, ogImage: body.ogImage }))
 
     if (body.notes !== undefined) data.notes = validateLinkNotes(body.notes)
+    if (body.pinned !== undefined) data.pinnedAt = parsePinned(body.pinned)
 
     if (body.isActive !== undefined) {
       data.isActive = Boolean(body.isActive)
@@ -182,7 +184,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
         })
         data.originalUrl = newDestination
       }
-      return tx.url.update({ where: { id: link.id }, data, select: { id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, notes: true, tags: true, isActive: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, updatedAt: true } })
+      return tx.url.update({ where: { id: link.id }, data, select: { id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, notes: true, pinnedAt: true, tags: true, isActive: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, updatedAt: true } })
     })
 
     await invalidateLink(updated.shortCode, updated.id)
