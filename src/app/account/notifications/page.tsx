@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft, Mail } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 
-type Prefs = { weeklyDigest: boolean; lastSentAt: string | null; emailVerified: boolean }
+type Prefs = { weeklyDigest: boolean; milestoneAlerts: boolean; lastSentAt: string | null; emailVerified: boolean }
 
 export default function NotificationsPage() {
   const [prefs, setPrefs] = useState<Prefs | null>(null)
@@ -18,14 +18,14 @@ export default function NotificationsPage() {
       .catch((e: Error) => toast.error(e.message))
   }, [])
 
-  async function toggle(next: boolean) {
+  async function toggle(key: 'weeklyDigest' | 'milestoneAlerts', next: boolean) {
     setBusy(true)
     try {
-      const r = await fetch('/api/account/notifications', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ weeklyDigest: next }) })
+      const r = await fetch('/api/account/notifications', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [key]: next }) })
       const data = await r.json().catch(() => null)
       if (!r.ok) throw new Error(data?.error || 'Could not save')
-      setPrefs((p) => (p ? { ...p, weeklyDigest: next } : p))
-      toast.success(next ? 'Weekly digest on' : 'Weekly digest off')
+      setPrefs((p) => (p ? { ...p, [key]: next } : p))
+      toast.success(next ? 'Notification on' : 'Notification off')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not save')
     } finally {
@@ -48,10 +48,18 @@ export default function NotificationsPage() {
           <p className="mt-1 text-xs text-slate-500">Mondays 08:00 UTC: clicks, conversions and revenue for the last 7 days versus the week before, plus your top links. Skipped when there was no activity.</p>
           {prefs && !prefs.emailVerified && <p className="mt-3 text-xs text-amber-400">Verify your email address to enable this.</p>}
           <label className="mt-4 flex items-center gap-3 text-sm">
-            <input type="checkbox" disabled={!prefs || busy || (!prefs.emailVerified && !prefs.weeklyDigest)} checked={prefs?.weeklyDigest ?? false} onChange={(e) => void toggle(e.target.checked)} />
+            <input type="checkbox" disabled={!prefs || busy || (!prefs.emailVerified && !prefs.weeklyDigest)} checked={prefs?.weeklyDigest ?? false} onChange={(e) => void toggle('weeklyDigest', e.target.checked)} />
             Email me every week
           </label>
           {prefs?.lastSentAt && <p className="mt-3 text-xs text-slate-500">Last sent {new Date(prefs.lastSentAt).toLocaleDateString()}</p>}
+        </section>
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+          <h2 className="font-semibold">Click milestone alerts</h2>
+          <p className="mt-1 text-xs text-slate-500">One email when a link first reaches 100, 1k, 10k, 100k or 1M clicks. Checked hourly; links already past a milestone are not announced.</p>
+          <label className="mt-4 flex items-center gap-3 text-sm">
+            <input type="checkbox" disabled={!prefs || busy || (!prefs.emailVerified && !prefs.milestoneAlerts)} checked={prefs?.milestoneAlerts ?? false} onChange={(e) => void toggle('milestoneAlerts', e.target.checked)} />
+            Email me on milestones
+          </label>
         </section>
       </main>
     </div>
