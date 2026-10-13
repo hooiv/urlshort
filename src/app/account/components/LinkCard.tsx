@@ -130,6 +130,30 @@ export default function LinkCard({
     }
   }
 
+  async function rename() {
+    if (typeof window === 'undefined') return
+    const input = window.prompt(`Rename /${link.shortCode}. The old short URL will stop working immediately. New short code:`, link.shortCode)
+    if (input === null) return
+    const code = input.trim()
+    if (!code || code === link.shortCode) return
+    setBusy(true)
+    try {
+      const response = await fetch(`/api/links/${encodeURIComponent(link.shortCode)}/rename`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newShortCode: code, confirm: true }),
+      })
+      const data = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(data?.error || 'Rename failed')
+      toast.success(`Renamed to /${data.shortCode}`)
+      onChanged()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Rename failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function copyShortUrl() {
     try {
       if (typeof window === 'undefined' || !navigator.clipboard) throw new Error('unavailable')
@@ -307,6 +331,7 @@ export default function LinkCard({
             Manage
           </a>
           <CardAction disabled={busy} onClick={() => void clone()} label="Clone" />
+          <CardAction disabled={busy} onClick={() => void rename()} label="Rename" />
           <CardAction disabled={busy} onClick={() => void remove()} label="Delete" danger />
         </div>
       </div>
