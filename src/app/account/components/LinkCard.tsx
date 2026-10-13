@@ -107,6 +107,29 @@ export default function LinkCard({
     }
   }
 
+  async function clone() {
+    if (typeof window === 'undefined') return
+    const input = window.prompt(`Clone /${link.shortCode}. New short code (leave blank for a random one):`, '')
+    if (input === null) return
+    setBusy(true)
+    try {
+      const code = input.trim()
+      const response = await fetch(`/api/links/${encodeURIComponent(link.shortCode)}/clone`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(code ? { shortCode: code } : {}),
+      })
+      const data = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(data?.error || 'Clone failed')
+      toast.success(`Cloned to /${data.shortCode}`)
+      onChanged()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Clone failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function copyShortUrl() {
     try {
       if (typeof window === 'undefined' || !navigator.clipboard) throw new Error('unavailable')
@@ -283,6 +306,7 @@ export default function LinkCard({
           >
             Manage
           </a>
+          <CardAction disabled={busy} onClick={() => void clone()} label="Clone" />
           <CardAction disabled={busy} onClick={() => void remove()} label="Delete" danger />
         </div>
       </div>
