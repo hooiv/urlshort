@@ -41,14 +41,17 @@ function unlockSecret(): string {
  * (checker). The token is deterministic per link so verification is a
  * constant-time HMAC comparison — no database lookup on the hot path.
  */
-export function createUnlockToken(shortCode: string): string {
-  return createHmac('sha256', unlockSecret()).update(`unlock:${shortCode}`).digest('hex')
+export function createUnlockToken(shortCode: string, passwordHash?: string | null): string {
+  // Binding to the stored hash revokes every issued cookie when the password
+  // changes (a new hash has a fresh salt). Without a hash the token is per-link.
+  const bound = passwordHash ? `unlock:${shortCode}:${createHmac('sha256', unlockSecret()).update(passwordHash).digest('hex')}` : `unlock:${shortCode}`
+  return createHmac('sha256', unlockSecret()).update(bound).digest('hex')
 }
 
-export function verifyUnlockToken(shortCode: string, value: string | null | undefined): boolean {
+export function verifyUnlockToken(shortCode: string, value: string | null | undefined, passwordHash?: string | null): boolean {
   if (!value) return false
   try {
-    const expected = Buffer.from(createUnlockToken(shortCode), 'utf8')
+    const expected = Buffer.from(createUnlockToken(shortCode, passwordHash), 'utf8')
     const actual = Buffer.from(value, 'utf8')
     return expected.length === actual.length && timingSafeEqual(expected, actual)
   } catch {

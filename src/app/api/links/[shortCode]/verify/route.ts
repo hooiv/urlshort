@@ -23,7 +23,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
     }
 
     // Generate token
-    const token = createUnlockToken(shortCode)
+    const token = createUnlockToken(shortCode, url.passwordHash)
     
     const response = NextResponse.json({ success: true })
     response.cookies.set(`ql_unlocked_${shortCode}`, token, { 

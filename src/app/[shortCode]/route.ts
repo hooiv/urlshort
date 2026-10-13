@@ -79,7 +79,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     if (url.riskStatus === 'blocked') return NextResponse.redirect(new URL('/blocked', baseUrl), 307)
 
     if (url.passwordHash) {
-      const unlocked = verifyUnlockToken(url.shortCode, request.cookies.get(`ql_unlocked_${url.shortCode}`)?.value)
+      const unlocked = verifyUnlockToken(url.shortCode, request.cookies.get(`ql_unlocked_${url.shortCode}`)?.value, url.passwordHash)
       if (!unlocked) {
         return NextResponse.redirect(new URL(`/protected/${url.shortCode}`, baseUrl), 307)
       }

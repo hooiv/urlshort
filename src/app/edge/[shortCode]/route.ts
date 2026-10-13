@@ -36,7 +36,7 @@ const body=await loadConfig(request,shortCode);if(!body)return new NextResponse(
 // Timing-safe password gate. The old edge route never checked the gate and
 // served protected destinations to anyone holding the edge URL. Reuses the
 // shared constant-time checker — never `===` against the cookie value.
-if(link.passwordHash||link.locked){const unlocked=verifyUnlockToken(link.shortCode,request.cookies.get(`ql_unlocked_${link.shortCode}`)?.value);if(!unlocked)return NextResponse.redirect(new URL(`/protected/${link.shortCode}`,origin),307)}
+if(link.passwordHash||link.locked){const unlocked=verifyUnlockToken(link.shortCode,request.cookies.get(`ql_unlocked_${link.shortCode}`)?.value,link.passwordHash);if(!unlocked)return NextResponse.redirect(new URL(`/protected/${link.shortCode}`,origin),307)}
 // Go-live scheduling parity with the main route: before startsAt, send visitors to the teaser URL or /coming-soon.
 if(link.startsAt&&Date.now()<Date.parse(link.startsAt))return NextResponse.redirect(link.notStartedUrl||new URL('/coming-soon',origin),307)
 // Expiry honors the owner's fallback URL, else the shared /expired page —

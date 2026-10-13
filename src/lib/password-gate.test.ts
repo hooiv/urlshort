@@ -41,4 +41,13 @@ describe('password unlock tokens', () => {
     expect(verifyUnlockToken('abc123', null)).toBe(false)
     expect(verifyUnlockToken('abc123', '')).toBe(false)
   })
+
+  it('revokes tokens when the password hash changes', () => {
+    const h1 = hashGatePassword('one')
+    const h2 = hashGatePassword('one')
+    const token = createUnlockToken('abc123', h1)
+    expect(verifyUnlockToken('abc123', token, h1)).toBe(true)
+    expect(verifyUnlockToken('abc123', token, h2)).toBe(false)
+    expect(verifyUnlockToken('abc123', token)).toBe(false)
+  })
 })
