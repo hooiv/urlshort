@@ -17,6 +17,14 @@ describe('bulkEditSchema', () => {
   it('rejects setTags with addTags', () => expect(bulkEditSchema.safeParse({ links, changes: { setTags: ['a'], addTags: ['b'] } }).success).toBe(false))
   it('rejects utm with template', () => expect(bulkEditSchema.safeParse({ links, changes: { utm: { source: 'x' }, utmTemplateId: 't' } }).success).toBe(false))
   it('rejects past expiry', () => expect(bulkEditSchema.safeParse({ links, changes: { expiresAt: '2020-01-01T00:00:00Z' } }).success).toBe(false))
+  it('accepts maxClicks and null to clear it', () => {
+    expect(bulkEditSchema.safeParse({ links, changes: { maxClicks: 500 } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { maxClicks: null } }).success).toBe(true)
+  })
+  it('rejects non-positive or fractional maxClicks', () => {
+    expect(bulkEditSchema.safeParse({ links, changes: { maxClicks: 0 } }).success).toBe(false)
+    expect(bulkEditSchema.safeParse({ links, changes: { maxClicks: 1.5 } }).success).toBe(false)
+  })
   it('accepts extendExpiryDays', () => expect(bulkEditSchema.safeParse({ links, changes: { extendExpiryDays: 30 } }).success).toBe(true))
   it('rejects extendExpiryDays out of range or combined with expiresAt', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { extendExpiryDays: 0 } }).success).toBe(false)
