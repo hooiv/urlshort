@@ -57,6 +57,7 @@ const KEY_REACHABLE = [
   'analytics/[shortCode]/compare/route.ts',
   'analytics/route.ts',
   'analytics/trending/route.ts',
+  'analytics/stale/route.ts',
   'analytics/traffic-quality/route.ts',
   'links/duplicates/route.ts',
   'bulk/route.ts',
