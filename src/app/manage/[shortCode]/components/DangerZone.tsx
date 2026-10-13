@@ -17,18 +17,18 @@ export default function DangerZone({ onDeleteLink }: { onDeleteLink: () => Promi
 
       <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-red-500/20 bg-slate-950 p-4">
         <div>
-          <div className="text-sm font-medium text-slate-200">Delete Link Permanently</div>
+          <div className="text-sm font-medium text-slate-200">Move Link to Trash</div>
           <div className="text-xs text-slate-500">
-            Deletes this short link, routing rules, and associated analytics history.
+            Stops redirects now. Analytics and rules are kept and the link can be restored from Trash for 30 days.
           </div>
         </div>
         <button
           onClick={() => {
-            if (!window.confirm('Permanent action: Delete this link and all its history?')) return
+            if (!window.confirm('Move this link to the trash? Redirects stop immediately; you can restore it for 30 days.')) return
             void (async () => {
               try {
                 await onDeleteLink()
-                toast.success('Link deleted')
+                toast.success('Link moved to trash')
                 setTimeout(() => {
                   router.push('/')
                 }, 1000)

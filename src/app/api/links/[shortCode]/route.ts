@@ -1,3 +1,4 @@
+import { trashLink, TRASH_RETENTION_DAYS } from '@/lib/link-trash'
 import { validateOgFields } from '@/lib/og-preview'
 import { assertValidWindow, parseStartsAt } from '@/lib/link-schedule'
 import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
@@ -33,8 +34,8 @@ function normalizeTags(input: unknown): string[] {
     .filter((tag) => /^[a-z0-9][a-z0-9-_ ]{0,31}$/.test(tag)))].slice(0, MAX_TAGS)
 }
 
-async function authorize(request: NextRequest, shortCode: string): Promise<{ url: UrlRow } | { response: NextResponse }> {
-  const access = await getManageableUrl(request, shortCode)
+async function authorize(request: NextRequest, shortCode: string, includeTrashed = false): Promise<{ url: UrlRow } | { response: NextResponse }> {
+  const access = await getManageableUrl(request, shortCode, undefined, { includeTrashed })
   if (!access.url) return { response: NextResponse.json({ error: access.error }, { status: access.status }) }
   return { url: access.url }
 }
@@ -199,20 +200,22 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
 
 export async function DELETE(request: NextRequest, context: { params: Promise<{ shortCode: string }> }) {
   const { shortCode } = await context.params
-  const auth = await authorize(request, shortCode)
+  const permanent = request.nextUrl.searchParams.get('permanent') === 'true'
+  const auth = await authorize(request, shortCode, permanent)
   if ('response' in auth) return auth.response
   const link = auth.url
 
   try {
-    // Hard delete the link and all associated analytics via cascading foreign keys
-    const deleted = await prisma.url.delete({
-      where: { id: link.id },
-      select: { id: true, shortCode: true },
-    })
-
-    await invalidateLink(link.shortCode, link.id)
-    await recordAudit(request, { action: 'link.delete', urlId: link.id, resourceType: 'url', resourceId: link.id, after: { shortCode: link.shortCode } })
-    return NextResponse.json({ deleted: true, shortCode: deleted.shortCode })
+    // Default: move to the trash (restorable for 30 days). ?permanent=true erases now.
+    if (permanent) {
+      const deleted = await prisma.url.delete({ where: { id: link.id }, select: { id: true, shortCode: true } })
+      await invalidateLink(link.shortCode, link.id)
+      await recordAudit(request, { action: 'link.delete', urlId: link.id, resourceType: 'url', resourceId: link.id, after: { shortCode: link.shortCode, permanent: true } })
+      return NextResponse.json({ deleted: true, permanent: true, shortCode: deleted.shortCode })
+    }
+    await trashLink(link)
+    await recordAudit(request, { action: 'link.trash', urlId: link.id, resourceType: 'url', resourceId: link.id, after: { shortCode: link.shortCode } })
+    return NextResponse.json({ deleted: true, permanent: false, shortCode: link.shortCode, restorableDays: TRASH_RETENTION_DAYS })
   } catch (error) {
     console.error('Link deletion failed:', error)
     return NextResponse.json({ error: 'Could not delete link' }, { status: 500 })

@@ -37,6 +37,10 @@
       "schedule": "17 * * * *"
     },
     {
+      "path": "/api/cron/trash",
+      "schedule": "30 3 * * *"
+    },
+    {
       "path": "/api/cron/weekly-digest",
       "schedule": "0 8 * * 1"
     }

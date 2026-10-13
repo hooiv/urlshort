@@ -49,9 +49,9 @@ export async function canManageUrl(request: NextRequest, url: { managementTokenH
   return false
 }
 
-export async function getManageableUrl(request: NextRequest, shortCode: string, allowedRoles: WorkspaceRole[] = EDIT_ROLES) {
+export async function getManageableUrl(request: NextRequest, shortCode: string, allowedRoles: WorkspaceRole[] = EDIT_ROLES, options: { includeTrashed?: boolean } = {}) {
   const url = await prisma.url.findUnique({ where: { shortCode } })
-  if (!url) return { url: null, error: 'Short link not found', status: 404 as const }
+  if (!url || (url.deletedAt && !options.includeTrashed)) return { url: null, error: 'Short link not found', status: 404 as const }
   if (!(await canManageUrl(request, url, allowedRoles))) return { url: null, error: 'Insufficient permissions', status: 403 as const }
   return { url, error: null, status: 200 as const }
 }

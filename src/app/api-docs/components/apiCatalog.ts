@@ -87,7 +87,7 @@ export const API_CATALOG: EndpointSpec[] = [
     method: 'DELETE',
     path: '/api/links/{shortCode}',
     title: 'Delete Short Link',
-    description: 'Permanently deletes a short link and its associated analytics via cascading deletes.',
+    description: 'Moves a short link to the trash: redirects stop at once and it can be restored for 30 days via POST /api/links/{shortCode}/restore. Add ?permanent=true to erase it and its analytics immediately.',
     pathParams: [{ name: 'shortCode', placeholder: 'abc1234', default: 'demo' }],
   },
 
