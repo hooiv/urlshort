@@ -63,6 +63,13 @@ export default function LinksSection({
           >
             Export CSV
           </a>
+          <a
+            href="/api/links/export?format=json"
+            download="links.json"
+            className="rounded-xl border border-slate-700 px-3 py-2 text-sm font-medium text-slate-300 hover:border-slate-500"
+          >
+            Export JSON
+          </a>
           <Link
             href="/bulk"
             className="rounded-xl bg-blue-500/10 px-4 py-2 text-sm font-medium text-blue-400 hover:bg-blue-500/20"
