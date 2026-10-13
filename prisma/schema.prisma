@@ -540,6 +540,8 @@ model BrandedDomain {
   tlsStatus               String?
   tlsCertificateExpiresAt DateTime?
   tlsLastCheckedAt        DateTime?
+  rootRedirectUrl         String?
+  notFoundUrl             String?
   createdAt               DateTime     @default(now())
   updatedAt               DateTime     @updatedAt
 

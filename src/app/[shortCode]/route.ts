@@ -11,8 +11,18 @@ import { admitBillableClick, returnAdmittedClick } from '@/lib/click-admission'
 import { resolveIpGeolocation } from '@/lib/ip-geolocation'
 import { verifyUnlockToken } from '@/lib/password-gate'
 import { activePixels, pixelConsentGranted, pixelContentSecurityPolicy, renderPixelRedirectPage } from '@/lib/retargeting-pixels'
+import { getDomainFallbacks } from '@/lib/domain-settings'
 import { buildOgMetaTags } from '@/lib/og-preview'
 import { escapeHtml, forwardQueryParams, isBillableTraffic, jsString, resolveDestination } from '@/lib/redirect'
+
+/** Per-domain 404 fallback; any lookup failure degrades to the default 404 page. */
+async function domainNotFoundTarget(host: string, baseUrl: string): Promise<URL> {
+  try {
+    const fallbacks = await getDomainFallbacks(host)
+    if (fallbacks?.notFoundUrl) return new URL(fallbacks.notFoundUrl)
+  } catch { /* fall through */ }
+  return new URL('/404', baseUrl)
+}
 
 function utcDateKey(date: Date): string { return date.toISOString().slice(0, 10) }
 
@@ -60,7 +70,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     let url = null
     if (host && host !== appHost) {
       url = await getLinkByDomainPath(host, `/${shortCode}`)
-      if (!url) return NextResponse.redirect(new URL('/404', baseUrl), 307)
+      if (!url) return NextResponse.redirect(await domainNotFoundTarget(host, baseUrl), 307)
     } else {
       url = await getLinkByCode(shortCode)
     }

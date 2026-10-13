@@ -8,6 +8,7 @@ import BindingList from '@/app/manage/[shortCode]/domains/components/BindingList
 import AutoConnectCard from '@/app/manage/[shortCode]/domains/components/AutoConnectCard'
 import DnsSetupCard from '@/app/manage/[shortCode]/domains/components/DnsSetupCard'
 import DomainForm from '@/app/manage/[shortCode]/domains/components/DomainForm'
+import FallbacksCard from '@/app/manage/[shortCode]/domains/components/FallbacksCard'
 import DomainsHeader from '@/app/manage/[shortCode]/domains/components/DomainsHeader'
 import { useDomains } from '@/app/manage/[shortCode]/domains/components/useDomains'
 
@@ -74,6 +75,10 @@ export default function BrandedDomainsPage() {
             onVerify={() => void verify()}
           />
         )}
+
+        {Array.from(new Set(bindings.filter((binding) => binding.domain.status === 'verified').map((binding) => binding.domain.host))).map((verifiedHost) => (
+          <FallbacksCard key={verifiedHost} shortCode={shortCode} host={verifiedHost} token={token} />
+        ))}
 
         {/* Connected Domains List */}
         <BindingList bindings={bindings} shortCode={shortCode} onRemove={(binding) => void remove(binding)} />
