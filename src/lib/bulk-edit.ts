@@ -21,6 +21,8 @@ export const bulkEditSchema = z.object({
     folderId: z.string().min(1).max(64).nullable().optional(),
     /** null clears the expiry. */
     expiresAt: z.string().datetime({ offset: true }).nullable().optional(),
+    /** Push each link's existing expiry out by N days (from the later of its expiry and now). Links without an expiry are left alone. */
+    extendExpiryDays: z.number().int().min(1).max(3650).optional(),
     /** null clears the go-live time. */
     startsAt: z.string().datetime({ offset: true }).nullable().optional(),
     archived: z.boolean().optional(),
@@ -32,6 +34,7 @@ export const bulkEditSchema = z.object({
   if (!Object.values(c).some((v) => v !== undefined)) ctx.addIssue({ code: 'custom', message: 'Choose at least one change' })
   if (c.setTags && (c.addTags || c.removeTags)) ctx.addIssue({ code: 'custom', message: 'setTags cannot be combined with addTags/removeTags' })
   if (c.utm && c.utmTemplateId) ctx.addIssue({ code: 'custom', message: 'Send utm or utmTemplateId, not both' })
+  if (c.extendExpiryDays !== undefined && c.expiresAt !== undefined) ctx.addIssue({ code: 'custom', message: 'Send expiresAt or extendExpiryDays, not both' })
   if (c.startsAt && c.expiresAt && new Date(c.startsAt).getTime() >= new Date(c.expiresAt).getTime()) ctx.addIssue({ code: 'custom', message: 'startsAt must be before expiresAt' })
   if (c.expiresAt && new Date(c.expiresAt).getTime() <= Date.now()) ctx.addIssue({ code: 'custom', message: 'expiresAt must be in the future' })
 })
@@ -137,6 +140,11 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
     if (c.expiresAt !== undefined) {
       const next = c.expiresAt ? new Date(c.expiresAt) : null
       if ((next?.getTime() ?? null) !== (r.expiresAt?.getTime() ?? null)) { data.expiresAt = next; before.expiresAt = r.expiresAt; after.expiresAt = next }
+    }
+    if (c.extendExpiryDays !== undefined && r.expiresAt) {
+      const base = Math.max(r.expiresAt.getTime(), Date.now())
+      const next = new Date(base + c.extendExpiryDays * 86_400_000)
+      data.expiresAt = next; before.expiresAt = r.expiresAt; after.expiresAt = next
     }
     if (c.startsAt !== undefined) {
       const next = c.startsAt ? new Date(c.startsAt) : null

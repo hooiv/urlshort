@@ -86,6 +86,9 @@ export default function BulkEditBar({
               </button>
             </div>
           </label>
+          <label className="text-xs text-slate-400">Extend expiry (days)
+            <input type="number" min={1} max={3650} className="input mt-1 w-full" placeholder="e.g. 30" value={form.extendDays} onChange={(e) => set({ extendDays: e.target.value })} />
+          </label>
           <label className="text-xs text-slate-400">Status
             <select className="input mt-1 w-full" value={form.state} onChange={(e) => set({ state: e.target.value as BulkEditForm['state'] })}>
               <option value="">Leave as is</option>

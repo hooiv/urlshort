@@ -32,6 +32,13 @@ describe('real database: bulk edit', () => {
       const again = await applyBulkEdit(editor.id, { links: [a.shortCode], changes: { addTags: ['new'], archived: true } })
       expect(again.ok && again.updated.length).toBe(0)
 
+      // Extending moves each expiry out from its own date; links with no expiry stay unchanged.
+      const noExp = await mk('c')
+      const ext = await applyBulkEdit(editor.id, { links: [a.shortCode, noExp.shortCode], changes: { extendExpiryDays: 10 } })
+      expect(ext.ok && ext.updated.length).toBe(1)
+      expect((await db.url.findUniqueOrThrow({ where: { id: a.id } })).expiresAt?.toISOString()).toBe(new Date(new Date(exp).getTime() + 10 * 86_400_000).toISOString())
+      expect((await db.url.findUniqueOrThrow({ where: { id: noExp.id } })).expiresAt).toBeNull()
+
       // A viewer is rejected and nothing is written.
       const denied = await applyBulkEdit(viewer.id, { links: [a.shortCode], changes: { addTags: ['zzz'] } })
       expect(denied.ok).toBe(false)

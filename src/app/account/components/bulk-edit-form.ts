@@ -3,13 +3,14 @@ export type BulkEditForm = {
   removeTags: string
   folder: '' | 'none' | string
   expiry: '' | 'clear' | string // yyyy-mm-dd, interpreted as end of that day in the browser's zone
+  extendDays: string // whole days to push existing expiries out
   state: '' | 'archive' | 'restore'
   utmSource: string
   utmMedium: string
   utmCampaign: string
 }
 
-export const emptyBulkEditForm: BulkEditForm = { addTags: '', removeTags: '', folder: '', expiry: '', state: '', utmSource: '', utmMedium: '', utmCampaign: '' }
+export const emptyBulkEditForm: BulkEditForm = { addTags: '', removeTags: '', folder: '', expiry: '', extendDays: '', state: '', utmSource: '', utmMedium: '', utmCampaign: '' }
 
 const splitTags = (v: string) => v.split(',').map((t) => t.trim()).filter(Boolean)
 
@@ -28,6 +29,12 @@ export function buildBulkEditChanges(form: BulkEditForm, now = new Date()): { ch
     if (!y || Number.isNaN(end.getTime())) return { error: 'Choose a valid expiry date' }
     if (end.getTime() <= now.getTime()) return { error: 'Expiry must be in the future' }
     changes.expiresAt = end.toISOString()
+  }
+  if (form.extendDays.trim()) {
+    const n = Number(form.extendDays.trim())
+    if (!Number.isInteger(n) || n < 1 || n > 3650) return { error: 'Extend by a whole number of days from 1 to 3650' }
+    if (form.expiry) return { error: 'Set a new expiry date or extend by days, not both' }
+    changes.extendExpiryDays = n
   }
   if (form.state) changes.archived = form.state === 'archive'
   const utm: Record<string, string> = {}

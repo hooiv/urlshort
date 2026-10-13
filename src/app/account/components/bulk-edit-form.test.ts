@@ -5,9 +5,15 @@ const now = new Date(2026, 9, 12, 12)
 describe('buildBulkEditChanges', () => {
   it('errors on an empty form', () => expect(buildBulkEditChanges(emptyBulkEditForm, now)).toEqual({ error: 'Choose at least one change' }))
   it('maps every field', () => {
-    const r = buildBulkEditChanges({ addTags: 'a, b,', removeTags: 'c', folder: 'none', expiry: '2026-12-31', state: 'archive', utmSource: ' news ', utmMedium: '', utmCampaign: 'q4' }, now)
+    const r = buildBulkEditChanges({ addTags: 'a, b,', removeTags: 'c', folder: 'none', expiry: '2026-12-31', extendDays: '', state: 'archive', utmSource: ' news ', utmMedium: '', utmCampaign: 'q4' }, now)
     expect(r).toMatchObject({ changes: { addTags: ['a', 'b'], removeTags: ['c'], folderId: null, archived: true, utm: { source: 'news', campaign: 'q4' } } })
     expect((r as { changes: { expiresAt: string } }).changes.expiresAt).toMatch(/^2026-12-31T|^2027-01-01T/)
+  })
+  it('builds extendExpiryDays and rejects bad or conflicting input', () => {
+    expect(buildBulkEditChanges({ ...emptyBulkEditForm, extendDays: '30' }, now)).toEqual({ changes: { extendExpiryDays: 30 } })
+    expect('error' in buildBulkEditChanges({ ...emptyBulkEditForm, extendDays: '0' }, now)).toBe(true)
+    expect('error' in buildBulkEditChanges({ ...emptyBulkEditForm, extendDays: '2.5' }, now)).toBe(true)
+    expect('error' in buildBulkEditChanges({ ...emptyBulkEditForm, extendDays: '5', expiry: 'clear' }, now)).toBe(true)
   })
   it('clears expiry and rejects the past', () => {
     expect(buildBulkEditChanges({ ...emptyBulkEditForm, expiry: 'clear' }, now)).toEqual({ changes: { expiresAt: null } })
