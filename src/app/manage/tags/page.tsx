@@ -31,6 +31,21 @@ export default function TagPerformancePage() {
     }
   }
 
+  async function submitDelete(tag: string) {
+    if (!window.confirm(`Remove the tag "${tag}" from all links? The links themselves are kept.`)) return
+    setBusy(true)
+    try {
+      const r = await fetch('/api/tags', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tag }) })
+      const body = await r.json()
+      if (!r.ok) throw new Error(body.error || 'Delete failed')
+      setError(null); setLoading(true); setReload((n) => n + 1)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   useEffect(() => {
     let cancelled = false
     fetch(`/api/analytics/tags?days=${days}`)
@@ -80,7 +95,8 @@ export default function TagPerformancePage() {
                     <><button disabled={busy} onClick={() => void submitRename(t.tag)} className="mr-2 text-xs underline">Save</button>
                     <button onClick={() => setEditing(null)} className="text-xs opacity-70 underline">Cancel</button></>
                   ) : (
-                    <button onClick={() => { setEditing(t.tag); setNewName(t.tag) }} className="text-xs underline">Rename</button>
+                    <><button onClick={() => { setEditing(t.tag); setNewName(t.tag) }} className="mr-2 text-xs underline">Rename</button>
+                    <button disabled={busy} onClick={() => void submitDelete(t.tag)} className="text-xs text-red-600 underline">Delete</button></>
                   )}
                 </td>
               </tr>

@@ -8,3 +8,7 @@ Needs a session or an API key with `links:write`; workspace callers need an edit
 - All-or-nothing: if any link would exceed 20 tags the call returns 422 and changes nothing.
 - Link caches are invalidated and a `tag.rename` audit event is written.
 - Response: `{ from, to, updated }`.
+
+## Delete a tag
+
+`DELETE /api/tags` with `{ "tag": "promo", "workspaceId"?: "..." }` removes the tag from every editable, non-trashed link in one transaction (editor role required in workspaces), invalidates redirect caches and writes a `tag.delete` audit entry. Response: `{ tag, updated }`.

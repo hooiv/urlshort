@@ -8,7 +8,7 @@ describe('real database: tag rename', () => {
     process.env.DATABASE_URL = databaseUrl
     process.env.DIRECT_DATABASE_URL = databaseUrl
     const db = new PrismaClient({ datasources: { db: { url: databaseUrl } } })
-    const { renameTag, TagRenameError } = await import('./tag-manage')
+    const { renameTag, deleteTag, TagRenameError } = await import('./tag-manage')
     const tag = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const [editor, viewer] = await Promise.all(['e', 'v'].map((r) => db.user.create({ data: { email: `${r}-${tag}@example.com`, password: 'x' } })))
     const ws = await db.workspace.create({ data: { name: tag, slug: `t-${tag}`, members: { create: [{ userId: editor.id, role: 'editor' }, { userId: viewer.id, role: 'viewer' }] } } })
@@ -25,6 +25,13 @@ describe('real database: tag rename', () => {
       expect((await db.url.findUniqueOrThrow({ where: { id: a.id } })).tags).toEqual(['sale', 'x'])
       expect((await db.url.findUniqueOrThrow({ where: { id: b.id } })).tags).toEqual(['sale'])
       expect((await db.url.findUniqueOrThrow({ where: { id: trashed.id } })).tags).toEqual(['promo'])
+      expect((await db.url.findUniqueOrThrow({ where: { id: mine.id } })).tags).toEqual(['promo'])
+
+      await expect(deleteTag(viewer.id, { tag: 'sale', workspaceId: ws.id })).rejects.toBeInstanceOf(TagRenameError)
+      const del = await deleteTag(editor.id, { tag: 'Sale', workspaceId: ws.id })
+      expect(del.updated).toBe(2)
+      expect((await db.url.findUniqueOrThrow({ where: { id: a.id } })).tags).toEqual(['x'])
+      expect((await db.url.findUniqueOrThrow({ where: { id: b.id } })).tags).toEqual([])
       expect((await db.url.findUniqueOrThrow({ where: { id: mine.id } })).tags).toEqual(['promo'])
     } finally {
       await db.url.deleteMany({ where: { OR: [{ workspaceId: ws.id }, { userId: editor.id }] } })
