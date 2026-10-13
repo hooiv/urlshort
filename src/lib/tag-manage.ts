@@ -102,3 +102,45 @@ export async function deleteTag(userId: string, input: z.infer<typeof tagDeleteS
   }
   return { tag, updated: rows.length }
 }
+
+export const tagListSchema = z.object({
+  workspaceId: z.string().min(1).max(128).optional(),
+  q: z.string().trim().max(40).optional(),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+})
+
+/** Pure: count tags across link rows, optionally prefix/substring filtered, most-used first (ties alphabetical). */
+export function aggregateTags(rows: { tags: string[] }[], q?: string, limit = 100): { tag: string; links: number }[] {
+  const needle = q?.trim().toLowerCase()
+  const counts = new Map<string, number>()
+  for (const row of rows) {
+    for (const tag of new Set(row.tags)) {
+      if (needle && !tag.toLowerCase().includes(needle)) continue
+      counts.set(tag, (counts.get(tag) ?? 0) + 1)
+    }
+  }
+  return [...counts.entries()]
+    .map(([tag, links]) => ({ tag, links }))
+    .sort((a, b) => b.links - a.links || a.tag.localeCompare(b.tag))
+    .slice(0, limit)
+}
+
+/** Tags in use on the caller's visible, non-trashed links with usage counts (for autocomplete and the tag manager). */
+export async function listTags(userId: string, input: z.infer<typeof tagListSchema>) {
+  if (input.workspaceId) {
+    const membership = await prisma.membership.findUnique({ where: { workspaceId_userId: { workspaceId: input.workspaceId, userId } }, select: { role: true } })
+    if (!membership) throw new TagRenameError('Workspace not found', 404)
+  }
+  const rows = await prisma.url.findMany({
+    where: {
+      AND: [
+        visibleUrlWhere(userId),
+        input.workspaceId ? { workspaceId: input.workspaceId } : { userId, workspaceId: null },
+        { deletedAt: null, NOT: { tags: { isEmpty: true } } },
+      ],
+    },
+    select: { tags: true },
+    take: 20_000,
+  })
+  return aggregateTags(rows, input.q, input.limit)
+}

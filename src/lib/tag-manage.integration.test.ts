@@ -8,7 +8,7 @@ describe('real database: tag rename', () => {
     process.env.DATABASE_URL = databaseUrl
     process.env.DIRECT_DATABASE_URL = databaseUrl
     const db = new PrismaClient({ datasources: { db: { url: databaseUrl } } })
-    const { renameTag, deleteTag, TagRenameError } = await import('./tag-manage')
+    const { renameTag, deleteTag, listTags, TagRenameError } = await import('./tag-manage')
     const tag = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const [editor, viewer] = await Promise.all(['e', 'v'].map((r) => db.user.create({ data: { email: `${r}-${tag}@example.com`, password: 'x' } })))
     const ws = await db.workspace.create({ data: { name: tag, slug: `t-${tag}`, members: { create: [{ userId: editor.id, role: 'editor' }, { userId: viewer.id, role: 'viewer' }] } } })
@@ -19,6 +19,9 @@ describe('real database: tag rename', () => {
       const trashed = await mk('c', ['promo'], new Date())
       const mine = await db.url.create({ data: { shortCode: `m${tag}`.slice(0, 40), originalUrl: 'https://example.com', userId: editor.id, tags: ['promo'] } })
 
+      const listed = await listTags(viewer.id, { workspaceId: ws.id, limit: 100 })
+      expect(listed).toEqual([{ tag: 'promo', links: 2 }, { tag: 'sale', links: 1 }, { tag: 'x', links: 1 }])
+      await expect(listTags(viewer.id, { workspaceId: 'nope', limit: 10 })).rejects.toBeInstanceOf(TagRenameError)
       await expect(renameTag(viewer.id, { from: 'promo', to: 'sale', workspaceId: ws.id })).rejects.toBeInstanceOf(TagRenameError)
       const res = await renameTag(editor.id, { from: 'Promo', to: 'sale', workspaceId: ws.id })
       expect(res.updated).toBe(2)
