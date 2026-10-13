@@ -30,3 +30,11 @@ describe('duplicate destinations', () => {
     expect(parseDuplicatesLimit('x')).toBeNull()
   })
 })
+
+import { archiveTargets as _archiveTargets } from './duplicate-links'
+import { describe as d2, it as i2, expect as e2 } from 'vitest'
+d2('archiveTargets', () => {
+  const g = { links: [{ id: 'a', shortCode: 'aa' }, { id: 'b', shortCode: 'bb' }, { id: 'c', shortCode: 'cc' }] } as never
+  i2('excludes the kept link', () => e2(_archiveTargets(g, 'b')).toEqual(['aa', 'cc']))
+  i2('returns nothing for an unknown keeper', () => e2(_archiveTargets(g, 'zzz')).toEqual([]))
+})

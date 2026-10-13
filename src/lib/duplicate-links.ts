@@ -70,3 +70,9 @@ export async function findDuplicateLinks(scope: AnalyticsScope, limit: number) {
   const groups = groupDuplicates(truncated ? rows.slice(0, DUPLICATES_MAX_SCAN) : rows, limit)
   return { groups, truncated, scanned: Math.min(rows.length, DUPLICATES_MAX_SCAN) }
 }
+
+/** Short codes to archive when keeping one link of a duplicate group (never the kept one). */
+export function archiveTargets(group: Pick<DuplicateGroup, 'links'>, keepId: string): string[] {
+  if (!group.links.some((l) => l.id === keepId)) return []
+  return group.links.filter((l) => l.id !== keepId).map((l) => l.shortCode)
+}
