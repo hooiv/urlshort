@@ -48,6 +48,12 @@ describe('bulkEditSchema', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { password: 'abc' } }).success).toBe(false)
   })
 
+  it('accepts notes as trimmed string or null, rejects oversize', () => {
+    expect(bulkEditSchema.safeParse({ links, changes: { notes: 'Q4 promo' } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { notes: null } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { notes: 'x'.repeat(2001) } }).success).toBe(false)
+  })
+
   it('accepts cloaked boolean only', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { cloaked: true } }).success).toBe(true)
     expect(bulkEditSchema.safeParse({ links, changes: { cloaked: 'yes' } }).success).toBe(false)

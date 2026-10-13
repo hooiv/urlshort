@@ -26,6 +26,7 @@
 | `expiresAt` | future ISO datetime, or `null` to clear |
 | `expiredUrl` | http(s) fallback URL for expired or click-capped links, or `null` to clear it |
 | `notStartedUrl` | http(s) URL visitors see before the link's `startsAt`, or `null` to clear it |
+| `notes` | Private internal note set on every link; `null` or empty string clears it |
 | `cloaked` | `true` to serve the destination inside a masked frame (URL cloaking), `false` to turn it off |
 | `password` | 4-128 chars: protect every link with this password (hashed once per batch; never returned or written to the audit log, which records only `passwordProtected`), or `null` to remove protection. Existing unlock cookies stop working |
 | `maxClicks` | integer 1-1,000,000,000, or `null` to remove the click limit |

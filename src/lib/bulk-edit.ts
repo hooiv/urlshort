@@ -34,6 +34,8 @@ export const bulkEditSchema = z.object({
     notStartedUrl: z.string().trim().url().max(2048).refine((u) => /^https?:\/\//i.test(u), 'notStartedUrl must be http(s)').nullable().optional(),
     archived: z.boolean().optional(),
     cloaked: z.boolean().optional(),
+    /** Private internal note on every link; null or empty clears it. */
+    notes: z.string().trim().max(2000).nullable().optional(),
     /** String sets the same gate password on every link; null removes it. Never echoed back or audited. */
     password: z.string().min(4).max(128).nullable().optional(),
     utm: z.object(Object.fromEntries(UTM_KEYS.map((k) => [k, z.string().max(120).nullable().optional()])) as Record<(typeof UTM_KEYS)[number], z.ZodOptional<z.ZodNullable<z.ZodString>>>).optional(),
@@ -70,7 +72,7 @@ export function nextTags(current: string[], c: Pick<BulkEditChanges, 'addTags' |
 
 type LinkRow = {
   id: string; shortCode: string; originalUrl: string; tags: string[]; isActive: boolean
-  expiresAt: Date | null; startsAt: Date | null; maxClicks: number | null; expiredUrl: string | null; notStartedUrl: string | null; cloaked: boolean; passwordHash: string | null; folderId: string | null; workspaceId: string | null; userId: string | null
+  expiresAt: Date | null; startsAt: Date | null; maxClicks: number | null; expiredUrl: string | null; notStartedUrl: string | null; cloaked: boolean; notes: string | null; passwordHash: string | null; folderId: string | null; workspaceId: string | null; userId: string | null
 }
 
 export type BulkEditFailure = { link: string; reason: string }
@@ -89,7 +91,7 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
   const c = input.changes
   const rows: LinkRow[] = await prisma.url.findMany({
     where: { AND: [{ deletedAt: null, OR: [{ id: { in: keys } }, { shortCode: { in: keys } }] }, visibleUrlWhere(userId)] },
-    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, startsAt: true, maxClicks: true, expiredUrl: true, notStartedUrl: true, cloaked: true, passwordHash: true, folderId: true, workspaceId: true, userId: true },
+    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, startsAt: true, maxClicks: true, expiredUrl: true, notStartedUrl: true, cloaked: true, notes: true, passwordHash: true, folderId: true, workspaceId: true, userId: true },
   })
   const found = new Set(rows.flatMap((r) => [r.id, r.shortCode]))
   const failures: BulkEditFailure[] = keys.filter((k) => !found.has(k)).map((link) => ({ link, reason: 'Link not found' }))
@@ -181,6 +183,10 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
     }
     if (c.cloaked !== undefined && c.cloaked !== r.cloaked) {
       data.cloaked = c.cloaked; before.cloaked = r.cloaked; after.cloaked = c.cloaked
+    }
+    if (c.notes !== undefined) {
+      const next = c.notes && c.notes.length ? c.notes : null
+      if (next !== (r.notes ?? null)) { data.notes = next; before.notes = r.notes ?? null; after.notes = next }
     }
     if (c.password !== undefined) {
       const protectedNow = Boolean(r.passwordHash)
