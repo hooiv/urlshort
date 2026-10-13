@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { resolveActor } from '@/lib/request-actor'
+import { LINK_READ_SCOPES, resolveActor } from '@/lib/request-actor'
 import { READ_ROLES } from '@/lib/authorization'
 import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { canAdministerFolders } from '@/lib/folders'
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     const limit = await rateLimit(request, { name: 'links-export', limit: 10, windowMs: 60_000 })
     if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) })
 
-    const resolved = await resolveActor(request, ['links:read', 'links:write'])
+    const resolved = await resolveActor(request, LINK_READ_SCOPES)
     if (!resolved.actor) return NextResponse.json({ error: resolved.error === 'Authentication required' ? 'Unauthorized' : resolved.error }, { status: resolved.status })
     const userId = resolved.actor.userId
 
