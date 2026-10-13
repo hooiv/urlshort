@@ -27,6 +27,8 @@ export const bulkEditSchema = z.object({
     startsAt: z.string().datetime({ offset: true }).nullable().optional(),
     /** null removes the click limit. */
     maxClicks: z.number().int().min(1).max(1_000_000_000).nullable().optional(),
+    /** Where visitors land once a link expires or hits its click limit; null clears it. */
+    expiredUrl: z.string().trim().url().max(2048).refine((u) => /^https?:\/\//i.test(u), 'expiredUrl must be http(s)').nullable().optional(),
     archived: z.boolean().optional(),
     utm: z.object(Object.fromEntries(UTM_KEYS.map((k) => [k, z.string().max(120).nullable().optional()])) as Record<(typeof UTM_KEYS)[number], z.ZodOptional<z.ZodNullable<z.ZodString>>>).optional(),
     utmTemplateId: z.string().min(1).max(64).optional(),
@@ -62,7 +64,7 @@ export function nextTags(current: string[], c: Pick<BulkEditChanges, 'addTags' |
 
 type LinkRow = {
   id: string; shortCode: string; originalUrl: string; tags: string[]; isActive: boolean
-  expiresAt: Date | null; startsAt: Date | null; maxClicks: number | null; folderId: string | null; workspaceId: string | null; userId: string | null
+  expiresAt: Date | null; startsAt: Date | null; maxClicks: number | null; expiredUrl: string | null; folderId: string | null; workspaceId: string | null; userId: string | null
 }
 
 export type BulkEditFailure = { link: string; reason: string }
@@ -81,7 +83,7 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
   const c = input.changes
   const rows: LinkRow[] = await prisma.url.findMany({
     where: { AND: [{ deletedAt: null, OR: [{ id: { in: keys } }, { shortCode: { in: keys } }] }, visibleUrlWhere(userId)] },
-    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, startsAt: true, maxClicks: true, folderId: true, workspaceId: true, userId: true },
+    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, startsAt: true, maxClicks: true, expiredUrl: true, folderId: true, workspaceId: true, userId: true },
   })
   const found = new Set(rows.flatMap((r) => [r.id, r.shortCode]))
   const failures: BulkEditFailure[] = keys.filter((k) => !found.has(k)).map((link) => ({ link, reason: 'Link not found' }))
@@ -162,6 +164,9 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
     }
     if (c.maxClicks !== undefined && c.maxClicks !== r.maxClicks) {
       data.maxClicks = c.maxClicks; before.maxClicks = r.maxClicks; after.maxClicks = c.maxClicks
+    }
+    if (c.expiredUrl !== undefined && c.expiredUrl !== r.expiredUrl) {
+      data.expiredUrl = c.expiredUrl; before.expiredUrl = r.expiredUrl; after.expiredUrl = c.expiredUrl
     }
     if (c.archived !== undefined && c.archived === r.isActive) {
       data.isActive = !c.archived; before.isActive = r.isActive; after.isActive = !c.archived

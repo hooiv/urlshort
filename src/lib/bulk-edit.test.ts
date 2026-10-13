@@ -21,6 +21,12 @@ describe('bulkEditSchema', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { maxClicks: 500 } }).success).toBe(true)
     expect(bulkEditSchema.safeParse({ links, changes: { maxClicks: null } }).success).toBe(true)
   })
+  it('accepts an http(s) expiredUrl or null, rejects other schemes', () => {
+    expect(bulkEditSchema.safeParse({ links, changes: { expiredUrl: 'https://example.com/over' } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { expiredUrl: null } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { expiredUrl: 'javascript:alert(1)' } }).success).toBe(false)
+    expect(bulkEditSchema.safeParse({ links, changes: { expiredUrl: 'ftp://example.com/x' } }).success).toBe(false)
+  })
   it('rejects non-positive or fractional maxClicks', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { maxClicks: 0 } }).success).toBe(false)
     expect(bulkEditSchema.safeParse({ links, changes: { maxClicks: 1.5 } }).success).toBe(false)
