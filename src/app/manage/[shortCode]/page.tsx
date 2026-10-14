@@ -134,6 +134,8 @@ export default function ManageLink() {
           onStartsAtChange={controls.setStartsAt}
           onNotStartedUrlChange={controls.setNotStartedUrl}
           clickIdParam={controls.clickIdParam}
+          redirectStatus={controls.redirectStatus}
+          onRedirectStatusChange={controls.setRedirectStatus}
           onClickIdParamChange={controls.setClickIdParam}
           maxClicks={controls.maxClicks}
           password={controls.password}

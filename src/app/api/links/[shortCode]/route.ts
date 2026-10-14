@@ -1,3 +1,4 @@
+import { parseRedirectStatus, assertStatusCompatible } from '@/lib/redirect-status'
 import { parseClickIdParam } from '@/lib/click-id-param'
 import { validateLinkNotes } from '@/lib/link-notes'
 import { parsePinned } from '@/lib/link-pins'
@@ -52,7 +53,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     where: { id: link.id },
     select: {
       id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, notes: true, tags: true, clicks: true,
-      createdAt: true, updatedAt: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, clickIdParam: true, passwordHash: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, isActive: true,
+      createdAt: true, updatedAt: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, clickIdParam: true, redirectStatus: true, passwordHash: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, isActive: true,
       riskStatus: true, healthStatus: true,
       deepLinkApp: { select: { id: true, name: true, environment: true, appVersion: true, minimumAppVersion: true, enabled: true, resolverEnabled: true } },
       _count: { select: { clickEvents: true, rules: true, goals: true, revisions: true } },
@@ -178,6 +179,20 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
       newDestination = normalizeSafeUrl(String(body.destinationUrl ?? ''))
       await assertDestinationSafeForStorage(newDestination)
     }
+    if (body.redirectStatus !== undefined || body.maxClicks !== undefined || body.password !== undefined || body.expiresAt !== undefined || body.startsAt !== undefined) {
+      const status = body.redirectStatus !== undefined ? parseRedirectStatus(body.redirectStatus) : parseRedirectStatus(link.redirectStatus)
+      if (body.redirectStatus !== undefined) data.redirectStatus = status
+      if (status === 301 || status === 308) {
+        const ruleCount = await prisma.linkRule.count({ where: { urlId: link.id } })
+        assertStatusCompatible(status, {
+          hasPassword: (data.passwordHash !== undefined ? data.passwordHash : link.passwordHash) != null,
+          hasExpiry: (data.expiresAt !== undefined ? data.expiresAt : link.expiresAt) != null,
+          hasStart: (data.startsAt !== undefined ? data.startsAt : link.startsAt) != null,
+          hasMaxClicks: (data.maxClicks !== undefined ? data.maxClicks : link.maxClicks) != null,
+          hasRules: ruleCount > 0,
+        })
+      }
+    }
 
     const updated = await prisma.$transaction(async (tx) => {
       if (newDestination && newDestination !== link.originalUrl) {
@@ -186,7 +201,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
         })
         data.originalUrl = newDestination
       }
-      return tx.url.update({ where: { id: link.id }, data, select: { id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, notes: true, pinnedAt: true, tags: true, isActive: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, clickIdParam: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, updatedAt: true } })
+      return tx.url.update({ where: { id: link.id }, data, select: { id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, notes: true, pinnedAt: true, tags: true, isActive: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, clickIdParam: true, redirectStatus: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, updatedAt: true } })
     })
 
     await invalidateLink(updated.shortCode, updated.id)

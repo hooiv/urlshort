@@ -1,3 +1,4 @@
+import { effectiveRedirectStatus } from '@/lib/redirect-status'
 import { NextRequest, NextResponse, after } from 'next/server'
 import { linkWindowState, notStartedTarget } from '@/lib/link-schedule'
 import { prisma } from '@/lib/prisma'
@@ -304,8 +305,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
       return response
     }
 
-    const response = NextResponse.redirect(finalDestination, 307)
-    response.headers.set('Cache-Control', 'private, no-store')
+    const status = effectiveRedirectStatus(url.redirectStatus, { ruleMatched: destination !== url.originalUrl, gated: isBot || needsCap || !!url.expiresAt || !!url.startsAt || !!url.passwordHash })
+    const response = NextResponse.redirect(finalDestination, status)
+    // Permanent codes are meant to be cached by browsers/CDNs; only the temporary ones are no-store.
+    response.headers.set('Cache-Control', status === 301 || status === 308 ? 'public, max-age=3600' : 'private, no-store')
     if (visitor.isNew) setVisitorCookie(response, visitor.id)
     return response
   } catch (error) {

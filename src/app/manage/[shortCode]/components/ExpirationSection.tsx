@@ -11,6 +11,8 @@ interface ExpirationSectionProps {
   onStartsAtChange: (value: string) => void
   clickIdParam: string
   onClickIdParamChange: (value: string) => void
+  redirectStatus: string
+  onRedirectStatusChange: (value: string) => void
   onNotStartedUrlChange: (value: string) => void
   maxClicks: string
   password: string
@@ -31,6 +33,8 @@ export default function ExpirationSection({
   onStartsAtChange,
   clickIdParam,
   onClickIdParamChange,
+  redirectStatus,
+  onRedirectStatusChange,
   onNotStartedUrlChange,
   maxClicks,
   password,
@@ -78,6 +82,14 @@ export default function ExpirationSection({
               maxLength={32}
               className="input"
             />
+          </Field>
+          <Field label="Redirect type (301/308 are cached by browsers; not allowed with password, schedule or click limit)">
+            <select value={redirectStatus} onChange={(e) => onRedirectStatusChange(e.target.value)} className="input">
+              <option value="">307 Temporary (default)</option>
+              <option value="302">302 Found</option>
+              <option value="301">301 Permanent</option>
+              <option value="308">308 Permanent (keeps method)</option>
+            </select>
           </Field>
           <Field label="Expiration Date & Time">
             <input

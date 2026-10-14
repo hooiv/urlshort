@@ -60,6 +60,7 @@ model Url {
   expiresAt                  DateTime?
   expiredUrl                 String?
   clickIdParam               String?
+  redirectStatus             Int?
   milestoneReached           Int            @default(0)
   publicStatsHash            String?        @unique
   publicStatsEnabledAt       DateTime?
