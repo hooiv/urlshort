@@ -40,7 +40,7 @@ export async function assertDestinationSafeForStorage(input: string): Promise<vo
   await assertPublicHost(url)
 }
 
-async function assertPublicHost(url: URL): Promise<void> {
+export async function assertPublicHost(url: URL): Promise<void> {
   const host = url.hostname.toLowerCase()
   if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) throw new Error('Private/local destinations are not allowed')
   if (isIP(host)) {
