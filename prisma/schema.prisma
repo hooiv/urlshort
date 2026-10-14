@@ -429,6 +429,7 @@ model Workspace {
   featureFlags           FeatureFlag[]
   folders                Folder[]
   utmTemplates           UtmTemplate[]
+  linkPolicy             WorkspaceLinkPolicy?
 
   @@map("workspaces")
 }
@@ -1392,4 +1393,17 @@ model SavedView {
 
   @@unique([userId, name])
   @@map("saved_views")
+}
+
+/// Workspace link governance rules (validated by linkPolicySchema before every write).
+model WorkspaceLinkPolicy {
+  workspaceId String   @id
+  /// JSON LinkPolicy.
+  policy      String
+  updatedAt   DateTime @updatedAt
+  updatedBy   String?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_link_policies")
 }

@@ -23,6 +23,7 @@ import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
 import { dispatchWebhooksForUrl } from '@/lib/webhooks'
 import { invalidateLink } from '@/lib/link-cache'
 import { applyUtmTemplate } from '@/lib/utm-templates'
+import { loadWorkspacePolicy, policyErrorMessage } from '@/lib/link-policy-store'
 
 const CUSTOM_CODE = /^[A-Za-z0-9_-]{3,64}$/
 const CODE_COLLISION_RETRIES = 5
@@ -232,6 +233,10 @@ export async function POST(request: NextRequest) {
       if (!template) return NextResponse.json({ error: 'UTM template not found in this workspace' }, { status: 404 })
       destinationUrl = applyUtmTemplate(normalizedUrl, template)
       if (destinationUrl.length > 2048) return NextResponse.json({ error: 'Destination URL is too long after applying the UTM template' }, { status: 400 })
+    }
+    if (membership?.workspaceId) {
+      const policyError = await policyErrorMessage(await loadWorkspacePolicy(prisma, membership.workspaceId), { destination: destinationUrl, shortCode: customCode || null, tags, expiresAt })
+      if (policyError) return NextResponse.json({ error: policyError, code: 'link_policy_violation' }, { status: 422 })
     }
     const pixelData: Record<string, string | null> = {}
     try {
