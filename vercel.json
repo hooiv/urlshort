@@ -53,6 +53,10 @@
       "schedule": "45 3 * * *"
     },
     {
+      "path": "/api/cron/usage-alerts",
+      "schedule": "20 * * * *"
+    },
+    {
       "path": "/api/cron/weekly-digest",
       "schedule": "0 8 * * 1"
     }

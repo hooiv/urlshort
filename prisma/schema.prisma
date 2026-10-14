@@ -424,6 +424,7 @@ model Workspace {
   privacyPolicy          PrivacyPolicy?
   tenantQuota            TenantQuota?
   usageBuckets           UsageBucket[]
+  usageAlerts            UsageAlert[]
   ssoConnections         SsoConnection[]
   scimTokens             ScimToken[]
   scimIdentities         ScimIdentity[]
@@ -1409,4 +1410,17 @@ model WorkspaceLinkPolicy {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@map("workspace_link_policies")
+}
+
+model UsageAlert {
+  id          String       @id @default(cuid())
+  workspaceId String
+  metric      UsageMetric
+  periodKey   String
+  threshold   Int
+  sentAt      DateTime     @default(now())
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, metric, periodKey, threshold])
+  @@map("usage_alerts")
 }
