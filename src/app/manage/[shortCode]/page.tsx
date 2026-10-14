@@ -138,6 +138,8 @@ export default function ManageLink() {
           onRedirectStatusChange={controls.setRedirectStatus}
           onClickIdParamChange={controls.setClickIdParam}
           maxClicks={controls.maxClicks}
+          dailyClickCap={controls.dailyClickCap}
+          onDailyClickCapChange={controls.setDailyClickCap}
           password={controls.password}
           hasPassword={controls.hasPassword}
           onExpiresAtChange={controls.setExpiresAt}

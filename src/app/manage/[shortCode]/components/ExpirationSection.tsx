@@ -15,6 +15,8 @@ interface ExpirationSectionProps {
   onRedirectStatusChange: (value: string) => void
   onNotStartedUrlChange: (value: string) => void
   maxClicks: string
+  dailyClickCap: string
+  onDailyClickCapChange: (value: string) => void
   password: string
   hasPassword: boolean
   onExpiresAtChange: (value: string) => void
@@ -37,6 +39,8 @@ export default function ExpirationSection({
   onRedirectStatusChange,
   onNotStartedUrlChange,
   maxClicks,
+  dailyClickCap,
+  onDailyClickCapChange,
   password,
   hasPassword,
   onExpiresAtChange,
@@ -106,6 +110,16 @@ export default function ExpirationSection({
               value={maxClicks}
               onChange={(e) => onMaxClicksChange(e.target.value)}
               placeholder="e.g. 500"
+              className="input"
+            />
+          </Field>
+          <Field label="Daily Click Cap (resets 00:00 UTC)">
+            <input
+              type="number"
+              min="1"
+              value={dailyClickCap}
+              onChange={(e) => onDailyClickCapChange(e.target.value)}
+              placeholder="e.g. 1000"
               className="input"
             />
           </Field>

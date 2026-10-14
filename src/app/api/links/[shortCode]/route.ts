@@ -1,3 +1,4 @@
+import { parseDailyClickCap } from '@/lib/daily-click-cap'
 import { parseRedirectStatus, assertStatusCompatible } from '@/lib/redirect-status'
 import { parseClickIdParam } from '@/lib/click-id-param'
 import { validateLinkNotes } from '@/lib/link-notes'
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     where: { id: link.id },
     select: {
       id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, notes: true, tags: true, clicks: true,
-      createdAt: true, updatedAt: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, clickIdParam: true, redirectStatus: true, passwordHash: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, isActive: true,
+      createdAt: true, updatedAt: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, clickIdParam: true, redirectStatus: true, passwordHash: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, dailyClickCap: true, dailyClicksReserved: true, dailyClicksDate: true, isActive: true,
       riskStatus: true, healthStatus: true,
       deepLinkApp: { select: { id: true, name: true, environment: true, appVersion: true, minimumAppVersion: true, enabled: true, resolverEnabled: true } },
       _count: { select: { clickEvents: true, rules: true, goals: true, revisions: true } },
@@ -172,6 +173,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
     if (body.maxClicks !== undefined) {
       data.maxClicks = parseMaxClicks(body.maxClicks)
     }
+    if (body.dailyClickCap !== undefined) {
+      data.dailyClickCap = parseDailyClickCap(body.dailyClickCap)
+    }
 
     // Changing the fallback destination creates a revision (append-only history).
     let newDestination: string | null = null
@@ -201,7 +205,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
         })
         data.originalUrl = newDestination
       }
-      return tx.url.update({ where: { id: link.id }, data, select: { id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, notes: true, pinnedAt: true, tags: true, isActive: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, clickIdParam: true, redirectStatus: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, updatedAt: true } })
+      return tx.url.update({ where: { id: link.id }, data, select: { id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, notes: true, pinnedAt: true, tags: true, isActive: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, clickIdParam: true, redirectStatus: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, dailyClickCap: true, updatedAt: true } })
     })
 
     await invalidateLink(updated.shortCode, updated.id)

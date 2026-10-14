@@ -76,6 +76,9 @@ model Url {
   webhookUrl                 String?
   maxClicks                  Int?
   clicksReserved             Int            @default(0)
+  dailyClickCap              Int?
+  dailyClicksReserved        Int            @default(0)
+  dailyClicksDate            String?
   userId                     String?
   user                       User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
   isActive                   Boolean        @default(true)

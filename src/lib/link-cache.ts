@@ -61,6 +61,7 @@ export type CachedLink = {
   webhookUrl: string | null
   maxClicks: number | null
   clicksReserved: number
+  dailyClickCap: number | null
   deletedAt?: Date | null
   rules: SmartRule[]
 }
@@ -292,6 +293,7 @@ const linkSelect = {
   webhookUrl: true,
   maxClicks: true,
   clicksReserved: true,
+  dailyClickCap: true,
   deletedAt: true,
 } as const
 

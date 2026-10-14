@@ -1,3 +1,4 @@
+import { reserveDailyClick } from '@/lib/daily-click-cap'
 import { effectiveRedirectStatus } from '@/lib/redirect-status'
 import { applyRobotsHeader } from '@/lib/robots-header'
 import { NextRequest, NextResponse, after } from 'next/server'
@@ -150,6 +151,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     const billable = isBillableTraffic(trafficType)
     const needsQuota = billable && url.workspaceId !== null
     const needsCap = billable && url.maxClicks !== null
+    const needsDailyCap = billable && url.dailyClickCap != null
     let usageReserved = false
     const rejectOverLimit = () => url!.expiredUrl
       ? NextResponse.redirect(url!.expiredUrl, 307)
@@ -169,6 +171,16 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
         data: { clicksReserved: { increment: 1 } },
       })
       if (reservation.count !== 1) {
+        if (usageReserved && url.workspaceId) returnAdmittedClick(url.workspaceId)
+        return rejectOverLimit()
+      }
+    }
+    if (needsDailyCap && url.dailyClickCap != null) {
+      // Atomic per-UTC-day counter: one conditional UPDATE that also rolls the
+      // counter over when the day changes (see daily-click-cap.ts).
+      const admitted = await reserveDailyClick(prisma, url.id, url.dailyClickCap, dateKey)
+      if (!admitted) {
+        if (needsCap) await prisma.url.updateMany({ where: { id: url.id, clicksReserved: { gt: 0 } }, data: { clicksReserved: { decrement: 1 } } })
         if (usageReserved && url.workspaceId) returnAdmittedClick(url.workspaceId)
         return rejectOverLimit()
       }
