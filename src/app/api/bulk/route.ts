@@ -8,6 +8,7 @@ import { getBaseUrl } from '@/lib/utils'
 import { assertDestinationSafeForStorage } from '@/lib/destination-health'
 import { assessDestination } from '@/lib/link-safety'
 import { EDIT_ROLES } from '@/lib/workspaces'
+import { getIdempotentResponse, storeIdempotentResponse } from '@/lib/idempotency'
 import { recordAudit } from '@/lib/audit'
 import { ProviderImportError, fetchProviderImport } from '@/lib/provider-import'
 import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
@@ -71,6 +72,24 @@ export async function POST(request: NextRequest) {
     const body = bulkCsvSchema.safeParse(await request.json().catch(() => ({})))
     if (!body.success) return NextResponse.json({ error: body.error.issues[0]?.message || 'Invalid CSV' }, { status: 400 })
     const onConflict = body.data.onConflict ?? 'skip'
+
+    // Idempotency-Key: a retried import after a dropped connection replays the
+    // stored report instead of re-running (and, with onConflict=overwrite,
+    // re-editing) every row. Keys are scoped to the caller's primary workspace.
+    let idem: Awaited<ReturnType<typeof getIdempotentResponse>> = null
+    let idemWorkspaceId: string | null = null
+    if (request.headers.get('idempotency-key')) {
+      const membership = await prisma.membership.findFirst({ where: { userId: user.id }, orderBy: { createdAt: 'asc' }, select: { workspaceId: true } })
+      if (membership) {
+        idemWorkspaceId = membership.workspaceId
+        try {
+          idem = await getIdempotentResponse(request, membership.workspaceId, body.data)
+        } catch (error) {
+          return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid Idempotency-Key' }, { status: 400 })
+        }
+        if (idem?.existing) return new NextResponse(idem.existing.responseJson, { status: idem.existing.responseStatus, headers: { 'Content-Type': 'application/json', 'Idempotent-Replay': 'true' } })
+      }
+    }
 
     let workspaceId: string | null = null
     if (body.data.workspaceId) {
@@ -217,12 +236,17 @@ export async function POST(request: NextRequest) {
 
     const ordered = [...results.values()].sort((a, b) => a.row - b.row)
     const baseUrl = getBaseUrl()
-    return NextResponse.json({
+    const payload = {
       source: parsed.source,
       summary: { total: parsed.totalRows, created: created.length, skipped: parsed.totalRows - created.length, ...(parsed.truncated ? { truncated: true, limit: MAX_IMPORT_ROWS } : {}) },
       links: created.map((link) => ({ ...link, shortUrl: `${baseUrl}/${link.shortCode}` })),
       results: ordered,
-    }, { status: created.length ? 201 : 200 })
+    }
+    const status = created.length ? 201 : 200
+    if (idem && idemWorkspaceId) {
+      await storeIdempotentResponse({ workspaceId: idemWorkspaceId, keyHash: idem.keyHash, requestHash: idem.requestHash, method: request.method, path: request.nextUrl.pathname, status, body: payload }).catch((e) => console.error('Idempotency store failed:', e))
+    }
+    return NextResponse.json(payload, { status })
   } catch (err) {
     console.error('Bulk import failed:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

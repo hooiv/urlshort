@@ -2,18 +2,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 
 const prismaMock = vi.hoisted(() => ({
-  membership: { findUnique: vi.fn() },
+  membership: { findUnique: vi.fn(), findFirst: vi.fn() },
   folder: { findFirst: vi.fn() },
   url: { findMany: vi.fn(), createManyAndReturn: vi.fn() },
   destinationRevision: { createMany: vi.fn() },
   $transaction: vi.fn(),
 }))
+const idemMock = vi.hoisted(() => ({ get: vi.fn(), store: vi.fn() }))
 const safeMock = vi.hoisted(() => vi.fn())
 const dispatchMock = vi.hoisted(() => vi.fn())
 vi.mock('@/lib/prisma', () => ({ prisma: prismaMock }))
 vi.mock('@/lib/auth', () => ({ getCurrentUser: vi.fn(async () => ({ id: 'user_a' })) }))
 vi.mock('@/lib/rate-limit', () => ({ rateLimit: vi.fn(async () => ({ allowed: true })) }))
 vi.mock('@/lib/destination-health', () => ({ assertDestinationSafeForStorage: safeMock }))
+vi.mock('@/lib/idempotency', () => ({ getIdempotentResponse: idemMock.get, storeIdempotentResponse: idemMock.store }))
 vi.mock('@/lib/audit', () => ({ recordAudit: vi.fn() }))
 vi.mock('@/lib/routing-config', () => ({ publishWorkspaceRoutingConfig: vi.fn() }))
 vi.mock('@/lib/webhooks', () => ({ dispatchWebhooksForUrls: dispatchMock }))
@@ -155,5 +157,36 @@ describe('POST /api/bulk', () => {
     const res = await post({ csv: 'foo,bar\n1,2' })
     expect(res.status).toBe(400)
     expect((await res.json()).error).toMatch(/destination column/)
+  })
+
+  describe('Idempotency-Key', () => {
+    const csv = 'originalUrl\nhttps://example.com/a'
+    const idemPost = () => POST(new NextRequest('https://ql.test/api/bulk', { method: 'POST', body: JSON.stringify({ csv }), headers: { 'idempotency-key': 'key-12345678' } }))
+    beforeEach(() => {
+      prismaMock.membership.findFirst.mockResolvedValue({ workspaceId: 'w1' })
+      idemMock.get.mockReset(); idemMock.store.mockReset().mockResolvedValue(undefined)
+    })
+    it('replays the stored report without touching the database', async () => {
+      idemMock.get.mockResolvedValue({ keyHash: 'h', requestHash: 'r', existing: { responseStatus: 201, responseJson: '{"summary":{"created":1}}' } })
+      const res = await idemPost()
+      expect(res.status).toBe(201)
+      expect(res.headers.get('Idempotent-Replay')).toBe('true')
+      expect(prismaMock.url.createManyAndReturn).not.toHaveBeenCalled()
+    })
+    it('stores the report on first use', async () => {
+      idemMock.get.mockResolvedValue({ keyHash: 'h', requestHash: 'r', existing: null })
+      const res = await idemPost()
+      expect(res.status).toBe(201)
+      expect(idemMock.store).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: 'w1', keyHash: 'h', status: 201 }))
+    })
+    it('rejects key reuse with a different body before importing', async () => {
+      idemMock.get.mockRejectedValue(new Error('Idempotency-Key was reused with a different request'))
+      expect((await idemPost()).status).toBe(400)
+      expect(prismaMock.url.createManyAndReturn).not.toHaveBeenCalled()
+    })
+    it('does nothing idempotent without the header', async () => {
+      await post({ csv })
+      expect(idemMock.get).not.toHaveBeenCalled()
+    })
   })
 })
