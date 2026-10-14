@@ -24,3 +24,17 @@ d2('reserved codes', () => {
     e2(cs(['api'], new Set())[0].status).toBe('reserved')
   })
 })
+
+import { suggestAlternatives } from './slug-availability'
+describe('suggestAlternatives', () => {
+  it('skips taken suffixes and respects the limit', () => {
+    const r = suggestAlternatives('promo', new Set(['promo2', 'promo3']), 3)
+    expect(r).toEqual(['promo4', 'promo5', 'promo6'])
+  })
+  it('returns nothing for unusable input', () => {
+    expect(suggestAlternatives('!!!', new Set())).toEqual([])
+  })
+  it('never suggests reserved names', () => {
+    for (const s of suggestAlternatives('api', new Set())) expect(s).not.toMatch(/^api$/i)
+  })
+})
