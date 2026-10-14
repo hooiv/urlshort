@@ -86,7 +86,7 @@ export function serializeCsv(rows: (string | number | boolean | null | undefined
       row
         .map((cell) => {
           if (cell === null || cell === undefined) return '""'
-          const str = String(cell)
+          const str = neutralizeFormula(cell)
           if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
             return `"${str.replace(/"/g, '""')}"`
           }
@@ -95,4 +95,16 @@ export function serializeCsv(rows: (string | number | boolean | null | undefined
         .join(',')
     )
     .join('\n')
+}
+
+/**
+ * Spreadsheet formula injection guard (OWASP CSV injection). A user-controlled
+ * string starting with = + - @ or a tab/CR would execute as a formula when the
+ * export is opened in Excel/Sheets, so prefix it with an apostrophe. Real
+ * numbers (including negatives) are not strings and pass through untouched.
+ */
+export function neutralizeFormula(cell: string | number | boolean): string {
+  const str = String(cell)
+  if (typeof cell === 'string' && /^[=+\-@\t\r]/.test(str)) return `'${str}`
+  return str
 }

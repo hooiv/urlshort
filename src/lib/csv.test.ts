@@ -39,4 +39,9 @@ describe('CSV Parser and Serializer', () => {
   it('strips a leading UTF-8 BOM so the first header is intact', () => {
     expect(parseCsv('\uFEFFshort_url,clicks\nabc,3')[0]).toEqual(['short_url', 'clicks'])
   })
+
+  it('neutralizes spreadsheet formula injection in string cells only', () => {
+    const out = serializeCsv([['=HYPERLINK("http://evil")', '+1', '-2', '@SUM(A1)', '\tx', 'safe', -5, 7]])
+    expect(out).toBe(`"'=HYPERLINK(""http://evil"")","'+1","'-2","'@SUM(A1)","'\tx","safe","-5","7"`)
+  })
 })
