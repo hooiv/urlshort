@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { CheckCircle2 } from 'lucide-react'
 import LinkCard from '@/app/account/components/LinkCard'
 import BulkEditBar from '@/app/account/components/BulkEditBar'
+import SavedViews from '@/app/account/components/SavedViews'
 import TagFilter from '@/app/account/components/TagFilter'
 import type { Url } from '@/app/account/components/types'
 
@@ -15,6 +16,7 @@ export default function LinksSection({
   nextCursor,
   onSearchChange,
   onSelectTag,
+  onApplyView,
   onRefresh,
   onLoadMore,
 }: {
@@ -24,6 +26,7 @@ export default function LinksSection({
   nextCursor: string | null
   onSearchChange: (query: string) => void
   onSelectTag: (tag: string) => void
+  onApplyView: (query: string, tag: string) => void
   onRefresh: () => void
   onLoadMore: () => void
 }) {
@@ -92,6 +95,7 @@ export default function LinksSection({
           </div>
         </div>
       </div>
+      <SavedViews search={search} activeTag={activeTag} onApply={({ q, tag }) => onApplyView(q, tag)} />
       <TagFilter links={links} activeTag={activeTag} onSelect={onSelectTag} />
       {links.length ? (
         <div className="grid gap-3 md:grid-cols-2">

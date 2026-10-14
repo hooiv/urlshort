@@ -76,6 +76,10 @@ function AccountPageInner() {
             account.setActiveTag(tag)
             void account.searchLinks(account.search, tag || undefined)
           }}
+          onApplyView={(q, tag) => {
+            account.setActiveTag(tag)
+            void account.searchLinks(q, tag || undefined)
+          }}
           onRefresh={() => void account.searchLinks(account.search, account.activeTag || undefined)}
           onLoadMore={() => void account.loadMore()}
         />
