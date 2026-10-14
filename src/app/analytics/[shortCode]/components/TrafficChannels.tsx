@@ -5,7 +5,7 @@ import { formatNumber } from '@/lib/format'
 
 type Row = { channel: string; clicks: number; share: number; topHosts: Array<{ host: string; clicks: number }> }
 type Result = { days: number; total: number; channels: Row[] }
-const LABEL: Record<string, string> = { search: 'Search', social: 'Social', email: 'Email', messaging: 'Messaging', other: 'Other sites', direct: 'Direct / unknown' }
+const LABEL: Record<string, string> = { qr: 'QR code scans', search: 'Search', social: 'Social', email: 'Email', messaging: 'Messaging', other: 'Other sites', direct: 'Direct / unknown' }
 
 export default function TrafficChannels({ shortCode }: { shortCode: string }) {
   const [days, setDays] = useState(30)
@@ -40,7 +40,7 @@ export default function TrafficChannels({ shortCode }: { shortCode: string }) {
             <li key={c.channel} className="text-xs">
               <div className="mb-1 flex justify-between text-slate-300"><span>{LABEL[c.channel] ?? c.channel}</span><span>{formatNumber(c.clicks)} · {c.share}%</span></div>
               <div className="h-1.5 rounded bg-slate-800"><div className="h-1.5 rounded bg-sky-400" style={{ width: `${Math.max(2, c.share)}%` }} /></div>
-              {c.channel !== 'direct' && c.topHosts.length > 0 && (
+              {c.channel !== 'direct' && c.channel !== 'qr' && c.topHosts.length > 0 && (
                 <p className="mt-1 truncate text-slate-500">{c.topHosts.map((h) => `${h.host} (${formatNumber(h.clicks)})`).join(', ')}</p>
               )}
             </li>

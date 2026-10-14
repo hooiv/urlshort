@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildChannelBreakdown, classifyReferrer, parseChannelDays } from './referrer-channels'
+import { buildChannelBreakdown, classifyReferrer, isQrMedium, parseChannelDays } from './referrer-channels'
 
 describe('classifyReferrer', () => {
   it.each([
@@ -32,5 +32,19 @@ describe('parseChannelDays', () => {
     expect(parseChannelDays('366')).toBeNull()
     expect(parseChannelDays('0')).toBeNull()
     expect(parseChannelDays('1e2')).toBeNull()
+  })
+})
+
+describe('qr channel', () => {
+  it('isQrMedium is case/space insensitive', () => {
+    expect(isQrMedium(' QR ')).toBe(true)
+    expect(isQrMedium('qrcode')).toBe(false)
+    expect(isQrMedium(null)).toBe(false)
+  })
+  it('qr clicks win over referrer classification', () => {
+    const r = buildChannelBreakdown([
+      { host: null, clicks: 6, qr: true }, { host: 'google.com', clicks: 2, qr: true }, { host: 'google.com', clicks: 2 },
+    ], 30)
+    expect(r.channels.map((c) => [c.channel, c.clicks])).toEqual([['qr', 8], ['search', 2]])
   })
 })
