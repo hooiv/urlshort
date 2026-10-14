@@ -28,6 +28,8 @@
 | `notStartedUrl` | http(s) URL visitors see before the link's `startsAt`, or `null` to clear it |
 | `notes` | Private internal note set on every link; `null` or empty string clears it |
 | `cloaked` | `true` to serve the destination inside a masked frame (URL cloaking), `false` to turn it off |
+| `pinned` | `true` pins the links to the top of the links view, `false` unpins |
+| `redirectStatus` | `301`, `302`, `307` or `308` (`null` resets to the 307 default). Permanent codes are refused, for the whole batch, on any link that ends up with a password, expiry, go-live date, click limit or targeting rules |
 | `password` | 4-128 chars: protect every link with this password (hashed once per batch; never returned or written to the audit log, which records only `passwordProtected`), or `null` to remove protection. Existing unlock cookies stop working |
 | `maxClicks` | integer 1-1,000,000,000, or `null` to remove the click limit |
 | `extendExpiryDays` | integer 1-3650; moves each link's own expiry out by N days from the later of its expiry and now. Links with no expiry are left unchanged. Cannot be combined with `expiresAt` |

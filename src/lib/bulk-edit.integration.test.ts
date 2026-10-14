@@ -95,3 +95,46 @@ describe('real database: bulk edit', () => {
     }
   })
 })
+
+describe('real database: bulk pin and redirect status', () => {
+  it.skipIf(!databaseUrl)('pins, sets redirect codes and refuses permanent codes on gated links without writing', async () => {
+    process.env.DATABASE_URL = databaseUrl
+    process.env.DIRECT_DATABASE_URL = databaseUrl
+    const db = new PrismaClient({ datasources: { db: { url: databaseUrl } } })
+    const { applyBulkEdit } = await import('./bulk-edit')
+    const tag = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const owner = await db.user.create({ data: { email: `o-${tag}@example.com`, password: 'x' } })
+    const mk = (n: string, extra: object = {}) => db.url.create({ data: { shortCode: `${n}${tag}`.slice(0, 40), originalUrl: 'https://example.com/p', userId: owner.id, ...extra } })
+    try {
+      const [a, b, gated, ruled] = await Promise.all([mk('a'), mk('b'), mk('g', { maxClicks: 5 }), mk('r')])
+      await db.linkRule.create({ data: { urlId: ruled.id, name: 'US', countryCodes: 'US', destinationUrl: 'https://example.com/us' } })
+
+      const pinned = await applyBulkEdit(owner.id, { links: [a.id, b.id], changes: { pinned: true, redirectStatus: 301 } })
+      expect(pinned.ok && pinned.updated.length).toBe(2)
+      const rows = await db.url.findMany({ where: { id: { in: [a.id, b.id] } } })
+      for (const r of rows) { expect(r.pinnedAt).not.toBeNull(); expect(r.redirectStatus).toBe(301) }
+
+      const again = await applyBulkEdit(owner.id, { links: [a.id], changes: { pinned: true, redirectStatus: 301 } })
+      expect(again.ok && again.updated.length).toBe(0)
+
+      const refused = await applyBulkEdit(owner.id, { links: [a.id, gated.id, ruled.id], changes: { redirectStatus: 308 } })
+      expect(refused.ok).toBe(false)
+      if (!refused.ok) expect(refused.failures.map((f) => f.link).sort()).toEqual([gated.shortCode, ruled.shortCode].sort())
+      expect((await db.url.findUniqueOrThrow({ where: { id: a.id } })).redirectStatus).toBe(301)
+
+      // Removing the click limit in the same batch makes the permanent code legal.
+      const ok = await applyBulkEdit(owner.id, { links: [gated.id], changes: { maxClicks: null, redirectStatus: 308 } })
+      expect(ok.ok).toBe(true)
+
+      const reset = await applyBulkEdit(owner.id, { links: [a.id], changes: { pinned: false, redirectStatus: null } })
+      expect(reset.ok && reset.updated.length).toBe(1)
+      const back = await db.url.findUniqueOrThrow({ where: { id: a.id } })
+      expect(back.pinnedAt).toBeNull(); expect(back.redirectStatus).toBeNull()
+    } finally {
+      await db.auditEvent.deleteMany({ where: { actorUserId: owner.id } })
+      await db.url.deleteMany({ where: { userId: owner.id } })
+      await db.user.delete({ where: { id: owner.id } })
+      await db.$disconnect()
+    }
+  }, 60_000)
+})

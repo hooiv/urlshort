@@ -97,6 +97,22 @@ export default function BulkEditBar({
               <option value="restore">Restore</option>
             </select>
           </label>
+          <label className="text-xs text-slate-400">Pin to top
+            <select className="input mt-1 w-full" value={form.pin} onChange={(e) => set({ pin: e.target.value as BulkEditForm['pin'] })}>
+              <option value="">Leave as is</option>
+              <option value="pin">Pin</option>
+              <option value="unpin">Unpin</option>
+            </select>
+          </label>
+          <label className="text-xs text-slate-400">Redirect type
+            <select className="input mt-1 w-full" value={form.redirect} onChange={(e) => set({ redirect: e.target.value as BulkEditForm['redirect'] })}>
+              <option value="">Leave as is</option>
+              <option value="default">307 temporary (default)</option>
+              <option value="302">302 found</option>
+              <option value="301">301 permanent</option>
+              <option value="308">308 permanent</option>
+            </select>
+          </label>
           <label className="text-xs text-slate-400">Password
             <div className="mt-1 flex gap-2">
               <input type="password" autoComplete="new-password" className="input w-full" placeholder="Set one password" value={form.password === 'remove' ? '' : form.password} onChange={(e) => set({ password: e.target.value })} />

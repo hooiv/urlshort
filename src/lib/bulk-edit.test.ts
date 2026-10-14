@@ -58,6 +58,12 @@ describe('bulkEditSchema', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { cloaked: true } }).success).toBe(true)
     expect(bulkEditSchema.safeParse({ links, changes: { cloaked: 'yes' } }).success).toBe(false)
   })
+  it('validates pinned and redirectStatus', () => {
+    expect(bulkEditSchema.safeParse({ links, changes: { pinned: false } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { pinned: 'yes' } }).success).toBe(false)
+    for (const code of [301, 302, 307, 308, null]) expect(bulkEditSchema.safeParse({ links, changes: { redirectStatus: code } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { redirectStatus: 303 } }).success).toBe(false)
+  })
   it('accepts null expiry and folder', () => expect(bulkEditSchema.safeParse({ links, changes: { expiresAt: null, folderId: null } }).success).toBe(true))
   it('accepts startsAt and null', () => { expect(bulkEditSchema.safeParse({ links, changes: { startsAt: '2030-01-01T00:00:00Z' } }).success).toBe(true); expect(bulkEditSchema.safeParse({ links, changes: { startsAt: null } }).success).toBe(true) })
   it('rejects startsAt after expiresAt', () => expect(bulkEditSchema.safeParse({ links, changes: { startsAt: '2031-01-01T00:00:00Z', expiresAt: '2030-06-01T00:00:00Z' } }).success).toBe(false))

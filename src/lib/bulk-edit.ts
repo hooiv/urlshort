@@ -5,6 +5,7 @@ import { EDIT_ROLES } from '@/lib/workspaces'
 import { folderWriteError, visibleUrlWhere } from '@/lib/folders'
 import { applyUtmTemplate, normalizeUtmValues, UTM_KEYS, type UtmValues } from '@/lib/utm-templates'
 import { invalidateLinks } from '@/lib/link-cache'
+import { parseRedirectStatus, assertStatusCompatible } from '@/lib/redirect-status'
 import { hashGatePassword } from '@/lib/password-gate'
 
 export const MAX_BULK_EDIT_LINKS = 500
@@ -36,6 +37,10 @@ export const bulkEditSchema = z.object({
     /** Move the links to the trash (restorable for the retention window). Cannot be combined with other changes. */
     trash: z.literal(true).optional(),
     cloaked: z.boolean().optional(),
+    /** Pin or unpin the links in the account view (max 20 pinned per account is enforced client-side by ordering). */
+    pinned: z.boolean().optional(),
+    /** 301/302/307/308; null resets to the 307 default. Permanent codes are refused on links with a password, schedule, click limit or rules. */
+    redirectStatus: z.union([z.literal(301), z.literal(302), z.literal(307), z.literal(308)]).nullable().optional(),
     /** Private internal note on every link; null or empty clears it. */
     notes: z.string().trim().max(2000).nullable().optional(),
     /** String sets the same gate password on every link; null removes it. Never echoed back or audited. */
@@ -75,7 +80,7 @@ export function nextTags(current: string[], c: Pick<BulkEditChanges, 'addTags' |
 
 type LinkRow = {
   id: string; shortCode: string; originalUrl: string; tags: string[]; isActive: boolean
-  expiresAt: Date | null; startsAt: Date | null; maxClicks: number | null; expiredUrl: string | null; notStartedUrl: string | null; cloaked: boolean; notes: string | null; passwordHash: string | null; folderId: string | null; workspaceId: string | null; userId: string | null
+  expiresAt: Date | null; startsAt: Date | null; maxClicks: number | null; expiredUrl: string | null; notStartedUrl: string | null; cloaked: boolean; pinnedAt: Date | null; redirectStatus: number | null; notes: string | null; passwordHash: string | null; folderId: string | null; workspaceId: string | null; userId: string | null
 }
 
 export type BulkEditFailure = { link: string; reason: string }
@@ -94,7 +99,7 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
   const c = input.changes
   const rows: LinkRow[] = await prisma.url.findMany({
     where: { AND: [{ deletedAt: null, OR: [{ id: { in: keys } }, { shortCode: { in: keys } }] }, visibleUrlWhere(userId)] },
-    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, startsAt: true, maxClicks: true, expiredUrl: true, notStartedUrl: true, cloaked: true, notes: true, passwordHash: true, folderId: true, workspaceId: true, userId: true },
+    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, startsAt: true, maxClicks: true, expiredUrl: true, notStartedUrl: true, cloaked: true, pinnedAt: true, redirectStatus: true, notes: true, passwordHash: true, folderId: true, workspaceId: true, userId: true },
   })
   const found = new Set(rows.flatMap((r) => [r.id, r.shortCode]))
   const failures: BulkEditFailure[] = keys.filter((k) => !found.has(k)).map((link) => ({ link, reason: 'Link not found' }))
@@ -136,6 +141,11 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
 
   // One scrypt per batch (not per link) keeps a 500-link edit from blocking the event loop.
   const passwordHash = typeof c.password === 'string' ? hashGatePassword(c.password) : null
+  const ruleCounts = new Map<string, number>()
+  if (c.redirectStatus === 301 || c.redirectStatus === 308) {
+    const grouped = await prisma.linkRule.groupBy({ by: ['urlId'], where: { urlId: { in: rows.map((r) => r.id) } }, _count: { _all: true } })
+    for (const g of grouped) ruleCounts.set(g.urlId, g._count._all)
+  }
   const plans: Array<{ row: LinkRow; data: Prisma.UrlUpdateInput; newUrl: string | null; before: Record<string, unknown>; after: Record<string, unknown> }> = []
   for (const r of rows) {
     const data: Prisma.UrlUpdateInput = {}
@@ -187,6 +197,13 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
     if (c.cloaked !== undefined && c.cloaked !== r.cloaked) {
       data.cloaked = c.cloaked; before.cloaked = r.cloaked; after.cloaked = c.cloaked
     }
+    if (c.pinned !== undefined && c.pinned !== Boolean(r.pinnedAt)) {
+      data.pinnedAt = c.pinned ? new Date() : null; before.pinned = Boolean(r.pinnedAt); after.pinned = c.pinned
+    }
+    if (c.redirectStatus !== undefined) {
+      const next = parseRedirectStatus(c.redirectStatus)
+      if (next !== (r.redirectStatus ?? null)) { data.redirectStatus = next; before.redirectStatus = r.redirectStatus ?? 307; after.redirectStatus = next ?? 307 }
+    }
     if (c.notes !== undefined) {
       const next = c.notes && c.notes.length ? c.notes : null
       if (next !== (r.notes ?? null)) { data.notes = next; before.notes = r.notes ?? null; after.notes = next }
@@ -200,6 +217,19 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
       data.isActive = !c.archived; before.isActive = r.isActive; after.isActive = !c.archived
     }
     if (c.trash) { data.deletedAt = new Date(); before.trashed = false; after.trashed = true }
+    if (c.redirectStatus === 301 || c.redirectStatus === 308) {
+      try {
+        assertStatusCompatible(c.redirectStatus, {
+          hasPassword: (data.passwordHash !== undefined ? data.passwordHash : r.passwordHash) != null,
+          hasExpiry: (data.expiresAt !== undefined ? data.expiresAt : r.expiresAt) != null,
+          hasStart: (data.startsAt !== undefined ? data.startsAt : r.startsAt) != null,
+          hasMaxClicks: (data.maxClicks !== undefined ? data.maxClicks : r.maxClicks) != null,
+          hasRules: (ruleCounts.get(r.id) ?? 0) > 0,
+        })
+      } catch (e) {
+        failures.push({ link: r.shortCode, reason: (e as Error).message })
+      }
+    }
     let newUrl: string | null = null
     if (utm) {
       const tagged = applyUtmTemplate(r.originalUrl, utm)

@@ -6,12 +6,14 @@ export type BulkEditForm = {
   extendDays: string // whole days to push existing expiries out
   state: '' | 'archive' | 'restore' | 'trash'
   password: '' | 'remove' | string // '' leaves as is, 'remove' clears, anything else sets
+  pin: '' | 'pin' | 'unpin'
+  redirect: '' | 'default' | '301' | '302' | '308'
   utmSource: string
   utmMedium: string
   utmCampaign: string
 }
 
-export const emptyBulkEditForm: BulkEditForm = { addTags: '', removeTags: '', folder: '', expiry: '', extendDays: '', state: '', password: '', utmSource: '', utmMedium: '', utmCampaign: '' }
+export const emptyBulkEditForm: BulkEditForm = { addTags: '', removeTags: '', folder: '', expiry: '', extendDays: '', state: '', password: '', pin: '', redirect: '', utmSource: '', utmMedium: '', utmCampaign: '' }
 
 const splitTags = (v: string) => v.split(',').map((t) => t.trim()).filter(Boolean)
 
@@ -42,6 +44,8 @@ export function buildBulkEditChanges(form: BulkEditForm, now = new Date()): { ch
     return { changes: { trash: true } }
   }
   if (form.state) changes.archived = form.state === 'archive'
+  if (form.pin) changes.pinned = form.pin === 'pin'
+  if (form.redirect) changes.redirectStatus = form.redirect === 'default' ? null : Number(form.redirect)
   if (form.password === 'remove') changes.password = null
   else if (form.password) {
     if (form.password.length < 4 || form.password.length > 128) return { error: 'Password must be 4 to 128 characters' }
