@@ -25,7 +25,7 @@ export async function PATCH(request: NextRequest) {
   // scoped to the caller's primary workspace.
   let idem: Awaited<ReturnType<typeof getIdempotentResponse>> = null
   let idemWorkspaceId: string | null = null
-  if (request.headers.get('idempotency-key')) {
+  if (!body.data.dryRun && request.headers.get('idempotency-key')) {
     const membership = await prisma.membership.findFirst({ where: { userId: resolved.actor.userId }, orderBy: { createdAt: 'asc' }, select: { workspaceId: true } })
     if (membership) {
       idemWorkspaceId = membership.workspaceId
@@ -40,6 +40,10 @@ export async function PATCH(request: NextRequest) {
 
   const result = await applyBulkEdit(resolved.actor.userId, body.data)
   if (!result.ok) return NextResponse.json({ error: result.error, failures: result.failures }, { status: result.status })
+
+  if (result.dryRun) {
+    return NextResponse.json({ dryRun: true, wouldUpdate: result.updated.length, unchanged: result.unchanged, changes: result.audit.map((a) => ({ ...a, shortCode: result.updated.find((u) => u.id === a.id)?.shortCode })) })
+  }
 
   if (body.data.changes.utm || body.data.changes.utmTemplateId) {
     try {

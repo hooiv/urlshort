@@ -51,3 +51,7 @@ In the app: tick links on Account → Your links, then use the bar that appears.
 ## Idempotency
 
 Send an `Idempotency-Key` header (8–255 chars) with `PATCH /api/bulk/edit`. A retry with the same key and body within 24 hours returns the stored response with `Idempotent-Replay: true` and does not re-apply the edit or write duplicate audit events. Reusing a key with a different body returns 400. Keys are scoped to the caller's primary workspace.
+
+## Dry run
+
+Add `"dryRun": true` to preview a batch. It runs every check a real edit does (visibility, editor role, folder rights, tag cap, redirect-status compatibility) and returns `{ "dryRun": true, "wouldUpdate": 2, "unchanged": 1, "changes": [{ "id", "shortCode", "before", "after" }] }`. Nothing is written, audited, cache-invalidated or webhooked, and `Idempotency-Key` is ignored. Failures return the same 403/404 body as a real edit.

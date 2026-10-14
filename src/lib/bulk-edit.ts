@@ -15,6 +15,8 @@ const TAG = z.string().trim().min(1).max(40)
 export const bulkEditSchema = z.object({
   /** Link ids or short codes. */
   links: z.array(z.string().min(1).max(128)).min(1).max(MAX_BULK_EDIT_LINKS),
+  /** Validate and return the per-link before/after diff without writing, auditing or invalidating anything. */
+  dryRun: z.boolean().optional(),
   changes: z.object({
     addTags: z.array(TAG).max(MAX_TAGS_PER_LINK).optional(),
     removeTags: z.array(TAG).max(MAX_TAGS_PER_LINK).optional(),
@@ -85,7 +87,7 @@ type LinkRow = {
 
 export type BulkEditFailure = { link: string; reason: string }
 export type BulkEditResult =
-  | { ok: true; updated: Array<{ id: string; shortCode: string }>; unchanged: number; audit: Array<{ id: string; before: Record<string, unknown>; after: Record<string, unknown> }> }
+  | { ok: true; dryRun: boolean; updated: Array<{ id: string; shortCode: string }>; unchanged: number; audit: Array<{ id: string; before: Record<string, unknown>; after: Record<string, unknown> }> }
   | { ok: false; status: 400 | 403 | 404; error: string; failures: BulkEditFailure[] }
 
 /**
@@ -239,6 +241,16 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
   }
   if (failures.length) return { ok: false, status: 403, error: `${failures.length} link(s) cannot be edited; nothing was changed`, failures }
 
+  if (input.dryRun) {
+    return {
+      ok: true,
+      dryRun: true,
+      updated: plans.map((p) => ({ id: p.row.id, shortCode: p.row.shortCode })),
+      unchanged: rows.length - plans.length,
+      audit: plans.map((p) => ({ id: p.row.id, before: p.before, after: p.after })),
+    }
+  }
+
   const now = new Date()
   await prisma.$transaction(async (tx) => {
     for (const p of plans) {
@@ -261,6 +273,7 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
   await invalidateLinks(plans.map((p) => p.row))
   return {
     ok: true,
+    dryRun: false,
     updated: plans.map((p) => ({ id: p.row.id, shortCode: p.row.shortCode })),
     unchanged: rows.length - plans.length,
     audit: plans.map((p) => ({ id: p.row.id, before: p.before, after: p.after })),

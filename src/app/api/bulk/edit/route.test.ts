@@ -37,10 +37,19 @@ describe('PATCH /api/bulk/edit', () => {
   })
   it('reports counts on success', async () => {
     resolveActor.mockResolvedValue({ actor: { userId: 'u' } })
-    applyBulkEdit.mockResolvedValue({ ok: true, updated: [{ id: '1', shortCode: 'a' }], unchanged: 2, audit: [] })
+    applyBulkEdit.mockResolvedValue({ ok: true, dryRun: false, updated: [{ id: '1', shortCode: 'a' }], unchanged: 2, audit: [] })
     const { PATCH } = await import('./route')
     const res = await PATCH(req({ links: ['a', 'b', 'c'], changes: { archived: true } }))
     expect(await res.json()).toMatchObject({ updated: 1, unchanged: 2 })
+  })
+
+  it('dry run returns a diff and skips idempotency and webhooks', async () => {
+    resolveActor.mockResolvedValue({ actor: { userId: 'u' } })
+    applyBulkEdit.mockResolvedValue({ ok: true, dryRun: true, updated: [{ id: '1', shortCode: 'a' }], unchanged: 1, audit: [{ id: '1', before: { isActive: true }, after: { isActive: false } }] })
+    const { PATCH } = await import('./route')
+    const res = await PATCH(new NextRequest('http://x/api/bulk/edit', { method: 'PATCH', body: JSON.stringify({ links: ['a', 'b'], dryRun: true, changes: { archived: true } }), headers: { 'idempotency-key': 'key-12345678' } }))
+    expect(await res.json()).toEqual({ dryRun: true, wouldUpdate: 1, unchanged: 1, changes: [{ id: '1', shortCode: 'a', before: { isActive: true }, after: { isActive: false } }] })
+    expect(getIdem).not.toHaveBeenCalled()
   })
 
   describe('Idempotency-Key', () => {
@@ -60,7 +69,7 @@ describe('PATCH /api/bulk/edit', () => {
       resolveActor.mockResolvedValue({ actor: { userId: 'u' } })
       findMembership.mockResolvedValue({ workspaceId: 'w' })
       getIdem.mockResolvedValue({ keyHash: 'h', requestHash: 'r', existing: null })
-      applyBulkEdit.mockResolvedValue({ ok: true, updated: [{ id: '1', shortCode: 'a' }], unchanged: 0, audit: [] })
+      applyBulkEdit.mockResolvedValue({ ok: true, dryRun: false, updated: [{ id: '1', shortCode: 'a' }], unchanged: 0, audit: [] })
       const { PATCH } = await import('./route')
       expect((await PATCH(idemReq(body))).status).toBe(200)
       expect(storeIdem).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: 'w', keyHash: 'h', status: 200 }))
