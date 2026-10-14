@@ -32,6 +32,7 @@ export type ApiKeyRow = {
   prefix: string
   lastUsedAt: string | null
   revokedAt: string | null
+  allowedIps?: string[]
   createdAt: string
 }
 

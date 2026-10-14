@@ -73,6 +73,15 @@ describe('authenticateApiKey', () => {
     )
   })
 
+  it('enforces the IP allowlist using the client address', async () => {
+    const { key } = createApiKey()
+    prismaMock.apiKey.findUnique.mockResolvedValue({ id: 'k1', userId: 'u1', revokedAt: null, scopes: '*', allowedIps: ['203.0.113.0/24'] })
+    prismaMock.apiKey.update.mockResolvedValue({})
+    expect(await authenticateApiKey(requestWith({ 'x-api-key': key, 'x-forwarded-for': '203.0.113.9' }))).toMatchObject({ userId: 'u1' })
+    expect(await authenticateApiKey(requestWith({ 'x-api-key': key, 'x-forwarded-for': '198.51.100.1' }))).toBeNull()
+    expect(await authenticateApiKey(requestWith({ 'x-api-key': key }))).toBeNull()
+  })
+
   it('authenticates via Bearer and rejects revoked keys', async () => {
     const { key } = createApiKey()
     prismaMock.apiKey.findUnique.mockResolvedValue({ id: 'k1', userId: 'u1', revokedAt: new Date(), scopes: '*' })

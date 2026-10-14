@@ -7,7 +7,7 @@ import CardAction from '@/app/account/components/CardAction'
 import { useApiKeys } from '@/app/account/components/useApiKeys'
 
 export default function ApiKeysSection() {
-  const { keys, newKeyName, setNewKeyName, createdKey, busy, createKey, revokeKey, dismissCreatedKey } = useApiKeys()
+  const { keys, newKeyName, setNewKeyName, newKeyIps, setNewKeyIps, editAllowlist, createdKey, busy, createKey, revokeKey, dismissCreatedKey } = useApiKeys()
 
   async function copyCreatedKey() {
     if (!createdKey) return
@@ -68,6 +68,13 @@ export default function ApiKeysSection() {
           placeholder="Key name (e.g. zapier-integration)"
           className="input flex-1"
         />
+        <input
+          value={newKeyIps}
+          onChange={(e) => setNewKeyIps(e.target.value)}
+          placeholder="Allowed IPs/CIDR (optional)"
+          aria-label="Allowed IPs or CIDR ranges"
+          className="input flex-1"
+        />
         <button
           disabled={busy}
           className="rounded-xl bg-violet-500 px-5 py-2.5 text-sm font-semibold hover:bg-violet-400 disabled:opacity-60"
@@ -91,8 +98,10 @@ export default function ApiKeysSection() {
                   {apiKey.lastUsedAt
                     ? ` · last used ${new Date(apiKey.lastUsedAt).toLocaleDateString()}`
                     : ' · never used'}
+                  {apiKey.allowedIps?.length ? ` · IPs: ${apiKey.allowedIps.join(', ')}` : ''}
                 </div>
               </div>
+              {!apiKey.revokedAt && <CardAction onClick={() => void editAllowlist(apiKey.id, apiKey.allowedIps ?? [])} label="IPs" />}
               {!apiKey.revokedAt && <CardAction onClick={() => void revokeKey(apiKey.id)} label="Revoke" danger />}
             </div>
           ))}

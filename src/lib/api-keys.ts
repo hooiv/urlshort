@@ -1,3 +1,5 @@
+import { ipAllowed } from '@/lib/ip-allowlist'
+import { getClientIp } from '@/lib/rate-limit'
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
@@ -51,10 +53,11 @@ export type ApiKeyAuth = {
 export async function authenticateApiKey(request: NextRequest): Promise<ApiKeyAuth | null> {
   const key = extractApiKey(request)
   if (!key) return null
-  const record = await prisma.apiKey.findUnique({ where: { keyHash: hashApiKey(key) }, select: { id: true, userId: true, revokedAt: true, scopes: true, expiresAt: true, lastUsedAt: true } })
+  const record = await prisma.apiKey.findUnique({ where: { keyHash: hashApiKey(key) }, select: { id: true, userId: true, revokedAt: true, scopes: true, expiresAt: true, lastUsedAt: true, allowedIps: true } })
   const now = new Date()
   if (!record || record.revokedAt) return null
   if (record.expiresAt && record.expiresAt <= now) return null
+  if (record.allowedIps?.length && !ipAllowed(getClientIp(request), record.allowedIps)) return null
   // Throttle last-used writes to one per 5 minutes per key.
   if (!record.lastUsedAt || now.getTime() - record.lastUsedAt.getTime() >= LAST_USED_THROTTLE_MS) {
     void prisma.apiKey.update({ where: { id: record.id }, data: { lastUsedAt: now } }).catch(() => {})

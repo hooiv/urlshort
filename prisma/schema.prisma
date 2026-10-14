@@ -358,6 +358,8 @@ model ApiKey {
   revokedAt  DateTime?
   /// Optional hard expiry; expired keys stop authenticating.
   expiresAt  DateTime?
+  /// Optional IP/CIDR allowlist; empty means any address may use the key.
+  allowedIps String[]  @default([])
   createdAt  DateTime  @default(now())
 
   @@index([userId])

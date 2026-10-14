@@ -1,0 +1,1 @@
+ALTER TABLE "api_keys" ADD COLUMN "allowedIps" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];

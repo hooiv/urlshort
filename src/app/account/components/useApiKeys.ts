@@ -6,11 +6,16 @@ import toast from 'react-hot-toast'
 import type { ApiKeyRow } from '@/app/account/components/types'
 import { validateApiKeyName } from '@/app/account/components/account-utils'
 
+function splitIps(value: string): string[] {
+  return value.split(/[\s,]+/).filter(Boolean)
+}
+
 /** Owns API-key list state. The full secret only ever lives in `createdKey` until dismissed. */
 export function useApiKeys() {
   const [keys, setKeys] = useState<ApiKeyRow[]>([])
   const [newKeyName, setNewKeyName] = useState('')
   const [createdKey, setCreatedKey] = useState<string | null>(null)
+  const [newKeyIps, setNewKeyIps] = useState('')
   const [busy, setBusy] = useState(false)
   const seqRef = useRef(0)
 
@@ -42,12 +47,13 @@ export function useApiKeys() {
         const response = await fetch('/api/account/api-keys', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: newKeyName.trim() }),
+          body: JSON.stringify({ name: newKeyName.trim(), allowedIps: splitIps(newKeyIps) }),
         })
         const data = await response.json().catch(() => null)
         if (!response.ok) throw new Error(data?.error || 'Could not create key')
         setCreatedKey(data.key)
         setNewKeyName('')
+        setNewKeyIps('')
         await loadKeys()
         toast.success("API key created — copy it now, it won't be shown again")
       } catch (error) {
@@ -56,7 +62,7 @@ export function useApiKeys() {
         setBusy(false)
       }
     },
-    [newKeyName, loadKeys],
+    [newKeyName, newKeyIps, loadKeys],
   )
 
   const revokeKey = useCallback(
@@ -76,9 +82,31 @@ export function useApiKeys() {
     [loadKeys],
   )
 
+  const editAllowlist = useCallback(
+    async (id: string, current: string[]) => {
+      if (typeof window === 'undefined') return
+      const input = window.prompt('Allowed IPs or CIDR ranges, comma separated (blank = any address):', current.join(', '))
+      if (input === null) return
+      try {
+        const response = await fetch('/api/account/api-keys', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, allowedIps: splitIps(input) }),
+        })
+        const data = await response.json().catch(() => null)
+        if (!response.ok) throw new Error(data?.error || 'Could not update allowlist')
+        toast.success('Allowlist updated')
+        await loadKeys()
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Could not update allowlist')
+      }
+    },
+    [loadKeys],
+  )
+
   const dismissCreatedKey = useCallback(() => {
     setCreatedKey(null)
   }, [])
 
-  return { keys, newKeyName, setNewKeyName, createdKey, busy, createKey, revokeKey, dismissCreatedKey }
+  return { keys, newKeyName, setNewKeyName, newKeyIps, setNewKeyIps, editAllowlist, createdKey, busy, createKey, revokeKey, dismissCreatedKey }
 }
