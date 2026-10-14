@@ -1,4 +1,5 @@
 import { effectiveRedirectStatus } from '@/lib/redirect-status'
+import { applyRobotsHeader } from '@/lib/robots-header'
 import { NextRequest, NextResponse, after } from 'next/server'
 import { linkWindowState, notStartedTarget } from '@/lib/link-schedule'
 import { prisma } from '@/lib/prisma'
@@ -302,7 +303,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
         },
       })
       if (visitor.isNew) setVisitorCookie(response, visitor.id)
-      return response
+      return applyRobotsHeader(response)
     }
 
     const status = effectiveRedirectStatus(url.redirectStatus, { ruleMatched: destination !== url.originalUrl, gated: isBot || needsCap || !!url.expiresAt || !!url.startsAt || !!url.passwordHash })
@@ -310,7 +311,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     // Permanent codes are meant to be cached by browsers/CDNs; only the temporary ones are no-store.
     response.headers.set('Cache-Control', status === 301 || status === 308 ? 'public, max-age=3600' : 'private, no-store')
     if (visitor.isNew) setVisitorCookie(response, visitor.id)
-    return response
+    return applyRobotsHeader(response)
   } catch (error) {
     console.error('Error redirecting short link:', error)
     // Distinguish infrastructure failure from "not found": serve a 503 page so
