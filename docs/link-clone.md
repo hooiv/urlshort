@@ -7,3 +7,10 @@ Copied: destination, title/description/OG image, expiry and go-live schedule, cl
 Not copied: click counters, health state, password, management token, public-stats sharing, webhook URL, milestones. A clone starts clean and never inherits secrets.
 
 Auth: session with an edit role, API key with `links:write`, or the link's management token. Rate limited to 30/min. Writes a `link.clone` audit entry. Link and rules are created in one transaction.
+
+## Idempotency
+
+Send an `Idempotency-Key` header (8–255 chars) to make retries safe: a repeated
+POST with the same key and body replays the first response (`Idempotent-Replay: true`)
+instead of creating another copy. Reusing a key with a different source link or
+short code returns 400. Keys are scoped to the caller's primary workspace and expire after 24h.

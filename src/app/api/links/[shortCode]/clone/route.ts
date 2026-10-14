@@ -5,6 +5,8 @@ import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { CodeTakenError, cloneLink, validateCloneCode } from '@/lib/link-clone'
 import { recordAudit } from '@/lib/audit'
 import { getBaseUrl } from '@/lib/utils'
+import { prisma } from '@/lib/prisma'
+import { getIdempotentResponse, storeIdempotentResponse } from '@/lib/idempotency'
 
 /**
  * POST /api/links/:code/clone  { shortCode?: string }
@@ -33,6 +35,22 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
 
     const resolved = await resolveActor(request, LINK_WRITE_SCOPES)
     const actorUserId = resolved.actor?.userId ?? null
+    // Idempotency-Key: a retried POST replays the first clone instead of
+    // creating a second auto-coded copy. Scoped to the actor's primary workspace.
+    let idem: Awaited<ReturnType<typeof getIdempotentResponse>> = null
+    let idemWorkspaceId: string | null = null
+    if (actorUserId && request.headers.get('idempotency-key')) {
+      const membership = await prisma.membership.findFirst({ where: { userId: actorUserId }, orderBy: { createdAt: 'asc' }, select: { workspaceId: true } })
+      if (membership) {
+        idemWorkspaceId = membership.workspaceId
+        try {
+          idem = await getIdempotentResponse(request, membership.workspaceId, { from: access.url.shortCode, shortCode: code.code ?? null })
+        } catch (error) {
+          return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid Idempotency-Key' }, { status: 400 })
+        }
+        if (idem?.existing) return new NextResponse(idem.existing.responseJson, { status: idem.existing.responseStatus, headers: { 'Content-Type': 'application/json', 'Idempotent-Replay': 'true' } })
+      }
+    }
     let clone
     try {
       clone = await cloneLink(access.url, code.code, actorUserId)
@@ -41,7 +59,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
       throw error
     }
     await recordAudit(request, { action: 'link.clone', urlId: clone.id, resourceType: 'url', resourceId: clone.id, after: { shortCode: clone.shortCode, clonedFrom: access.url.shortCode, rulesCopied: clone.rulesCopied } })
-    return NextResponse.json({ ...clone, shortUrl: `${getBaseUrl()}/${clone.shortCode}`, clonedFrom: access.url.shortCode }, { status: 201 })
+    const payload = { ...clone, shortUrl: `${getBaseUrl()}/${clone.shortCode}`, clonedFrom: access.url.shortCode }
+    if (idem && idemWorkspaceId) {
+      await storeIdempotentResponse({ workspaceId: idemWorkspaceId, keyHash: idem.keyHash, requestHash: idem.requestHash, method: request.method, path: request.nextUrl.pathname, status: 201, body: payload }).catch((e) => console.error('Idempotency store failed:', e))
+    }
+    return NextResponse.json(payload, { status: 201 })
   } catch (error) {
     console.error('Clone link failed:', error)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
