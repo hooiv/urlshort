@@ -1,3 +1,4 @@
+import { parseClickIdParam } from '@/lib/click-id-param'
 import { validateLinkNotes } from '@/lib/link-notes'
 import { parsePinned } from '@/lib/link-pins'
 import { trashLink, TRASH_RETENTION_DAYS } from '@/lib/link-trash'
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     where: { id: link.id },
     select: {
       id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, notes: true, tags: true, clicks: true,
-      createdAt: true, updatedAt: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, passwordHash: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, isActive: true,
+      createdAt: true, updatedAt: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, clickIdParam: true, passwordHash: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, isActive: true,
       riskStatus: true, healthStatus: true,
       deepLinkApp: { select: { id: true, name: true, environment: true, appVersion: true, minimumAppVersion: true, enabled: true, resolverEnabled: true } },
       _count: { select: { clickEvents: true, rules: true, goals: true, revisions: true } },
@@ -107,6 +108,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
       }
     }
     
+    if (body.clickIdParam !== undefined) data.clickIdParam = parseClickIdParam(body.clickIdParam)
     if (body.startsAt !== undefined) data.startsAt = parseStartsAt(body.startsAt)
     if (body.notStartedUrl !== undefined) {
       if (body.notStartedUrl === null || body.notStartedUrl === '') {
@@ -184,7 +186,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
         })
         data.originalUrl = newDestination
       }
-      return tx.url.update({ where: { id: link.id }, data, select: { id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, notes: true, pinnedAt: true, tags: true, isActive: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, updatedAt: true } })
+      return tx.url.update({ where: { id: link.id }, data, select: { id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, notes: true, pinnedAt: true, tags: true, isActive: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, clickIdParam: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, updatedAt: true } })
     })
 
     await invalidateLink(updated.shortCode, updated.id)

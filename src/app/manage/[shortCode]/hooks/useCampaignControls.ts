@@ -60,6 +60,7 @@ export function useCampaignControls(shortCode: string) {
   const [expiredUrl, setExpiredUrl] = useState('')
   const [startsAt, setStartsAt] = useState('')
   const [notStartedUrl, setNotStartedUrl] = useState('')
+  const [clickIdParam, setClickIdParam] = useState('')
   const [maxClicks, setMaxClicks] = useState('')
   const [password, setPassword] = useState('')
   const [hasPassword, setHasPassword] = useState(false)
@@ -123,6 +124,7 @@ export function useCampaignControls(shortCode: string) {
       setExpiredUrl(linkPayload.expiredUrl || '')
       setStartsAt(toDatetimeLocalValue(linkPayload.startsAt ?? null))
       setNotStartedUrl(linkPayload.notStartedUrl || '')
+      setClickIdParam(linkPayload.clickIdParam || '')
       setMaxClicks(linkPayload.maxClicks ? String(linkPayload.maxClicks) : '')
       setHasPassword(Boolean(linkPayload.passwordHash))
 
@@ -311,6 +313,7 @@ export function useCampaignControls(shortCode: string) {
           expiredUrl: expiredUrl || null,
           startsAt: parsedStartsAt,
           notStartedUrl: notStartedUrl || null,
+          clickIdParam: clickIdParam.trim() || null,
           maxClicks: parsedMaxClicks,
         }),
       })
@@ -462,6 +465,7 @@ export function useCampaignControls(shortCode: string) {
     expiredUrl, setExpiredUrl,
     startsAt, setStartsAt,
     notStartedUrl, setNotStartedUrl,
+    clickIdParam, setClickIdParam,
     maxClicks, setMaxClicks,
     password, setPassword,
     hasPassword,

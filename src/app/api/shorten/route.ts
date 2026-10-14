@@ -1,3 +1,4 @@
+import { parseClickIdParam } from '@/lib/click-id-param'
 import { MAX_PINNED_LINKS, pinnedFirst } from '@/lib/link-pins'
 import { NextRequest, NextResponse } from 'next/server'
 import { assertValidWindow, parseStartsAt } from '@/lib/link-schedule'
@@ -34,6 +35,7 @@ export const shortenExtrasSchema = z.object({
   expiredUrl: z.string().trim().max(2048).optional().nullable(),
   startsAt: z.string().max(100).optional().nullable(),
   notStartedUrl: z.string().trim().max(2048).optional().nullable(),
+  clickIdParam: z.string().max(64).optional().nullable(),
   maxClicks: z.union([z.string(), z.number()]).optional().nullable(),
   ogImage: z.string().trim().max(2048).optional().nullable(),
   metaPixelId: z.string().max(50).optional().nullable(),
@@ -117,6 +119,10 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'ogImage must be a valid HTTP or HTTPS URL' }, { status: 400 })
       }
       ogImage = candidate || null
+    }
+    let clickIdParam: string | null = null
+    try { clickIdParam = parseClickIdParam(extras.data.clickIdParam) } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : 'Invalid clickIdParam' }, { status: 400 })
     }
     let notStartedUrl: string | null = null
     if (extras.data.notStartedUrl) {
@@ -264,6 +270,7 @@ export async function POST(request: NextRequest) {
             expiredUrl,
             startsAt,
             notStartedUrl,
+            clickIdParam,
             maxClicks,
             ...pixelData,
             cloaked: body.cloaked === true,

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import { linkWindowState, notStartedTarget } from '@/lib/link-schedule'
 import { prisma } from '@/lib/prisma'
+import { appendClickId } from '@/lib/click-id-param'
 import { appendAttribution, createAttributionToken, hashVisitorId } from '@/lib/attribution'
 import { chooseSmartRule, getAiAgent, getBrowser, getCountry, getDeviceType, getLanguage, getOperatingSystem, getReferrerHost, getTrafficType, getTrafficConfidence, getVisitorId } from '@/lib/smart-routing'
 import { getBaseUrl } from '@/lib/utils'
@@ -187,7 +188,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     // served under a shared cache key. Bots get the canonical destination.
     const isBot = trafficType === 'bot'
     const attributionToken = isBot ? null : createAttributionToken({ urlId: url.id, shortCode: url.shortCode, clickEventId, visitorIdHash, issuedAt: Date.now() })
-    const finalDestination = attributionToken ? appendAttribution(destination, attributionToken) : destination
+    // Click-id passthrough is per visitor, so (like the attribution token) bots get the canonical URL.
+    const withClickId = isBot ? destination : appendClickId(destination, url.clickIdParam, clickEventId)
+    const finalDestination = attributionToken ? appendAttribution(withClickId, attributionToken) : withClickId
 
     // Resolve the click's country. The CDN-provided country header is the
     // fast path; when it is absent (XX) we fall back to an IP-geolocation

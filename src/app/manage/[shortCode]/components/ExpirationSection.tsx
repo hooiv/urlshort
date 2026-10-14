@@ -9,6 +9,8 @@ interface ExpirationSectionProps {
   startsAt: string
   notStartedUrl: string
   onStartsAtChange: (value: string) => void
+  clickIdParam: string
+  onClickIdParamChange: (value: string) => void
   onNotStartedUrlChange: (value: string) => void
   maxClicks: string
   password: string
@@ -27,6 +29,8 @@ export default function ExpirationSection({
   startsAt,
   notStartedUrl,
   onStartsAtChange,
+  clickIdParam,
+  onClickIdParamChange,
   onNotStartedUrlChange,
   maxClicks,
   password,
@@ -62,6 +66,16 @@ export default function ExpirationSection({
               value={notStartedUrl}
               onChange={(e) => onNotStartedUrlChange(e.target.value)}
               placeholder="https://example.com/teaser"
+              className="input"
+            />
+          </Field>
+          <Field label="Click ID parameter (appended to destination, e.g. clickid)">
+            <input
+              type="text"
+              value={clickIdParam}
+              onChange={(e) => onClickIdParamChange(e.target.value)}
+              placeholder="clickid"
+              maxLength={32}
               className="input"
             />
           </Field>
