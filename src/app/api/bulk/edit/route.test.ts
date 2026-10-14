@@ -2,7 +2,9 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 const { resolveActor, applyBulkEdit } = vi.hoisted(() => ({ resolveActor: vi.fn(), applyBulkEdit: vi.fn() }))
-vi.mock('@/lib/prisma', () => ({ prisma: {} }))
+const { findMembership, getIdem, storeIdem } = vi.hoisted(() => ({ findMembership: vi.fn(), getIdem: vi.fn(), storeIdem: vi.fn(async () => ({})) }))
+vi.mock('@/lib/prisma', () => ({ prisma: { membership: { findFirst: findMembership } } }))
+vi.mock('@/lib/idempotency', () => ({ getIdempotentResponse: getIdem, storeIdempotentResponse: storeIdem }))
 vi.mock('@/lib/link-cache', () => ({ invalidateLinks: vi.fn() }))
 vi.mock('@/lib/folders', () => ({ folderWriteError: vi.fn(), visibleUrlWhere: vi.fn() }))
 vi.mock('@/lib/request-actor', () => ({ LINK_WRITE_SCOPES: ['links:write'], resolveActor }))
@@ -39,5 +41,37 @@ describe('PATCH /api/bulk/edit', () => {
     const { PATCH } = await import('./route')
     const res = await PATCH(req({ links: ['a', 'b', 'c'], changes: { archived: true } }))
     expect(await res.json()).toMatchObject({ updated: 1, unchanged: 2 })
+  })
+
+  describe('Idempotency-Key', () => {
+    const idemReq = (body: unknown) => new NextRequest('http://x/api/bulk/edit', { method: 'PATCH', body: JSON.stringify(body), headers: { 'idempotency-key': 'key-12345678' } })
+    const body = { links: ['a'], changes: { archived: true } }
+    beforeEach(() => { findMembership.mockReset(); getIdem.mockReset(); storeIdem.mockClear() })
+    it('replays a stored response without re-applying', async () => {
+      resolveActor.mockResolvedValue({ actor: { userId: 'u' } })
+      findMembership.mockResolvedValue({ workspaceId: 'w' })
+      getIdem.mockResolvedValue({ keyHash: 'h', requestHash: 'r', existing: { responseStatus: 200, responseJson: '{"updated":1}' } })
+      const { PATCH } = await import('./route')
+      const res = await PATCH(idemReq(body))
+      expect(res.headers.get('Idempotent-Replay')).toBe('true')
+      expect(applyBulkEdit).not.toHaveBeenCalled()
+    })
+    it('stores the response on first use', async () => {
+      resolveActor.mockResolvedValue({ actor: { userId: 'u' } })
+      findMembership.mockResolvedValue({ workspaceId: 'w' })
+      getIdem.mockResolvedValue({ keyHash: 'h', requestHash: 'r', existing: null })
+      applyBulkEdit.mockResolvedValue({ ok: true, updated: [{ id: '1', shortCode: 'a' }], unchanged: 0, audit: [] })
+      const { PATCH } = await import('./route')
+      expect((await PATCH(idemReq(body))).status).toBe(200)
+      expect(storeIdem).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: 'w', keyHash: 'h', status: 200 }))
+    })
+    it('rejects key reuse with a different body', async () => {
+      resolveActor.mockResolvedValue({ actor: { userId: 'u' } })
+      findMembership.mockResolvedValue({ workspaceId: 'w' })
+      getIdem.mockRejectedValue(new Error('Idempotency-Key was reused with a different request'))
+      const { PATCH } = await import('./route')
+      expect((await PATCH(idemReq(body))).status).toBe(400)
+      expect(applyBulkEdit).not.toHaveBeenCalled()
+    })
   })
 })

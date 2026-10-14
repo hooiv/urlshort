@@ -45,3 +45,7 @@
 Response: `{ "updated": 2, "unchanged": 1, "links": [{ "id": "…", "shortCode": "…" }] }`.
 
 In the app: tick links on Account → Your links, then use the bar that appears.
+
+## Idempotency
+
+Send an `Idempotency-Key` header (8–255 chars) with `PATCH /api/bulk/edit`. A retry with the same key and body within 24 hours returns the stored response with `Idempotent-Replay: true` and does not re-apply the edit or write duplicate audit events. Reusing a key with a different body returns 400. Keys are scoped to the caller's primary workspace.
