@@ -12,6 +12,7 @@ import { SecurityLimitsPanel, SocialGraphPanel, TrackingPixelsPanel } from '@/ap
 import SplitTestingPanel from '@/app/components/SplitTestingPanel'
 import SocialPreview from '@/app/components/SocialPreview'
 import ShortenResult from '@/app/components/ShortenResult'
+import { useSlugAvailability } from '@/app/components/useSlugAvailability'
 
 export default function Home() {
   const {
@@ -28,6 +29,7 @@ export default function Home() {
   } = useCreateShortLink()
 
   const [showUtm, setShowUtm] = useState(false)
+  const slug = useSlugAvailability(form.customCode)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showLivePreview, setShowLivePreview] = useState(false)
   const [showSecurity, setShowSecurity] = useState(false)
@@ -70,7 +72,29 @@ export default function Home() {
                   placeholder="e.g. spring-sale"
                   className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-blue-500"
                   disabled={isLoading}
+                  aria-describedby="slug-status"
                 />
+                <div id="slug-status" aria-live="polite" className="mt-1.5 min-h-5 text-xs">
+                  {slug.status === 'checking' && <span className="text-slate-500">Checking…</span>}
+                  {slug.status === 'available' && <span className="text-emerald-400">Available</span>}
+                  {slug.status === 'invalid' && <span className="text-amber-400">Use letters, numbers, - or _</span>}
+                  {(slug.status === 'taken' || slug.status === 'reserved') && (
+                    <span className="text-rose-400">
+                      {slug.status === 'taken' ? 'Already taken' : 'Reserved'}
+                      {slug.alternatives.length > 0 && ' — try '}
+                      {slug.alternatives.map((alt) => (
+                        <button
+                          key={alt}
+                          type="button"
+                          onClick={() => patch({ customCode: alt })}
+                          className="mr-1.5 rounded bg-slate-800 px-1.5 py-0.5 text-slate-200 hover:bg-slate-700"
+                        >
+                          {alt}
+                        </button>
+                      ))}
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div>
