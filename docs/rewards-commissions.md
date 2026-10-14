@@ -41,6 +41,7 @@ All routes accept a session or an API key. Reads need `links:read` (or `links:wr
 | `GET /api/commissions?status=&urlId=&cursor=` | Paged list (50) with per-status totals |
 | `POST /api/commissions` | `{ action: approve\|pay\|reverse, ids \| allDue, payoutRef? }` |
 | `GET /api/commissions/export?status=approved` | Payout CSV |
+| `GET /api/commissions/statement?month=YYYY-MM` | Per-currency monthly statement: pending/approved/paid/reversed, clawbacks, net payable (approved − clawbacks, floored at 0) |
 
 The CSV defuses spreadsheet formulas (`=`, `+`, `-`, `@` prefixes are quoted) and includes
 `net_payable` (commission minus clawback).

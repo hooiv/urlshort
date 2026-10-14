@@ -116,6 +116,7 @@ const KEY_REACHABLE = [
   'rewards/config/route.ts',
   'rewards/preview/route.ts',
   'commissions/export/route.ts',
+  'commissions/statement/route.ts',
   'commissions/route.ts',
   'shorten/route.ts',
   'v1/campaigns/create/route.ts',
