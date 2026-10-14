@@ -1,9 +1,10 @@
+import { isReservedCode } from '@/lib/utils'
 import { assessSlugQuality, type SlugQuality } from '@/lib/slug-quality'
 
 export const MAX_AVAILABILITY_CODES = 50
 const CODE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/
 
-export type SlugStatus = 'available' | 'taken' | 'invalid' | 'duplicate'
+export type SlugStatus = 'available' | 'taken' | 'reserved' | 'invalid' | 'duplicate'
 
 export interface SlugAvailability {
   code: string
@@ -24,6 +25,7 @@ export function classifySlugs(codes: string[], takenLower: ReadonlySet<string>):
     const key = code.toLowerCase()
     if (seen.has(key)) return { code, status: 'duplicate' as const }
     seen.add(key)
+    if (isReservedCode(code)) return { code, status: 'reserved' as const }
     if (takenLower.has(key)) return { code, status: 'taken' as const }
     return { code, status: 'available' as const, quality: assessSlugQuality(code) }
   })

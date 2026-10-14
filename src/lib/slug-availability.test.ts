@@ -16,3 +16,11 @@ describe('classifySlugs', () => {
     expect(validCandidates(['a', 'a', '!', ' b'])).toEqual(['a', 'b'])
   })
 })
+
+import { describe as d2, it as i2, expect as e2 } from 'vitest'
+import { classifySlugs as cs } from './slug-availability'
+d2('reserved codes', () => {
+  i2('flags app route names as reserved, not available', () => {
+    e2(cs(['api'], new Set())[0].status).toBe('reserved')
+  })
+})
