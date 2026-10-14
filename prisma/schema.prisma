@@ -310,6 +310,7 @@ model User {
   weeklyDigest            Boolean                  @default(false)
   weeklyDigestSentAt      DateTime?
   milestoneAlerts         Boolean                  @default(false)
+  autoArchiveStaleDays    Int?
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
   urls                    Url[]

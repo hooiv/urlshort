@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft, Mail } from 'lucide-react'
 import toast, { Toaster } from 'react-hot-toast'
 
-type Prefs = { weeklyDigest: boolean; milestoneAlerts: boolean; lastSentAt: string | null; emailVerified: boolean }
+type Prefs = { weeklyDigest: boolean; milestoneAlerts: boolean; autoArchiveStaleDays: number | null; lastSentAt: string | null; emailVerified: boolean }
 
 export default function NotificationsPage() {
   const [prefs, setPrefs] = useState<Prefs | null>(null)
@@ -26,6 +26,21 @@ export default function NotificationsPage() {
       if (!r.ok) throw new Error(data?.error || 'Could not save')
       setPrefs((p) => (p ? { ...p, [key]: next } : p))
       toast.success(next ? 'Notification on' : 'Notification off')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not save')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function setArchive(days: number | null) {
+    setBusy(true)
+    try {
+      const r = await fetch('/api/account/notifications', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ autoArchiveStaleDays: days }) })
+      const data = await r.json().catch(() => null)
+      if (!r.ok) throw new Error(data?.error || 'Could not save')
+      setPrefs((p) => (p ? { ...p, autoArchiveStaleDays: days } : p))
+      toast.success(days ? `Idle links will be archived after ${days} days` : 'Auto-archive off')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Could not save')
     } finally {
@@ -59,6 +74,17 @@ export default function NotificationsPage() {
           <label className="mt-4 flex items-center gap-3 text-sm">
             <input type="checkbox" disabled={!prefs || busy || (!prefs.emailVerified && !prefs.milestoneAlerts)} checked={prefs?.milestoneAlerts ?? false} onChange={(e) => void toggle('milestoneAlerts', e.target.checked)} />
             Email me on milestones
+          </label>
+        </section>
+        <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6">
+          <h2 className="font-semibold">Auto-archive idle links</h2>
+          <p className="mt-1 text-xs text-slate-500">Daily at 03:45 UTC, personal links with no visitor click inside the window are archived (never deleted) and you get one summary email. Restore any from the stale links page.</p>
+          <label className="mt-4 flex items-center gap-3 text-sm">
+            Archive after
+            <select className="rounded border border-slate-700 bg-slate-950 px-2 py-1" disabled={!prefs || busy} value={prefs?.autoArchiveStaleDays ?? ''} onChange={(e) => void setArchive(e.target.value === '' ? null : Number(e.target.value))}>
+              <option value="">Never</option>
+              {[30, 60, 90, 180, 365].map((d) => <option key={d} value={d}>{d} days idle</option>)}
+            </select>
           </label>
         </section>
       </main>
