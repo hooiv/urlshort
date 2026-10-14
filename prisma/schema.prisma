@@ -324,6 +324,7 @@ model User {
   folderAccess            FolderAccess[]
   rewardConfigs           RewardConfig[]
   commissions             Commission[]
+  savedViews              SavedView[]
 
   @@map("users")
 }
@@ -1370,4 +1371,18 @@ model Commission {
   @@index([userId, status, createdAt])
   @@index([urlId, createdAt])
   @@map("commissions")
+}
+
+model SavedView {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  filters   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@map("saved_views")
 }
