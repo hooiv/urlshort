@@ -37,6 +37,10 @@
       "schedule": "5 9 * * *"
     },
     {
+      "path": "/api/cron/broken-link-alerts",
+      "schedule": "10 9 * * *"
+    },
+    {
       "path": "/api/cron/click-milestones",
       "schedule": "17 * * * *"
     },
