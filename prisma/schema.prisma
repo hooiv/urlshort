@@ -353,6 +353,8 @@ model ApiKey {
   scopes     String    @default("*")
   lastUsedAt DateTime?
   revokedAt  DateTime?
+  /// Optional hard expiry; expired keys stop authenticating.
+  expiresAt  DateTime?
   createdAt  DateTime  @default(now())
 
   @@index([userId])

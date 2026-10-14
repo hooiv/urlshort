@@ -14,6 +14,15 @@ import { prisma } from '@/lib/prisma'
 
 const PREFIX = 'qlk'
 const PREFIX_LENGTH = 8
+const LAST_USED_THROTTLE_MS = 5 * 60_000
+export const MAX_API_KEY_TTL_DAYS = 730
+
+/** Parse an optional `expiresInDays` (1..730). Returns undefined for absent, null for invalid. */
+export function parseApiKeyExpiry(value: unknown, now = new Date()): Date | undefined | null {
+  if (value === undefined || value === null) return undefined
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > MAX_API_KEY_TTL_DAYS) return null
+  return new Date(now.getTime() + value * 86_400_000)
+}
 
 export function createApiKey(): { key: string; keyHash: string; prefix: string } {
   const prefix = randomBytes(PREFIX_LENGTH).toString('base64url')
@@ -42,11 +51,14 @@ export type ApiKeyAuth = {
 export async function authenticateApiKey(request: NextRequest): Promise<ApiKeyAuth | null> {
   const key = extractApiKey(request)
   if (!key) return null
-  const record = await prisma.apiKey.findUnique({ where: { keyHash: hashApiKey(key) }, select: { id: true, userId: true, revokedAt: true, scopes: true } })
-  if (!record || record.revokedAt) return null
-  // Throttle last-used writes like sessions do (5 min).
+  const record = await prisma.apiKey.findUnique({ where: { keyHash: hashApiKey(key) }, select: { id: true, userId: true, revokedAt: true, scopes: true, expiresAt: true, lastUsedAt: true } })
   const now = new Date()
-  void prisma.apiKey.update({ where: { id: record.id }, data: { lastUsedAt: now } }).catch(() => {})
+  if (!record || record.revokedAt) return null
+  if (record.expiresAt && record.expiresAt <= now) return null
+  // Throttle last-used writes to one per 5 minutes per key.
+  if (!record.lastUsedAt || now.getTime() - record.lastUsedAt.getTime() >= LAST_USED_THROTTLE_MS) {
+    void prisma.apiKey.update({ where: { id: record.id }, data: { lastUsedAt: now } }).catch(() => {})
+  }
   return { userId: record.userId, apiKeyId: record.id, scopes: record.scopes.split(/[,\s]+/).filter(Boolean) }
 }
 

@@ -6,7 +6,7 @@ const prismaMock = vi.hoisted(() => ({
 }))
 vi.mock('./prisma', () => ({ prisma: prismaMock }))
 
-import { authenticateApiKey, apiKeyMatches, createApiKey, hasAnyApiScope, hasApiScope, hashApiKey } from './api-keys'
+import { authenticateApiKey, parseApiKeyExpiry, apiKeyMatches, createApiKey, hasAnyApiScope, hasApiScope, hashApiKey } from './api-keys'
 
 function requestWith(headers: Record<string, string>): NextRequest {
   return new NextRequest('http://localhost/api/test', { headers })
@@ -88,4 +88,33 @@ describe('authenticateApiKey', () => {
     const { key } = createApiKey()
     expect(await authenticateApiKey(requestWith({ 'x-api-key': key }))).toBeNull()
   })
+})
+
+describe('api key expiry and last-used throttle', () => {
+  beforeEach(() => { prismaMock.apiKey.findUnique.mockReset(); prismaMock.apiKey.update.mockReset().mockResolvedValue({}) })
+  const base = { id: 'k1', userId: 'u1', revokedAt: null, scopes: '*', lastUsedAt: null }
+  const req = () => requestWith({ 'x-api-key': 'qlk_abc_def' })
+
+  it('rejects expired keys', async () => {
+    prismaMock.apiKey.findUnique.mockResolvedValue({ ...base, expiresAt: new Date(Date.now() - 1000) })
+    expect(await authenticateApiKey(req())).toBeNull()
+    expect(prismaMock.apiKey.update).not.toHaveBeenCalled()
+  })
+  it('accepts keys that have not expired and records first use', async () => {
+    prismaMock.apiKey.findUnique.mockResolvedValue({ ...base, expiresAt: new Date(Date.now() + 60_000) })
+    expect((await authenticateApiKey(req()))?.userId).toBe('u1')
+    expect(prismaMock.apiKey.update).toHaveBeenCalledTimes(1)
+  })
+  it('skips the lastUsedAt write when used within 5 minutes', async () => {
+    prismaMock.apiKey.findUnique.mockResolvedValue({ ...base, expiresAt: null, lastUsedAt: new Date(Date.now() - 60_000) })
+    expect(await authenticateApiKey(req())).not.toBeNull()
+    expect(prismaMock.apiKey.update).not.toHaveBeenCalled()
+  })
+})
+
+describe('parseApiKeyExpiry', () => {
+  const now = new Date('2026-01-01T00:00:00Z')
+  it('computes the expiry date', () => { expect(parseApiKeyExpiry(30, now)?.toISOString()).toBe('2026-01-31T00:00:00.000Z') })
+  it('treats absent as no expiry', () => { expect(parseApiKeyExpiry(undefined, now)).toBeUndefined() })
+  it.each([0, 731, 1.5, '30', NaN])('rejects %s', (v) => { expect(parseApiKeyExpiry(v, now)).toBeNull() })
 })
