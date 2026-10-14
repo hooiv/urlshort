@@ -55,3 +55,13 @@ Send an `Idempotency-Key` header (8–255 chars) with `PATCH /api/bulk/edit`. A 
 ## Dry run
 
 Add `"dryRun": true` to preview a batch. It runs every check a real edit does (visibility, editor role, folder rights, tag cap, redirect-status compatibility) and returns `{ "dryRun": true, "wouldUpdate": 2, "unchanged": 1, "changes": [{ "id", "shortCode", "before", "after" }] }`. Nothing is written, audited, cache-invalidated or webhooked, and `Idempotency-Key` is ignored. Failures return the same 403/404 body as a real edit.
+
+## Destination rewrite
+
+`changes.rewriteDestination` migrates destinations in bulk (cannot combine with `utm`):
+
+- `{ "mode": "host", "from": "old.com", "to": "new.com" }` swaps the hostname and its subdomains, keeping path and query.
+- `{ "mode": "prefix", "host": "example.com", "from": "/blog", "to": "/articles" }` rewrites a path prefix on a segment boundary.
+- `{ "mode": "text", "find": "...", "replace": "..." }` literal (non-regex) replace.
+
+Every result must be http(s), at most 2048 chars and must not introduce a new link-safety concern; otherwise the whole batch is refused and nothing changes. Use `dryRun: true` to preview. Each rewrite writes a destination revision ("Bulk destination rewrite") and an audit event.

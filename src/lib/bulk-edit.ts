@@ -7,6 +7,7 @@ import { applyUtmTemplate, normalizeUtmValues, UTM_KEYS, type UtmValues } from '
 import { invalidateLinks } from '@/lib/link-cache'
 import { parseRedirectStatus, assertStatusCompatible } from '@/lib/redirect-status'
 import { hashGatePassword } from '@/lib/password-gate'
+import { rewriteDestination, validateRewriteSpec, type RewriteSpec } from '@/lib/destination-rewrite'
 
 export const MAX_BULK_EDIT_LINKS = 500
 export const MAX_TAGS_PER_LINK = 20
@@ -49,12 +50,23 @@ export const bulkEditSchema = z.object({
     password: z.string().min(4).max(128).nullable().optional(),
     utm: z.object(Object.fromEntries(UTM_KEYS.map((k) => [k, z.string().max(120).nullable().optional()])) as Record<(typeof UTM_KEYS)[number], z.ZodOptional<z.ZodNullable<z.ZodString>>>).optional(),
     utmTemplateId: z.string().min(1).max(64).optional(),
+    /** Rewrite destinations: swap a hostname, a path prefix, or literal text. Refused for the whole batch if any result is invalid or newly risky. */
+    rewriteDestination: z.discriminatedUnion('mode', [
+      z.object({ mode: z.literal('host'), from: z.string().min(1).max(253), to: z.string().min(1).max(253) }).strict(),
+      z.object({ mode: z.literal('prefix'), host: z.string().min(1).max(253).optional(), from: z.string().min(1).max(500), to: z.string().min(1).max(500) }).strict(),
+      z.object({ mode: z.literal('text'), find: z.string().min(1).max(500), replace: z.string().max(500) }).strict(),
+    ]).optional(),
   }).strict(),
 }).superRefine((body, ctx) => {
   const c = body.changes
   if (!Object.values(c).some((v) => v !== undefined)) ctx.addIssue({ code: 'custom', message: 'Choose at least one change' })
   if (c.setTags && (c.addTags || c.removeTags)) ctx.addIssue({ code: 'custom', message: 'setTags cannot be combined with addTags/removeTags' })
   if (c.trash && Object.entries(c).some(([k, v]) => k !== 'trash' && v !== undefined)) ctx.addIssue({ code: 'custom', message: 'trash cannot be combined with other changes' })
+  if (c.rewriteDestination) {
+    const err = validateRewriteSpec(c.rewriteDestination as RewriteSpec)
+    if (err) ctx.addIssue({ code: 'custom', message: err })
+    if (c.utm || c.utmTemplateId) ctx.addIssue({ code: 'custom', message: 'rewriteDestination cannot be combined with utm changes' })
+  }
   if (c.utm && c.utmTemplateId) ctx.addIssue({ code: 'custom', message: 'Send utm or utmTemplateId, not both' })
   if (c.extendExpiryDays !== undefined && c.expiresAt !== undefined) ctx.addIssue({ code: 'custom', message: 'Send expiresAt or extendExpiryDays, not both' })
   if (c.startsAt && c.expiresAt && new Date(c.startsAt).getTime() >= new Date(c.expiresAt).getTime()) ctx.addIssue({ code: 'custom', message: 'startsAt must be before expiresAt' })
@@ -237,6 +249,11 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
       const tagged = applyUtmTemplate(r.originalUrl, utm)
       if (tagged !== r.originalUrl) { newUrl = tagged; data.originalUrl = tagged; before.originalUrl = r.originalUrl; after.originalUrl = tagged }
     }
+    if (c.rewriteDestination) {
+      const res = rewriteDestination(r.originalUrl, c.rewriteDestination as RewriteSpec)
+      if ('error' in res) { failures.push({ link: r.shortCode, reason: res.error }); continue }
+      if (res.changed) { newUrl = res.url; data.originalUrl = res.url; before.originalUrl = r.originalUrl; after.originalUrl = res.url }
+    }
     if (Object.keys(data).length) plans.push({ row: r, data, newUrl, before, after })
   }
   if (failures.length) return { ok: false, status: 403, error: `${failures.length} link(s) cannot be edited; nothing was changed`, failures }
@@ -259,7 +276,7 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
     const revisions = plans.filter((p) => p.newUrl)
     if (revisions.length) {
       await tx.destinationRevision.createMany({
-        data: revisions.map((p) => ({ urlId: p.row.id, destinationUrl: p.newUrl!, reason: 'Bulk UTM edit', effectiveAt: now })),
+        data: revisions.map((p) => ({ urlId: p.row.id, destinationUrl: p.newUrl!, reason: c.rewriteDestination ? 'Bulk destination rewrite' : 'Bulk UTM edit', effectiveAt: now })),
       })
     }
     await tx.auditEvent.createMany({
