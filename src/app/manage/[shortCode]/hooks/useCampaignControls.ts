@@ -62,6 +62,8 @@ export function useCampaignControls(shortCode: string) {
   const [startsAt, setStartsAt] = useState('')
   const [notStartedUrl, setNotStartedUrl] = useState('')
   const [clickIdParam, setClickIdParam] = useState('')
+  const [queryForwardMode, setQueryForwardMode] = useState('all')
+  const [queryForwardAllow, setQueryForwardAllow] = useState('')
   const [redirectStatus, setRedirectStatus] = useState('')
   const [maxClicks, setMaxClicks] = useState('')
   const [dailyClickCap, setDailyClickCap] = useState('')
@@ -128,6 +130,8 @@ export function useCampaignControls(shortCode: string) {
       setStartsAt(toDatetimeLocalValue(linkPayload.startsAt ?? null))
       setNotStartedUrl(linkPayload.notStartedUrl || '')
       setClickIdParam(linkPayload.clickIdParam || '')
+      setQueryForwardMode(linkPayload.queryForwardMode || 'all')
+      setQueryForwardAllow(Array.isArray(linkPayload.queryForwardAllow) ? linkPayload.queryForwardAllow.join(', ') : '')
       setRedirectStatus(linkPayload.redirectStatus ? String(linkPayload.redirectStatus) : '')
       setMaxClicks(linkPayload.maxClicks ? String(linkPayload.maxClicks) : '')
       setDailyClickCap(linkPayload.dailyClickCap ? String(linkPayload.dailyClickCap) : '')
@@ -321,6 +325,8 @@ export function useCampaignControls(shortCode: string) {
           startsAt: parsedStartsAt,
           notStartedUrl: notStartedUrl || null,
           clickIdParam: clickIdParam.trim() || null,
+          queryForwardMode,
+          queryForwardAllow: queryForwardMode === 'allowlist' ? queryForwardAllow.split(/[\s,]+/).filter(Boolean) : [],
           redirectStatus: redirectStatus || null,
           maxClicks: parsedMaxClicks,
           dailyClickCap: parsedDailyCap,
@@ -475,6 +481,8 @@ export function useCampaignControls(shortCode: string) {
     startsAt, setStartsAt,
     notStartedUrl, setNotStartedUrl,
     clickIdParam, setClickIdParam,
+    queryForwardMode, setQueryForwardMode,
+    queryForwardAllow, setQueryForwardAllow,
     redirectStatus, setRedirectStatus,
     maxClicks, setMaxClicks,
     dailyClickCap, setDailyClickCap,

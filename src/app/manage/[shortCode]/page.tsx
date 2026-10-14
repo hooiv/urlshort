@@ -134,6 +134,10 @@ export default function ManageLink() {
           onStartsAtChange={controls.setStartsAt}
           onNotStartedUrlChange={controls.setNotStartedUrl}
           clickIdParam={controls.clickIdParam}
+          queryForwardMode={controls.queryForwardMode}
+          queryForwardAllow={controls.queryForwardAllow}
+          onQueryForwardModeChange={controls.setQueryForwardMode}
+          onQueryForwardAllowChange={controls.setQueryForwardAllow}
           redirectStatus={controls.redirectStatus}
           onRedirectStatusChange={controls.setRedirectStatus}
           onClickIdParamChange={controls.setClickIdParam}

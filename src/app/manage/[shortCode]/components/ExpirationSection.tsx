@@ -10,6 +10,10 @@ interface ExpirationSectionProps {
   notStartedUrl: string
   onStartsAtChange: (value: string) => void
   clickIdParam: string
+  queryForwardMode: string
+  queryForwardAllow: string
+  onQueryForwardModeChange: (value: string) => void
+  onQueryForwardAllowChange: (value: string) => void
   onClickIdParamChange: (value: string) => void
   redirectStatus: string
   onRedirectStatusChange: (value: string) => void
@@ -34,6 +38,10 @@ export default function ExpirationSection({
   notStartedUrl,
   onStartsAtChange,
   clickIdParam,
+  queryForwardMode,
+  queryForwardAllow,
+  onQueryForwardModeChange,
+  onQueryForwardAllowChange,
   onClickIdParamChange,
   redirectStatus,
   onRedirectStatusChange,
@@ -86,6 +94,22 @@ export default function ExpirationSection({
               maxLength={32}
               className="input"
             />
+          </Field>
+          <Field label="Query parameters passed to destination (ql_* and credential params are never forwarded)">
+            <select value={queryForwardMode} onChange={(e) => onQueryForwardModeChange(e.target.value)} className="input">
+              <option value="all">Forward all (default)</option>
+              <option value="none">Forward none</option>
+              <option value="allowlist">Only listed names</option>
+            </select>
+            {queryForwardMode === 'allowlist' && (
+              <input
+                type="text"
+                value={queryForwardAllow}
+                onChange={(e) => onQueryForwardAllowChange(e.target.value)}
+                placeholder="utm_source, utm_medium, ref"
+                className="input mt-2"
+              />
+            )}
           </Field>
           <Field label="Redirect type (301/308 are cached by browsers; not allowed with password, schedule or click limit)">
             <select value={redirectStatus} onChange={(e) => onRedirectStatusChange(e.target.value)} className="input">
