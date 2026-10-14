@@ -6,6 +6,8 @@ import { normalizePixelId, PixelValidationError } from '@/lib/retargeting-pixels
 import { folderWriteError, visibleUrlWhere } from '@/lib/folders'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
+import { applyAutoTagRules } from '@/lib/auto-tag-rules'
+import { loadAutoTagRules } from '@/lib/auto-tag-rules-store'
 import { prisma } from '@/lib/prisma'
 import { generateShortCode, getBaseUrl, isReservedCode, isValidUrl, normalizeUrl } from '@/lib/utils'
 import { buildManagementUrl, createManagementToken, hashManagementToken } from '@/lib/management'
@@ -89,7 +91,7 @@ export async function POST(request: NextRequest) {
     const customCode = typeof body.customCode === 'string' ? body.customCode.trim() : ''
     const title = typeof body.title === 'string' ? body.title.trim().slice(0, 200) : null
     const description = typeof body.description === 'string' ? body.description.trim().slice(0, 1000) : null
-    const tags = normalizeTags(body.tags)
+    let tags = normalizeTags(body.tags)
     const rawSplitRules = Array.isArray(body.splitRules) ? body.splitRules.slice(0, MAX_SPLIT_VARIANTS) : []
 
     if (!rawUrl) return NextResponse.json({ error: 'URL is required' }, { status: 400 })
@@ -235,6 +237,8 @@ export async function POST(request: NextRequest) {
       if (destinationUrl.length > 2048) return NextResponse.json({ error: 'Destination URL is too long after applying the UTM template' }, { status: 400 })
     }
     if (membership?.workspaceId) {
+      // Workspace auto-tag rules add tags by destination before policy checks (so requiredTags can be satisfied by rules).
+      tags = applyAutoTagRules(await loadAutoTagRules(prisma, membership.workspaceId), destinationUrl, tags).tags
       const policyError = await policyErrorMessage(await loadWorkspacePolicy(prisma, membership.workspaceId), { destination: destinationUrl, shortCode: customCode || null, tags, expiresAt })
       if (policyError) return NextResponse.json({ error: policyError, code: 'link_policy_violation' }, { status: 422 })
     }

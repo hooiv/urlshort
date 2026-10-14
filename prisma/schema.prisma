@@ -434,6 +434,7 @@ model Workspace {
   folders                Folder[]
   utmTemplates           UtmTemplate[]
   linkPolicy             WorkspaceLinkPolicy?
+  autoTagRules           WorkspaceAutoTagRules?
 
   @@map("workspaces")
 }
@@ -1423,4 +1424,16 @@ model UsageAlert {
 
   @@unique([workspaceId, metric, periodKey, threshold])
   @@map("usage_alerts")
+}
+
+model WorkspaceAutoTagRules {
+  workspaceId String   @id
+  /// JSON AutoTagRule[].
+  rules       String
+  updatedAt   DateTime @updatedAt
+  updatedBy   String?
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("workspace_auto_tag_rules")
 }
