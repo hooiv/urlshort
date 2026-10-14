@@ -1,3 +1,4 @@
+import { filterForwardedParams, type QueryForwardMode } from '@/lib/query-forwarding'
 import { reserveDailyClick } from '@/lib/daily-click-cap'
 import { effectiveRedirectStatus } from '@/lib/redirect-status'
 import { applyRobotsHeader } from '@/lib/robots-header'
@@ -128,7 +129,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
           revisionUrl: revision?.destinationUrl,
           fallbackUrl: url.originalUrl,
         }),
-        request.nextUrl.searchParams
+        filterForwardedParams(request.nextUrl.searchParams, { mode: url.queryForwardMode as QueryForwardMode, allow: url.queryForwardAllow })
       )
     } catch {
       // A corrupt destination is a broken link, not an infrastructure outage.

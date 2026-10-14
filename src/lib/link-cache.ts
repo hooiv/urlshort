@@ -50,6 +50,8 @@ export type CachedLink = {
   startsAt: Date | null
   notStartedUrl: string | null
   clickIdParam: string | null
+  queryForwardMode: string
+  queryForwardAllow: string[]
   redirectStatus: number | null
   passwordHash: string | null
   metaPixelId: string | null
@@ -282,6 +284,8 @@ const linkSelect = {
   startsAt: true,
   notStartedUrl: true,
   clickIdParam: true,
+  queryForwardMode: true,
+  queryForwardAllow: true,
   redirectStatus: true,
   passwordHash: true,
   metaPixelId: true,

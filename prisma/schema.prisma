@@ -60,6 +60,8 @@ model Url {
   expiresAt                  DateTime?
   expiredUrl                 String?
   clickIdParam               String?
+  queryForwardMode           String   @default("all")
+  queryForwardAllow          String[] @default([])
   redirectStatus             Int?
   milestoneReached           Int            @default(0)
   publicStatsHash            String?        @unique
