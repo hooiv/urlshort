@@ -77,6 +77,7 @@ const KEY_REACHABLE = [
   'analytics/traffic-quality/route.ts',
   'links/duplicates/route.ts',
   'links/export/route.ts',
+  'links/hygiene/route.ts',
   'analytics/creators/route.ts',
   'analytics/languages/route.ts',
   'links/[shortCode]/clone/route.ts',
