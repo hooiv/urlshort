@@ -14,3 +14,7 @@ Send an `Idempotency-Key` header (8–255 chars) to make retries safe: a repeate
 POST with the same key and body replays the first response (`Idempotent-Replay: true`)
 instead of creating another copy. Reusing a key with a different source link or
 short code returns 400. Keys are scoped to the caller's primary workspace and expire after 24h.
+
+## Bulk clone
+
+`POST /api/links/bulk-clone` with `{ "codes": ["a1b", "c2d"] }` (1-50 unique codes, scope `links:write`) clones each link under an auto-generated code. Each item is authorized independently and reported in `results` (`shortCode`/`shortUrl` or `error`); one failure never blocks the rest. Each clone writes a `link.clone` audit entry with `bulk: true`. Rate limit: 10 requests/min.

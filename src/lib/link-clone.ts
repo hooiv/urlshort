@@ -96,3 +96,19 @@ export async function cloneLink(source: Url, requestedCode: string | null, actor
   }
   throw new CodeTakenError()
 }
+
+export const BULK_CLONE_MAX = 50
+
+/** Validate a bulk-clone body: 1..50 unique, well-formed short codes. */
+export function validateBulkCloneCodes(input: unknown): { ok: true; codes: string[] } | { ok: false; error: string } {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return { ok: false, error: 'Invalid JSON body' }
+  const codes = (input as { codes?: unknown }).codes
+  if (!Array.isArray(codes) || codes.length === 0) return { ok: false, error: 'codes must be a non-empty array' }
+  if (codes.length > BULK_CLONE_MAX) return { ok: false, error: `At most ${BULK_CLONE_MAX} links per request` }
+  const seen = new Set<string>()
+  for (const c of codes) {
+    if (typeof c !== 'string' || !CODE_PATTERN.test(c)) return { ok: false, error: 'Every code must be 3-40 letters, digits, "-" or "_"' }
+    seen.add(c)
+  }
+  return { ok: true, codes: [...seen] }
+}

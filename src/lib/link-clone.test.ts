@@ -35,3 +35,18 @@ describe('cloneUrlData', () => {
     }
   })
 })
+
+import { validateBulkCloneCodes as _vb } from './link-clone'
+describe('validateBulkCloneCodes', () => {
+  it('dedupes and accepts valid codes', () => {
+    expect(_vb({ codes: ['abc', 'abc', 'x-y_z'] })).toEqual({ ok: true, codes: ['abc', 'x-y_z'] })
+  })
+  it('rejects empty, oversize, malformed and non-object bodies', () => {
+    expect(_vb({ codes: [] }).ok).toBe(false)
+    expect(_vb({ codes: Array.from({ length: 51 }, (_, i) => `code${i}`) }).ok).toBe(false)
+    expect(_vb({ codes: ['a b'] }).ok).toBe(false)
+    expect(_vb({ codes: [5] }).ok).toBe(false)
+    expect(_vb(null).ok).toBe(false)
+    expect(_vb([]).ok).toBe(false)
+  })
+})
