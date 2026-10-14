@@ -93,6 +93,7 @@ export default function BulkEditBar({
             <select className="input mt-1 w-full" value={form.state} onChange={(e) => set({ state: e.target.value as BulkEditForm['state'] })}>
               <option value="">Leave as is</option>
               <option value="archive">Archive (pause)</option>
+              <option value="trash">Move to trash (restorable)</option>
               <option value="restore">Restore</option>
             </select>
           </label>

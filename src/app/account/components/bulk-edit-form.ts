@@ -4,7 +4,7 @@ export type BulkEditForm = {
   folder: '' | 'none' | string
   expiry: '' | 'clear' | string // yyyy-mm-dd, interpreted as end of that day in the browser's zone
   extendDays: string // whole days to push existing expiries out
-  state: '' | 'archive' | 'restore'
+  state: '' | 'archive' | 'restore' | 'trash'
   password: '' | 'remove' | string // '' leaves as is, 'remove' clears, anything else sets
   utmSource: string
   utmMedium: string
@@ -36,6 +36,10 @@ export function buildBulkEditChanges(form: BulkEditForm, now = new Date()): { ch
     if (!Number.isInteger(n) || n < 1 || n > 3650) return { error: 'Extend by a whole number of days from 1 to 3650' }
     if (form.expiry) return { error: 'Set a new expiry date or extend by days, not both' }
     changes.extendExpiryDays = n
+  }
+  if (form.state === 'trash') {
+    if (Object.keys(changes).length) return { error: 'Moving to trash cannot be combined with other changes' }
+    return { changes: { trash: true } }
   }
   if (form.state) changes.archived = form.state === 'archive'
   if (form.password === 'remove') changes.password = null

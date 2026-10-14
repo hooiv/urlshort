@@ -26,3 +26,12 @@ describe('buildBulkEditChanges', () => {
   })
   it('restores', () => expect(buildBulkEditChanges({ ...emptyBulkEditForm, state: 'restore' }, now)).toEqual({ changes: { archived: false } }))
 })
+
+describe('trash state', () => {
+  it('sends trash alone', () => {
+    expect(buildBulkEditChanges({ ...emptyBulkEditForm, state: 'trash' })).toEqual({ changes: { trash: true } })
+  })
+  it('refuses trash combined with other changes', () => {
+    expect(buildBulkEditChanges({ ...emptyBulkEditForm, state: 'trash', addTags: 'x' })).toEqual({ error: 'Moving to trash cannot be combined with other changes' })
+  })
+})

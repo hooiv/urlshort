@@ -32,6 +32,7 @@
 | `maxClicks` | integer 1-1,000,000,000, or `null` to remove the click limit |
 | `extendExpiryDays` | integer 1-3650; moves each link's own expiry out by N days from the later of its expiry and now. Links with no expiry are left unchanged. Cannot be combined with `expiresAt` |
 | `archived` | `true` pauses the link, `false` restores it |
+| `trash` | `true` moves the links to the trash (restorable for the retention window from `/manage/trash`). Must be the only change; audited per link as `trashed: false → true` |
 | `utm` or `utmTemplateId` | fill `utm_*` on the destination. Existing non-empty values are kept. Creates a destination revision. Template must belong to the links' workspace |
 
 ## Guarantees

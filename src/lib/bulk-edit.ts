@@ -33,6 +33,8 @@ export const bulkEditSchema = z.object({
     /** Where visitors land before the link's go-live time; null clears it. */
     notStartedUrl: z.string().trim().url().max(2048).refine((u) => /^https?:\/\//i.test(u), 'notStartedUrl must be http(s)').nullable().optional(),
     archived: z.boolean().optional(),
+    /** Move the links to the trash (restorable for the retention window). Cannot be combined with other changes. */
+    trash: z.literal(true).optional(),
     cloaked: z.boolean().optional(),
     /** Private internal note on every link; null or empty clears it. */
     notes: z.string().trim().max(2000).nullable().optional(),
@@ -45,6 +47,7 @@ export const bulkEditSchema = z.object({
   const c = body.changes
   if (!Object.values(c).some((v) => v !== undefined)) ctx.addIssue({ code: 'custom', message: 'Choose at least one change' })
   if (c.setTags && (c.addTags || c.removeTags)) ctx.addIssue({ code: 'custom', message: 'setTags cannot be combined with addTags/removeTags' })
+  if (c.trash && Object.entries(c).some(([k, v]) => k !== 'trash' && v !== undefined)) ctx.addIssue({ code: 'custom', message: 'trash cannot be combined with other changes' })
   if (c.utm && c.utmTemplateId) ctx.addIssue({ code: 'custom', message: 'Send utm or utmTemplateId, not both' })
   if (c.extendExpiryDays !== undefined && c.expiresAt !== undefined) ctx.addIssue({ code: 'custom', message: 'Send expiresAt or extendExpiryDays, not both' })
   if (c.startsAt && c.expiresAt && new Date(c.startsAt).getTime() >= new Date(c.expiresAt).getTime()) ctx.addIssue({ code: 'custom', message: 'startsAt must be before expiresAt' })
@@ -196,6 +199,7 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
     if (c.archived !== undefined && c.archived === r.isActive) {
       data.isActive = !c.archived; before.isActive = r.isActive; after.isActive = !c.archived
     }
+    if (c.trash) { data.deletedAt = new Date(); before.trashed = false; after.trashed = true }
     let newUrl: string | null = null
     if (utm) {
       const tagged = applyUtmTemplate(r.originalUrl, utm)

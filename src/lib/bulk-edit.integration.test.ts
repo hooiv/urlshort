@@ -68,4 +68,30 @@ describe('real database: bulk edit', () => {
       await db.$disconnect()
     }
   }, 60_000)
+
+  it.skipIf(!databaseUrl)('moves links to trash in one batch, audits them, and they can be restored', async () => {
+    process.env.DATABASE_URL = databaseUrl
+    process.env.DIRECT_DATABASE_URL = databaseUrl
+    const db = new PrismaClient({ datasources: { db: { url: databaseUrl } } })
+    const { applyBulkEdit } = await import('./bulk-edit')
+    const tag = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const owner = await db.user.create({ data: { email: `t-${tag}@example.com`, password: 'x' } })
+    const mk = (n: string) => db.url.create({ data: { shortCode: `${n}${tag}`.slice(0, 40), originalUrl: 'https://example.com/t', userId: owner.id } })
+    try {
+      const [a, b] = await Promise.all([mk('ta'), mk('tb')])
+      const res = await applyBulkEdit(owner.id, { links: [a.shortCode, b.shortCode], changes: { trash: true } })
+      expect(res.ok && res.updated.length).toBe(2)
+      const rows = await db.url.findMany({ where: { id: { in: [a.id, b.id] } } })
+      expect(rows.every((r) => r.deletedAt instanceof Date)).toBe(true)
+      expect(await db.auditEvent.count({ where: { action: 'link.bulk_edit', urlId: { in: [a.id, b.id] } } })).toBe(2)
+      // Already-trashed links are no longer editable targets.
+      const again = await applyBulkEdit(owner.id, { links: [a.shortCode], changes: { trash: true } })
+      expect(again.ok).toBe(false)
+    } finally {
+      await db.url.deleteMany({ where: { userId: owner.id } })
+      await db.auditEvent.deleteMany({ where: { actorUserId: owner.id } })
+      await db.user.delete({ where: { id: owner.id } })
+      await db.$disconnect()
+    }
+  })
 })

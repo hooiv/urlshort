@@ -61,6 +61,11 @@ describe('bulkEditSchema', () => {
   it('accepts null expiry and folder', () => expect(bulkEditSchema.safeParse({ links, changes: { expiresAt: null, folderId: null } }).success).toBe(true))
   it('accepts startsAt and null', () => { expect(bulkEditSchema.safeParse({ links, changes: { startsAt: '2030-01-01T00:00:00Z' } }).success).toBe(true); expect(bulkEditSchema.safeParse({ links, changes: { startsAt: null } }).success).toBe(true) })
   it('rejects startsAt after expiresAt', () => expect(bulkEditSchema.safeParse({ links, changes: { startsAt: '2031-01-01T00:00:00Z', expiresAt: '2030-06-01T00:00:00Z' } }).success).toBe(false))
+  it('accepts trash alone and rejects it combined or false', () => {
+    expect(bulkEditSchema.safeParse({ links, changes: { trash: true } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { trash: true, archived: true } }).success).toBe(false)
+    expect(bulkEditSchema.safeParse({ links, changes: { trash: false } }).success).toBe(false)
+  })
   it('rejects unknown keys and >500 links', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { nope: 1 } }).success).toBe(false)
     expect(bulkEditSchema.safeParse({ links: Array.from({ length: 501 }, (_, i) => `c${i}`), changes: { archived: true } }).success).toBe(false)
