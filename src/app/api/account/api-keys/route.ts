@@ -1,3 +1,4 @@
+import { classifyApiKey } from '@/lib/api-key-health'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
@@ -15,7 +16,8 @@ export async function GET(request: NextRequest) {
     orderBy: { createdAt: 'desc' },
     select: { id: true, name: true, prefix: true, scopes: true, lastUsedAt: true, revokedAt: true, expiresAt: true, allowedIps: true, createdAt: true },
   })
-  return NextResponse.json(keys)
+  const now = new Date()
+  return NextResponse.json(keys.map((k) => ({ ...k, health: classifyApiKey(k, now) })))
 }
 
 /** POST /api/account/api-keys — create a key. The raw key is returned once. */
