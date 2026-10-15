@@ -14,6 +14,7 @@ import SocialPreview from '@/app/components/SocialPreview'
 import ShortenResult from '@/app/components/ShortenResult'
 import { useSlugAvailability } from '@/app/components/useSlugAvailability'
 import { usePreflight } from '@/app/components/usePreflight'
+import { useSlugSuggestions } from '@/app/components/useSlugSuggestions'
 
 export default function Home() {
   const {
@@ -32,6 +33,7 @@ export default function Home() {
   const [showUtm, setShowUtm] = useState(false)
   const slug = useSlugAvailability(form.customCode)
   const preflight = usePreflight(form.url)
+  const suggestions = useSlugSuggestions(form.url)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showLivePreview, setShowLivePreview] = useState(false)
   const [showSecurity, setShowSecurity] = useState(false)
@@ -110,6 +112,21 @@ export default function Home() {
                     </span>
                   )}
                 </div>
+                {!form.customCode && suggestions.length > 0 && (
+                  <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                    Suggested:
+                    {suggestions.map((code) => (
+                      <button
+                        key={code}
+                        type="button"
+                        onClick={() => patch({ customCode: code })}
+                        className="rounded bg-slate-800 px-1.5 py-0.5 text-slate-200 hover:bg-slate-700"
+                      >
+                        {code}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div>
