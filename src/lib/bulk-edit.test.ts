@@ -102,3 +102,15 @@ describe('bulkEditSchema pixels', () => {
   })
 })
 
+
+describe('bulkEditSchema og', () => {
+  const links = ['abc']
+  it('accepts valid preview overrides and clears', () => {
+    expect(bulkEditSchema.safeParse({ links, changes: { og: { title: 'Sale', description: null, ogImage: 'https://cdn.x.com/a.png' } } }).success).toBe(true)
+  })
+  it('rejects empty og, http image and overlong title', () => {
+    expect(bulkEditSchema.safeParse({ links, changes: { og: {} } }).success).toBe(false)
+    expect(bulkEditSchema.safeParse({ links, changes: { og: { ogImage: 'http://evil.com/a.png' } } }).success).toBe(false)
+    expect(bulkEditSchema.safeParse({ links, changes: { og: { title: 'x'.repeat(500) } } }).success).toBe(false)
+  })
+})

@@ -8,6 +8,7 @@ import { invalidateLinks } from '@/lib/link-cache'
 import { parseRedirectStatus, assertStatusCompatible } from '@/lib/redirect-status'
 import { MAX_DAILY_CLICK_CAP } from '@/lib/daily-click-cap'
 import { hashGatePassword } from '@/lib/password-gate'
+import { validateOgFields } from '@/lib/og-preview'
 import { normalizePixelId, PIXEL_PROVIDERS, PixelValidationError, type PixelProvider } from '@/lib/retargeting-pixels'
 import { rewriteDestination, validateRewriteSpec, type RewriteSpec } from '@/lib/destination-rewrite'
 
@@ -52,6 +53,8 @@ export const bulkEditSchema = z.object({
     notes: z.string().trim().max(2000).nullable().optional(),
     /** String sets the same gate password on every link; null removes it. Never echoed back or audited. */
     password: z.string().min(4).max(128).nullable().optional(),
+    /** Social preview overrides for crawlers; null or empty clears a field. Fields not listed are untouched. Validated like the single-link editor. */
+    og: z.object({ title: z.string().max(1000).nullable().optional(), description: z.string().max(2000).nullable().optional(), ogImage: z.string().max(4096).nullable().optional() }).strict().optional(),
     utm: z.object(Object.fromEntries(UTM_KEYS.map((k) => [k, z.string().max(120).nullable().optional()])) as Record<(typeof UTM_KEYS)[number], z.ZodOptional<z.ZodNullable<z.ZodString>>>).optional(),
     utmTemplateId: z.string().min(1).max(64).optional(),
     /** Retargeting pixel ids per provider; null (or empty) clears that provider. Providers not listed are untouched. Ids are format-validated. */
@@ -72,6 +75,10 @@ export const bulkEditSchema = z.object({
     const err = validateRewriteSpec(c.rewriteDestination as RewriteSpec)
     if (err) ctx.addIssue({ code: 'custom', message: err })
     if (c.utm || c.utmTemplateId) ctx.addIssue({ code: 'custom', message: 'rewriteDestination cannot be combined with utm changes' })
+  }
+  if (c.og) {
+    if (!Object.values(c.og).some((v) => v !== undefined)) ctx.addIssue({ code: 'custom', message: 'og needs at least one field' })
+    else { try { validateOgFields(c.og) } catch (e) { ctx.addIssue({ code: 'custom', message: (e as Error).message }) } }
   }
   if (c.pixels) {
     if (!Object.values(c.pixels).some((v) => v !== undefined)) ctx.addIssue({ code: 'custom', message: 'pixels needs at least one provider' })
@@ -106,7 +113,7 @@ export function nextTags(current: string[], c: Pick<BulkEditChanges, 'addTags' |
 
 type LinkRow = {
   id: string; shortCode: string; originalUrl: string; tags: string[]; isActive: boolean
-  expiresAt: Date | null; startsAt: Date | null; maxClicks: number | null; dailyClickCap: number | null; expiredUrl: string | null; notStartedUrl: string | null; cloaked: boolean; metaPixelId: string | null; googleTagId: string | null; xPixelId: string | null; linkedinPartnerId: string | null; tiktokPixelId: string | null; pinnedAt: Date | null; redirectStatus: number | null; notes: string | null; passwordHash: string | null; folderId: string | null; workspaceId: string | null; userId: string | null
+  expiresAt: Date | null; startsAt: Date | null; maxClicks: number | null; dailyClickCap: number | null; expiredUrl: string | null; notStartedUrl: string | null; cloaked: boolean; metaPixelId: string | null; googleTagId: string | null; xPixelId: string | null; linkedinPartnerId: string | null; tiktokPixelId: string | null; pinnedAt: Date | null; redirectStatus: number | null; notes: string | null; title: string | null; description: string | null; ogImage: string | null; passwordHash: string | null; folderId: string | null; workspaceId: string | null; userId: string | null
 }
 
 const PIXEL_FIELDS = { meta: 'metaPixelId', google: 'googleTagId', x: 'xPixelId', linkedin: 'linkedinPartnerId', tiktok: 'tiktokPixelId' } as const satisfies Record<PixelProvider, 'metaPixelId' | 'googleTagId' | 'xPixelId' | 'linkedinPartnerId' | 'tiktokPixelId'>
@@ -127,7 +134,7 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
   const c = input.changes
   const rows: LinkRow[] = await prisma.url.findMany({
     where: { AND: [{ deletedAt: null, OR: [{ id: { in: keys } }, { shortCode: { in: keys } }] }, visibleUrlWhere(userId)] },
-    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, startsAt: true, maxClicks: true, dailyClickCap: true, expiredUrl: true, notStartedUrl: true, cloaked: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, pinnedAt: true, redirectStatus: true, notes: true, passwordHash: true, folderId: true, workspaceId: true, userId: true },
+    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, startsAt: true, maxClicks: true, dailyClickCap: true, expiredUrl: true, notStartedUrl: true, cloaked: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, pinnedAt: true, redirectStatus: true, notes: true, title: true, description: true, ogImage: true, passwordHash: true, folderId: true, workspaceId: true, userId: true },
   })
   const found = new Set(rows.flatMap((r) => [r.id, r.shortCode]))
   const failures: BulkEditFailure[] = keys.filter((k) => !found.has(k)).map((link) => ({ link, reason: 'Link not found' }))
@@ -246,6 +253,13 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
     if (c.notes !== undefined) {
       const next = c.notes && c.notes.length ? c.notes : null
       if (next !== (r.notes ?? null)) { data.notes = next; before.notes = r.notes ?? null; after.notes = next }
+    }
+    if (c.og) {
+      const og = validateOgFields(c.og)
+      for (const k of ['title', 'description', 'ogImage'] as const) {
+        const next = og[k]
+        if (next !== undefined && next !== r[k]) { data[k] = next; before[k] = r[k]; after[k] = next }
+      }
     }
     if (c.password !== undefined) {
       const protectedNow = Boolean(r.passwordHash)
