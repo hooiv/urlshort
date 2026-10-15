@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { classifySlugs, suggestAlternatives, validCandidates, MAX_AVAILABILITY_CODES } from '@/lib/slug-availability'
 
 export const availabilitySchema = z.object({
@@ -11,7 +11,7 @@ export const availabilitySchema = z.object({
 /** POST { codes: string[] } -> availability + readability score per code. */
 export async function POST(request: NextRequest) {
   const limit = await rateLimit(request, { name: 'slug-availability', limit: 60, windowMs: 60_000 })
-  if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) })
 
   const body = await request.json().catch(() => null)
   const parsed = availabilitySchema.safeParse(body)

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { LINK_WRITE_SCOPES, resolveActor } from '@/lib/request-actor'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { applyBulkEdit, bulkEditSchema } from '@/lib/bulk-edit'
 import { dispatchWebhooksForUrls } from '@/lib/webhooks'
 import { prisma } from '@/lib/prisma'
@@ -15,7 +15,7 @@ export async function PATCH(request: NextRequest) {
   const resolved = await resolveActor(request, LINK_WRITE_SCOPES)
   if (!resolved.actor) return NextResponse.json({ error: resolved.error }, { status: resolved.status })
   const limit = await rateLimit(request, { name: 'bulk-edit', limit: 20, windowMs: 60_000, identifier: resolved.actor.userId })
-  if (!limit.allowed) return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
+  if (!limit.allowed) return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: rateLimitHeaders(limit) })
 
   const body = bulkEditSchema.safeParse(await request.json().catch(() => ({})))
   if (!body.success) return NextResponse.json({ error: body.error.issues[0]?.message || 'Invalid request' }, { status: 400 })

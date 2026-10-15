@@ -7,7 +7,7 @@ import { getIdempotentResponse, storeIdempotentResponse } from '@/lib/idempotenc
 import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
 import { requireWorkspaceRole, EDIT_ROLES, ANALYTICS_ROLES } from '@/lib/workspaces'
 import { assertDestinationSafeForStorage } from '@/lib/destination-health'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { recordAudit } from '@/lib/audit'
 
 const variantSchema = z.object({ name: z.string().trim().min(1).max(120), destinationUrl: z.string().url().max(4096), isControl: z.boolean().optional(), weight: z.number().int().min(1).max(100) })
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
  const workspace = await workspaceFor(request); if (!workspace) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
  try {
    const limit = await rateLimit(request, { name: 'campaigns-create', limit: 30, windowMs: 60_000 })
-   if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+   if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) })
    const role = await requireWorkspaceRole(request, workspace.id, EDIT_ROLES)
    if (role.error) return NextResponse.json({ error: role.error }, { status: role.status })
    const body = createSchema.parse(await request.json())

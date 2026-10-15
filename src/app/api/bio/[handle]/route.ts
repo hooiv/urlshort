@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { requireWorkspaceRole, EDIT_ROLES } from '@/lib/workspaces';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
 
 const BIO_HANDLE_RE = /^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$/;
 
@@ -34,7 +34,7 @@ export async function GET(
 ) {
   try {
     const limit = await rateLimit(request, { name: 'bio-profile-get', limit: 120, windowMs: 60_000 });
-    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) });
     const { handle: rawHandle } = await params;
     const handle = normalizeRouteHandle(rawHandle);
     if (!BIO_HANDLE_RE.test(handle)) return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
@@ -69,7 +69,7 @@ export async function PUT(
     }
 
     const limit = await rateLimit(request, { name: 'bio-profile-update', limit: 60, windowMs: 60_000 });
-    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) });
 
     const { handle: rawHandle } = await params;
     const handle = normalizeRouteHandle(rawHandle);

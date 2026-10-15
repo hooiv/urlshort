@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
 export const abuseReportSchema = z.object({
   shortCode: z.string().trim().min(1).max(64),
@@ -13,7 +13,7 @@ export const abuseReportSchema = z.object({
 export async function POST(request: NextRequest) {
   try {
     const limit = await rateLimit(request, { name: 'abuse-report', limit: 20, windowMs: 60_000 })
-    if (!limit.allowed) return NextResponse.json({ error: 'Too many reports. Please try again shortly.' }, { status: 429 })
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many reports. Please try again shortly.' }, { status: 429, headers: rateLimitHeaders(limit) })
     const parsed = abuseReportSchema.safeParse(await request.json().catch(() => null))
     if (!parsed.success) return NextResponse.json({ error: 'A valid short code and report reason are required' }, { status: 400 })
     const { shortCode, reason } = parsed.data

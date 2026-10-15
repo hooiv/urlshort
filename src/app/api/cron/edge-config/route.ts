@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import { replicateRoutingSnapshot } from '@/lib/routing-config'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
 export const maxDuration = 60
 
@@ -25,7 +25,7 @@ function authorized(request: NextRequest): boolean {
 export async function GET(request: NextRequest) {
   if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const limit = await rateLimit(request, { name: 'cron-edge-config', limit: 4, windowMs: 60_000 })
-  if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) })
   try {
     const pending = await prisma.routingConfigSnapshot.findMany({ where: { replicatedAt: null }, orderBy: [{ workspaceId: 'asc' }, { version: 'desc' }], take: 500 })
     const newest = new Map<string, typeof pending[number]>()

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { isValidStripeSigningSecret } from '@/lib/stripe-attribution'
 import { MAX_INTEGRATIONS_PER_USER, integrationSelect, presentIntegration, stripeIntegrationCreateSchema } from '@/lib/stripe-integrations'
 
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     const user = await getCurrentUser(request)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     const limit = await rateLimit(request, { name: 'stripe-integration-create', limit: 10, windowMs: 60_000 })
-    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) })
 
     const parsed = stripeIntegrationCreateSchema.safeParse(await request.json().catch(() => null))
     if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid request' }, { status: 400 })

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { recordAudit } from '@/lib/audit'
 import { WEBHOOK_SCOPES, resolveActor } from '@/lib/request-actor'
 import { findManageableEndpoint } from '@/lib/webhook-endpoint-access'
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const resolved = await resolveActor(request, WEBHOOK_SCOPES)
   if (!resolved.actor) return NextResponse.json({ error: resolved.status === 401 ? 'Unauthorized' : resolved.error }, { status: resolved.status })
   const limit = await rateLimit(request, { name: 'webhooks-replay-failed', limit: 5, windowMs: 10 * 60_000, identifier: resolved.actor.userId })
-  if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) })
 
   const { id } = await params
   const endpoint = await findManageableEndpoint(resolved.actor.userId, id)

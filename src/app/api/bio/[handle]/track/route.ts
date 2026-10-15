@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { hashVisitorId } from '@/lib/attribution'
 import { getDeviceType, getOperatingSystem, getBrowser, getTrafficSource, getVisitorId } from '@/lib/smart-routing'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { enforceUsage } from '@/lib/tenant-usage'
 import { sanitizeAnalyticsMetadata } from '@/lib/privacy-ingestion'
 
@@ -13,7 +13,7 @@ export async function POST(
   try {
     const limit = await rateLimit(request, { name: 'bio-track', limit: 300, windowMs: 60_000 })
     if (!limit.allowed) {
-      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
+      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: rateLimitHeaders(limit) })
     }
 
     const { handle } = await context.params

@@ -3,7 +3,7 @@ import { findManageableEndpoint } from '@/lib/webhook-endpoint-access';
 import { prisma } from '@/lib/prisma';
 import { WEBHOOK_SCOPES, resolveActor } from '@/lib/request-actor';
 import { enqueueWebhook, processWebhookDelivery } from '@/lib/webhooks';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
 
 export async function POST(
   request: NextRequest,
@@ -15,7 +15,7 @@ export async function POST(
     const user = { id: resolved.actor.userId };
 
     const limit = await rateLimit(request, { name: 'webhooks-test', limit: 10, windowMs: 60_000 });
-    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) });
 
     const { id } = await params;
 

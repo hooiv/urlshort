@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { timingSafeEqual } from 'node:crypto'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { invalidateLinks } from '@/lib/link-cache'
 
 /**
@@ -93,7 +93,7 @@ async function expireLinksInBatches(now: Date): Promise<number> {
 export async function POST(request: NextRequest) {
   if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const limit = await rateLimit(request, { name: 'retention-sweep', limit: 4, windowMs: 60 * 60_000 })
-  if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) })
 
   const results: Record<string, number> = {}
   const now = new Date()

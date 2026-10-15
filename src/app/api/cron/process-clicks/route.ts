@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'node:crypto'
 import { clickQueue } from '@/lib/queue'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
 export const maxDuration = 60
 
@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
   }
 
   const limit = await rateLimit(request, { name: 'process-clicks', limit: 4, windowMs: 60_000 })
-  if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) })
 
   try {
     await clickQueue.processBatch()

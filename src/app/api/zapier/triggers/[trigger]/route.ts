@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ANALYTICS_READ_SCOPES, LINK_READ_SCOPES, resolveActor } from '@/lib/request-actor'
 import { isZapierTrigger, parsePollLimit, pollTrigger } from '@/lib/zapier-hooks'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
 /**
  * Polling trigger: newest-first array of plain objects with a stable `id`,
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const resolved = trigger === 'new_link' ? await resolveActor(request, LINK_READ_SCOPES) : await resolveActor(request, ANALYTICS_READ_SCOPES)
   if (!resolved.actor) return NextResponse.json({ error: resolved.status === 401 ? 'Unauthorized' : resolved.error }, { status: resolved.status })
   const limit = await rateLimit(request, { name: 'zapier-poll', limit: 120, windowMs: 60_000 })
-  if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) })
   const rows = await pollTrigger(trigger, resolved.actor.userId, parsePollLimit(request.nextUrl.searchParams.get('limit')))
   return NextResponse.json(rows)
 }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { generateSlugSuggestions } from '@/lib/slug'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
 export const slugSuggestSchema = z.object({
   title: z.string().max(200).optional().default(''),
@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
   try {
     const limit = await rateLimit(request, { name: 'slug-suggest', limit: 60, windowMs: 60_000 })
     if (!limit.allowed) {
-      return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) })
     }
 
     const body = await request.json().catch(() => ({}))

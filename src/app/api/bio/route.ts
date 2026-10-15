@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { requireWorkspaceRole, EDIT_ROLES } from '@/lib/workspaces';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
 
 export const MAX_BIO_HANDLE_LENGTH = 64;
 const BIO_HANDLE_RE = /^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$/;
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     }
 
     const limit = await rateLimit(request, { name: 'bio-create', limit: 20, windowMs: 60_000 });
-    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) });
 
     const raw = await request.json().catch(() => null);
     const parsed = bioCreateSchema.safeParse(raw);

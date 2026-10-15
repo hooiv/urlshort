@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { requireWorkspaceRole, EDIT_ROLES } from '@/lib/workspaces';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
 
 export const MAX_BIO_BLOCKS = 100;
 
@@ -36,7 +36,7 @@ export async function POST(
     }
 
     const limit = await rateLimit(request, { name: 'bio-block-create', limit: 60, windowMs: 60_000 });
-    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) });
 
     const { handle: rawHandle } = await params;
     const handle = typeof rawHandle === 'string' ? rawHandle.trim().toLowerCase() : '';

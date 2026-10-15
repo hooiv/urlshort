@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { WEBHOOK_SCOPES, resolveActor } from '@/lib/request-actor';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
 import { parseLinkFilterInput } from '@/lib/webhook-filters';
 import { findManageableEndpoint, resolveEndpointFilter } from '@/lib/webhook-endpoint-access';
 import { normalizeEvents } from '../route';
@@ -47,7 +47,7 @@ export async function PATCH(
     const user = { id: resolved.actor.userId };
 
     const limit = await rateLimit(request, { name: 'webhooks-update', limit: 60, windowMs: 60_000 });
-    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) });
 
     const { id } = await params;
     const endpoint = await findManageableEndpoint(user.id, id);

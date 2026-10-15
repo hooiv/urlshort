@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { WEBHOOK_SCOPES, resolveActor } from '@/lib/request-actor';
 import { assertDestinationSafeForStorage } from '@/lib/destination-health';
-import { rateLimit } from '@/lib/rate-limit';
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
 import crypto from 'crypto';
 import { isSlackWebhookUrl } from '@/lib/slack-format';
 import { parseLinkFilterInput } from '@/lib/webhook-filters';
@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
     const user = { id: resolved.actor.userId };
 
     const limit = await rateLimit(request, { name: 'webhooks-create', limit: 30, windowMs: 60_000 });
-    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) });
 
     const parsed = webhookCreateSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'URL is required' }, { status: 400 });

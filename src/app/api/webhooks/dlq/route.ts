@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'node:crypto'
 import { processDeadLetterQueue, WEBHOOK_MAX_RETRIES } from '@/lib/webhooks'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
 /**
  * Cron processor for pending webhook deliveries (retries with exponential
@@ -31,7 +31,7 @@ async function handler(request: NextRequest) {
 
   // Belt-and-braces against accidental tight-loop scheduling.
   const limit = await rateLimit(request, { name: 'webhook-dlq', limit: 4, windowMs: 60_000 })
-  if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) })
 
   try {
     const results = await processDeadLetterQueue()

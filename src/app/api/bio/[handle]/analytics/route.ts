@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { requireWorkspaceRole, ANALYTICS_ROLES } from '@/lib/workspaces'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
 export async function GET(
   request: NextRequest,
@@ -11,7 +11,7 @@ export async function GET(
   try {
     const limit = await rateLimit(request, { name: 'bio-analytics', limit: 120, windowMs: 60_000 })
     if (!limit.allowed) {
-      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
+      return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: rateLimitHeaders(limit) })
     }
 
     const { handle: rawHandle } = await context.params

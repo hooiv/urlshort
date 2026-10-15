@@ -3,7 +3,7 @@ import { folderWriteError } from '@/lib/folders'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { LINK_WRITE_SCOPES, resolveActor } from '@/lib/request-actor'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { getBaseUrl } from '@/lib/utils'
 import { assertDestinationSafeForStorage } from '@/lib/destination-health'
 import { assessDestination } from '@/lib/link-safety'
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     const user = { id: resolved.actor.userId }
 
     const limit = await rateLimit(request, { name: 'bulk-create', limit: 5, windowMs: 60_000 })
-    if (!limit.allowed) return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429 })
+    if (!limit.allowed) return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers: rateLimitHeaders(limit) })
 
     const body = bulkCsvSchema.safeParse(await request.json().catch(() => ({})))
     if (!body.success) return NextResponse.json({ error: body.error.issues[0]?.message || 'Invalid CSV' }, { status: 400 })
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
     if (body.data.provider) {
       // API pulls are slower and hit a third party: tighter per-user budget.
       const pullLimit = await rateLimit(request, { name: 'bulk-provider-pull', limit: 3, windowMs: 10 * 60_000, identifier: user.id })
-      if (!pullLimit.allowed) return NextResponse.json({ error: 'Too many provider imports; try again in a few minutes' }, { status: 429 })
+      if (!pullLimit.allowed) return NextResponse.json({ error: 'Too many provider imports; try again in a few minutes' }, { status: 429, headers: rateLimitHeaders(pullLimit) })
       try {
         parsed = await fetchProviderImport(body.data.provider.name, body.data.provider.token, body.data.provider.scope || undefined)
       } catch (error) {
