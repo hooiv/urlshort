@@ -32,6 +32,14 @@ describe('bulkEditSchema', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { notStartedUrl: null } }).success).toBe(true)
     expect(bulkEditSchema.safeParse({ links, changes: { notStartedUrl: 'javascript:alert(1)' } }).success).toBe(false)
   })
+  it('validates dailyClickCap bounds and null clears', () => {
+    expect(bulkEditSchema.safeParse({ links, changes: { dailyClickCap: 100 } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { dailyClickCap: null } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { dailyClickCap: 0 } }).success).toBe(false)
+    expect(bulkEditSchema.safeParse({ links, changes: { dailyClickCap: 1.5 } }).success).toBe(false)
+    expect(bulkEditSchema.safeParse({ links, changes: { dailyClickCap: 10_000_001 } }).success).toBe(false)
+  })
+
   it('rejects non-positive or fractional maxClicks', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { maxClicks: 0 } }).success).toBe(false)
     expect(bulkEditSchema.safeParse({ links, changes: { maxClicks: 1.5 } }).success).toBe(false)

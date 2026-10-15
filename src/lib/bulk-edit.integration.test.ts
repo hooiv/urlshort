@@ -126,6 +126,16 @@ describe('real database: bulk pin and redirect status', () => {
       const ok = await applyBulkEdit(owner.id, { links: [gated.id], changes: { maxClicks: null, redirectStatus: 308 } })
       expect(ok.ok).toBe(true)
 
+      // Daily cap: set, refused on a permanent-redirect link, cleared.
+      const capped = await applyBulkEdit(owner.id, { links: [b.id], changes: { dailyClickCap: 50, redirectStatus: 307 } })
+      expect(capped.ok && capped.updated.length).toBe(1)
+      expect((await db.url.findUniqueOrThrow({ where: { id: b.id } })).dailyClickCap).toBe(50)
+      const perm = await applyBulkEdit(owner.id, { links: [b.id], changes: { redirectStatus: 301 } })
+      expect(perm.ok).toBe(false)
+      const clear = await applyBulkEdit(owner.id, { links: [b.id], changes: { dailyClickCap: null } })
+      expect(clear.ok && clear.updated.length).toBe(1)
+      expect((await db.url.findUniqueOrThrow({ where: { id: b.id } })).dailyClickCap).toBeNull()
+
       const reset = await applyBulkEdit(owner.id, { links: [a.id], changes: { pinned: false, redirectStatus: null } })
       expect(reset.ok && reset.updated.length).toBe(1)
       const back = await db.url.findUniqueOrThrow({ where: { id: a.id } })

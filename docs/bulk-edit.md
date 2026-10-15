@@ -32,6 +32,7 @@
 | `redirectStatus` | `301`, `302`, `307` or `308` (`null` resets to the 307 default). Permanent codes are refused, for the whole batch, on any link that ends up with a password, expiry, go-live date, click limit or targeting rules |
 | `password` | 4-128 chars: protect every link with this password (hashed once per batch; never returned or written to the audit log, which records only `passwordProtected`), or `null` to remove protection. Existing unlock cookies stop working |
 | `maxClicks` | integer 1-1,000,000,000, or `null` to remove the click limit |
+| `dailyClickCap` | integer 1-10,000,000 clicks per UTC day, or `null` to remove the cap |
 | `extendExpiryDays` | integer 1-3650; moves each link's own expiry out by N days from the later of its expiry and now. Links with no expiry are left unchanged. Cannot be combined with `expiresAt` |
 | `archived` | `true` pauses the link, `false` restores it |
 | `trash` | `true` moves the links to the trash (restorable for the retention window from `/manage/trash`). Must be the only change; audited per link as `trashed: false → true` |

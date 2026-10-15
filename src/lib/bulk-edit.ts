@@ -6,6 +6,7 @@ import { folderWriteError, visibleUrlWhere } from '@/lib/folders'
 import { applyUtmTemplate, normalizeUtmValues, UTM_KEYS, type UtmValues } from '@/lib/utm-templates'
 import { invalidateLinks } from '@/lib/link-cache'
 import { parseRedirectStatus, assertStatusCompatible } from '@/lib/redirect-status'
+import { MAX_DAILY_CLICK_CAP } from '@/lib/daily-click-cap'
 import { hashGatePassword } from '@/lib/password-gate'
 import { normalizePixelId, PIXEL_PROVIDERS, PixelValidationError, type PixelProvider } from '@/lib/retargeting-pixels'
 import { rewriteDestination, validateRewriteSpec, type RewriteSpec } from '@/lib/destination-rewrite'
@@ -33,6 +34,8 @@ export const bulkEditSchema = z.object({
     startsAt: z.string().datetime({ offset: true }).nullable().optional(),
     /** null removes the click limit. */
     maxClicks: z.number().int().min(1).max(1_000_000_000).nullable().optional(),
+    /** Max clicks admitted per UTC day; null removes the cap. */
+    dailyClickCap: z.number().int().min(1).max(MAX_DAILY_CLICK_CAP).nullable().optional(),
     /** Where visitors land once a link expires or hits its click limit; null clears it. */
     expiredUrl: z.string().trim().url().max(2048).refine((u) => /^https?:\/\//i.test(u), 'expiredUrl must be http(s)').nullable().optional(),
     /** Where visitors land before the link's go-live time; null clears it. */
@@ -103,7 +106,7 @@ export function nextTags(current: string[], c: Pick<BulkEditChanges, 'addTags' |
 
 type LinkRow = {
   id: string; shortCode: string; originalUrl: string; tags: string[]; isActive: boolean
-  expiresAt: Date | null; startsAt: Date | null; maxClicks: number | null; expiredUrl: string | null; notStartedUrl: string | null; cloaked: boolean; metaPixelId: string | null; googleTagId: string | null; xPixelId: string | null; linkedinPartnerId: string | null; tiktokPixelId: string | null; pinnedAt: Date | null; redirectStatus: number | null; notes: string | null; passwordHash: string | null; folderId: string | null; workspaceId: string | null; userId: string | null
+  expiresAt: Date | null; startsAt: Date | null; maxClicks: number | null; dailyClickCap: number | null; expiredUrl: string | null; notStartedUrl: string | null; cloaked: boolean; metaPixelId: string | null; googleTagId: string | null; xPixelId: string | null; linkedinPartnerId: string | null; tiktokPixelId: string | null; pinnedAt: Date | null; redirectStatus: number | null; notes: string | null; passwordHash: string | null; folderId: string | null; workspaceId: string | null; userId: string | null
 }
 
 const PIXEL_FIELDS = { meta: 'metaPixelId', google: 'googleTagId', x: 'xPixelId', linkedin: 'linkedinPartnerId', tiktok: 'tiktokPixelId' } as const satisfies Record<PixelProvider, 'metaPixelId' | 'googleTagId' | 'xPixelId' | 'linkedinPartnerId' | 'tiktokPixelId'>
@@ -124,7 +127,7 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
   const c = input.changes
   const rows: LinkRow[] = await prisma.url.findMany({
     where: { AND: [{ deletedAt: null, OR: [{ id: { in: keys } }, { shortCode: { in: keys } }] }, visibleUrlWhere(userId)] },
-    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, startsAt: true, maxClicks: true, expiredUrl: true, notStartedUrl: true, cloaked: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, pinnedAt: true, redirectStatus: true, notes: true, passwordHash: true, folderId: true, workspaceId: true, userId: true },
+    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, startsAt: true, maxClicks: true, dailyClickCap: true, expiredUrl: true, notStartedUrl: true, cloaked: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, pinnedAt: true, redirectStatus: true, notes: true, passwordHash: true, folderId: true, workspaceId: true, userId: true },
   })
   const found = new Set(rows.flatMap((r) => [r.id, r.shortCode]))
   const failures: BulkEditFailure[] = keys.filter((k) => !found.has(k)).map((link) => ({ link, reason: 'Link not found' }))
@@ -213,6 +216,9 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
     if (c.maxClicks !== undefined && c.maxClicks !== r.maxClicks) {
       data.maxClicks = c.maxClicks; before.maxClicks = r.maxClicks; after.maxClicks = c.maxClicks
     }
+    if (c.dailyClickCap !== undefined && c.dailyClickCap !== r.dailyClickCap) {
+      data.dailyClickCap = c.dailyClickCap; before.dailyClickCap = r.dailyClickCap; after.dailyClickCap = c.dailyClickCap
+    }
     if (c.expiredUrl !== undefined && c.expiredUrl !== r.expiredUrl) {
       data.expiredUrl = c.expiredUrl; before.expiredUrl = r.expiredUrl; after.expiredUrl = c.expiredUrl
     }
@@ -250,14 +256,15 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
       data.isActive = !c.archived; before.isActive = r.isActive; after.isActive = !c.archived
     }
     if (c.trash) { data.deletedAt = new Date(); before.trashed = false; after.trashed = true }
-    if (c.redirectStatus === 301 || c.redirectStatus === 308) {
+    if (c.redirectStatus === 301 || c.redirectStatus === 308 || (typeof c.dailyClickCap === 'number' && c.redirectStatus === undefined && (r.redirectStatus === 301 || r.redirectStatus === 308))) {
       try {
-        assertStatusCompatible(c.redirectStatus, {
+        assertStatusCompatible((c.redirectStatus ?? r.redirectStatus) as 301 | 308, {
           hasPassword: (data.passwordHash !== undefined ? data.passwordHash : r.passwordHash) != null,
           hasExpiry: (data.expiresAt !== undefined ? data.expiresAt : r.expiresAt) != null,
           hasStart: (data.startsAt !== undefined ? data.startsAt : r.startsAt) != null,
           hasMaxClicks: (data.maxClicks !== undefined ? data.maxClicks : r.maxClicks) != null,
           hasRules: (ruleCounts.get(r.id) ?? 0) > 0,
+          hasDailyCap: (data.dailyClickCap !== undefined ? data.dailyClickCap : r.dailyClickCap) != null,
         })
       } catch (e) {
         failures.push({ link: r.shortCode, reason: (e as Error).message })

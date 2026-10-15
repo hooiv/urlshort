@@ -25,6 +25,7 @@ export interface PermanenceFacts {
   hasStart: boolean
   hasMaxClicks: boolean
   hasRules: boolean
+  hasDailyCap?: boolean
 }
 
 /** Permanent redirects get cached by browsers and would bypass later gates. */
@@ -35,6 +36,7 @@ export function assertStatusCompatible(status: RedirectStatus | null, f: Permane
   if (f.hasExpiry) reasons.push('an expiry date')
   if (f.hasStart) reasons.push('a go-live date')
   if (f.hasMaxClicks) reasons.push('a click limit')
+  if (f.hasDailyCap) reasons.push('a daily click cap')
   if (f.hasRules) reasons.push('targeting rules')
   if (reasons.length) throw new Error(`Permanent redirects (${status}) cannot be used with ${reasons.join(', ')}`)
 }
