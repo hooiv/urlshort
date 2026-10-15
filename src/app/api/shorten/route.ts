@@ -1,3 +1,4 @@
+import { buildLinkSearchWhere } from '@/lib/link-search'
 import { parseClickIdParam } from '@/lib/click-id-param'
 import { MAX_PINNED_LINKS, pinnedFirst } from '@/lib/link-pins'
 import { NextRequest, NextResponse } from 'next/server'
@@ -390,21 +391,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid cursor' }, { status: 400 })
     }
 
+    const searchWhere = buildLinkSearchWhere(search)
     const urls = await prisma.url.findMany({
       where: {
         deletedAt: null,
         AND: [
           visibleUrlWhere(user.id),
           ...(folderFilter === 'none' ? [{ folderId: null }] : folderFilter ? [{ folderId: folderFilter }] : []),
-          ...(search
-            ? [{
-                OR: [
-                  { shortCode: { contains: search, mode: 'insensitive' as const } },
-                  { title: { contains: search, mode: 'insensitive' as const } },
-                  { originalUrl: { contains: search, mode: 'insensitive' as const } },
-                ],
-              }]
-            : []),
+          ...(searchWhere ? [searchWhere] : []),
           ...(tagFilter ? [{ tags: { has: tagFilter } }] : []),
           ...(pinnedOnly ? [{ pinnedAt: { not: null } }] : []),
           ...(cursor && !pinnedOnly ? [{ createdAt: { lt: cursor } }] : []),
