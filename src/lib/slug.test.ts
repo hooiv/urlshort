@@ -46,3 +46,11 @@ describe('Slug Suggestion Generator', () => {
     for (const slug of out) expect(slug).toMatch(/^[a-z0-9-]+$/)
   })
 })
+
+describe('generateSlugSuggestions truncation', () => {
+  it('never emits a slug ending in a hyphen after truncating to 32 chars', () => {
+    const out = generateSlugSuggestions('Internationalization Documentation Modernization Guide', null)
+    expect(out.length).toBeGreaterThan(0)
+    for (const s of out) expect(s).toMatch(/[a-z0-9]$/)
+  })
+})

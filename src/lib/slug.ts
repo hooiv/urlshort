@@ -32,14 +32,14 @@ export function generateSlugSuggestions(
       // Variant A: first 2-3 words
       const fullKebab = tokensToUse.slice(0, 3).join('-')
       if (fullKebab.length >= 3 && !isReservedCode(fullKebab)) {
-        suggestions.add(fullKebab.slice(0, 32))
+        suggestions.add(fullKebab.slice(0, 32).replace(/[-_]+$/, ''))
       }
 
       // Variant B: first 2 words + current year
       const year = new Date().getFullYear()
       const yearKebab = `${tokensToUse.slice(0, 2).join('-')}-${year}`
       if (yearKebab.length >= 3 && !isReservedCode(yearKebab)) {
-        suggestions.add(yearKebab.slice(0, 32))
+        suggestions.add(yearKebab.slice(0, 32).replace(/[-_]+$/, ''))
       }
 
       // Variant C: "get-" or "go-" prefix if single keyword
@@ -60,13 +60,13 @@ export function generateSlugSuggestions(
       if (pathFiltered.length > 0) {
         const lastSegment = pathFiltered[pathFiltered.length - 1]
         if (lastSegment.length >= 3 && !isReservedCode(lastSegment)) {
-          suggestions.add(lastSegment.slice(0, 32))
+          suggestions.add(lastSegment.slice(0, 32).replace(/[-_]+$/, ''))
         }
 
         if (pathFiltered.length >= 2) {
           const combo = `${pathFiltered[0]}-${pathFiltered[pathFiltered.length - 1]}`
           if (combo.length >= 3 && !isReservedCode(combo)) {
-            suggestions.add(combo.slice(0, 32))
+            suggestions.add(combo.slice(0, 32).replace(/[-_]+$/, ''))
           }
         }
       }
