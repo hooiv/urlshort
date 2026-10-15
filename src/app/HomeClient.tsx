@@ -13,6 +13,7 @@ import SplitTestingPanel from '@/app/components/SplitTestingPanel'
 import SocialPreview from '@/app/components/SocialPreview'
 import ShortenResult from '@/app/components/ShortenResult'
 import { useSlugAvailability } from '@/app/components/useSlugAvailability'
+import { usePreflight } from '@/app/components/usePreflight'
 
 export default function Home() {
   const {
@@ -30,6 +31,7 @@ export default function Home() {
 
   const [showUtm, setShowUtm] = useState(false)
   const slug = useSlugAvailability(form.customCode)
+  const preflight = usePreflight(form.url)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [showLivePreview, setShowLivePreview] = useState(false)
   const [showSecurity, setShowSecurity] = useState(false)
@@ -58,7 +60,20 @@ export default function Home() {
                 placeholder="https://your-product.com/landing-page"
                 className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-5 py-4 text-base text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10"
                 disabled={isLoading}
+                aria-describedby="preflight-status"
               />
+              <div id="preflight-status" aria-live="polite" className="mt-2 space-y-1 text-xs">
+                {preflight.status === 'checking' && <p className="text-slate-500">Checking destination…</p>}
+                {preflight.status === 'done' && preflight.issues.length === 0 && <p className="text-emerald-400">Destination looks good</p>}
+                {preflight.status === 'done' && preflight.issues.map((issue) => (
+                  <p
+                    key={issue.code}
+                    className={issue.severity === 'error' ? 'text-red-400' : issue.severity === 'warning' ? 'text-amber-400' : 'text-slate-400'}
+                  >
+                    {issue.message}
+                  </p>
+                ))}
+              </div>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
