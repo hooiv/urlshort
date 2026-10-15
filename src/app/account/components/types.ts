@@ -34,6 +34,7 @@ export type ApiKeyRow = {
   revokedAt: string | null
   allowedIps?: string[]
   createdAt: string
+  health?: { status: 'revoked' | 'expired' | 'expiring' | 'stale' | 'unused' | 'healthy'; advice?: string; broad: boolean }
 }
 
 export type AuthMode = 'login' | 'register'

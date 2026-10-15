@@ -28,12 +28,6 @@ export default function ApiKeysSection() {
           <p className="text-xs text-slate-500">
             Programmatic access — send as <code className="text-slate-400">x-api-key</code> or{' '}
             <code className="text-slate-400">Authorization: Bearer</code>. See the{' '}
-            <Link
-              href="/status"
-              className="rounded-lg border border-slate-700 px-3 py-2 text-sm text-slate-300 hover:border-slate-500"
-            >
-              Status
-            </Link>
             <Link href="/api-docs" className="text-blue-300 underline">
               API reference
             </Link>
@@ -92,7 +86,26 @@ export default function ApiKeysSection() {
                   {apiKey.revokedAt ? (
                     <span className="rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-500">revoked</span>
                   ) : null}
+                  {apiKey.health && !apiKey.revokedAt && apiKey.health.status !== 'healthy' && (
+                    <span
+                      title={apiKey.health.advice}
+                      className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-300"
+                    >
+                      {apiKey.health.status}
+                    </span>
+                  )}
+                  {apiKey.health?.broad && !apiKey.revokedAt && (
+                    <span
+                      title="Full-access key with no IP allowlist. Prefer scoped keys."
+                      className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] text-rose-300"
+                    >
+                      full access
+                    </span>
+                  )}
                 </div>
+                {apiKey.health?.advice && !apiKey.revokedAt && (
+                  <p className="mt-0.5 text-xs text-amber-200/80">{apiKey.health.advice}</p>
+                )}
                 <div className="mt-0.5 font-mono text-xs text-slate-600">
                   {apiKey.prefix}… · created {new Date(apiKey.createdAt).toLocaleDateString()}
                   {apiKey.lastUsedAt
