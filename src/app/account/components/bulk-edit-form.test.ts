@@ -49,3 +49,15 @@ describe('destination rewrite form', () => {
     expect(build({ ...empty, rewriteMode: 'host' })).toEqual({ error: 'Enter the destination text to find' })
   })
 })
+
+describe('bulk edit limits', () => {
+  it('builds limit, fallback, note and cloak changes', () => {
+    const r = buildBulkEditChanges({ ...emptyBulkEditForm, maxClicks: '500', dailyCap: 'clear', expiredUrl: 'https://x.test/over', notes: ' hi ', cloak: 'on' })
+    expect(r).toEqual({ changes: { maxClicks: 500, dailyClickCap: null, expiredUrl: 'https://x.test/over', notes: 'hi', cloaked: true } })
+  })
+  it('rejects bad numbers and urls', () => {
+    expect(buildBulkEditChanges({ ...emptyBulkEditForm, maxClicks: '0' })).toHaveProperty('error')
+    expect(buildBulkEditChanges({ ...emptyBulkEditForm, dailyCap: '1.5' })).toHaveProperty('error')
+    expect(buildBulkEditChanges({ ...emptyBulkEditForm, expiredUrl: 'javascript:alert(1)' })).toHaveProperty('error')
+  })
+})

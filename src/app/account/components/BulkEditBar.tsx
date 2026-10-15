@@ -163,6 +163,37 @@ export default function BulkEditBar({
               </button>
             </div>
           </label>
+          <label className="text-xs text-slate-400">Click limit
+            <div className="mt-1 flex gap-2">
+              <input type="number" min={1} className="input w-full" placeholder="Total clicks" value={form.maxClicks === 'clear' ? '' : form.maxClicks} onChange={(e) => set({ maxClicks: e.target.value })} />
+              <button type="button" className="whitespace-nowrap rounded-lg border border-slate-700 px-2 text-slate-300" onClick={() => set({ maxClicks: form.maxClicks === 'clear' ? '' : 'clear' })}>{form.maxClicks === 'clear' ? 'Will clear' : 'Clear'}</button>
+            </div>
+          </label>
+          <label className="text-xs text-slate-400">Daily click cap
+            <div className="mt-1 flex gap-2">
+              <input type="number" min={1} className="input w-full" placeholder="Clicks per day" value={form.dailyCap === 'clear' ? '' : form.dailyCap} onChange={(e) => set({ dailyCap: e.target.value })} />
+              <button type="button" className="whitespace-nowrap rounded-lg border border-slate-700 px-2 text-slate-300" onClick={() => set({ dailyCap: form.dailyCap === 'clear' ? '' : 'clear' })}>{form.dailyCap === 'clear' ? 'Will clear' : 'Clear'}</button>
+            </div>
+          </label>
+          <label className="text-xs text-slate-400">Fallback URL (expired / limit hit)
+            <div className="mt-1 flex gap-2">
+              <input type="url" className="input w-full" placeholder="https://…" value={form.expiredUrl === 'clear' ? '' : form.expiredUrl} onChange={(e) => set({ expiredUrl: e.target.value })} />
+              <button type="button" className="whitespace-nowrap rounded-lg border border-slate-700 px-2 text-slate-300" onClick={() => set({ expiredUrl: form.expiredUrl === 'clear' ? '' : 'clear' })}>{form.expiredUrl === 'clear' ? 'Will clear' : 'Clear'}</button>
+            </div>
+          </label>
+          <label className="text-xs text-slate-400">Internal note
+            <div className="mt-1 flex gap-2">
+              <input className="input w-full" value={form.notes === 'clear' ? '' : form.notes} onChange={(e) => set({ notes: e.target.value })} />
+              <button type="button" className="whitespace-nowrap rounded-lg border border-slate-700 px-2 text-slate-300" onClick={() => set({ notes: form.notes === 'clear' ? '' : 'clear' })}>{form.notes === 'clear' ? 'Will clear' : 'Clear'}</button>
+            </div>
+          </label>
+          <label className="text-xs text-slate-400">Link cloaking
+            <select className="input mt-1 w-full" value={form.cloak} onChange={(e) => set({ cloak: e.target.value as BulkEditForm['cloak'] })}>
+              <option value="">Leave as is</option>
+              <option value="on">Cloak</option>
+              <option value="off">Uncloak</option>
+            </select>
+          </label>
           <div className="grid grid-cols-3 gap-2 text-xs text-slate-400">
             <label>utm_source<input className="input mt-1 w-full" value={form.utmSource} onChange={(e) => set({ utmSource: e.target.value })} /></label>
             <label>utm_medium<input className="input mt-1 w-full" value={form.utmMedium} onChange={(e) => set({ utmMedium: e.target.value })} /></label>

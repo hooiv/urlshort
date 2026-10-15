@@ -14,9 +14,14 @@ export type BulkEditForm = {
   rewriteMode: '' | 'host' | 'prefix' | 'text'
   rewriteFrom: string
   rewriteTo: string
+  maxClicks: '' | 'clear' | string
+  dailyCap: '' | 'clear' | string
+  expiredUrl: '' | 'clear' | string
+  notes: '' | 'clear' | string
+  cloak: '' | 'on' | 'off'
 }
 
-export const emptyBulkEditForm: BulkEditForm = { addTags: '', removeTags: '', folder: '', expiry: '', extendDays: '', state: '', password: '', pin: '', redirect: '', utmSource: '', utmMedium: '', utmCampaign: '', rewriteMode: '', rewriteFrom: '', rewriteTo: '' }
+export const emptyBulkEditForm: BulkEditForm = { addTags: '', removeTags: '', folder: '', expiry: '', extendDays: '', state: '', password: '', pin: '', redirect: '', utmSource: '', utmMedium: '', utmCampaign: '', rewriteMode: '', rewriteFrom: '', rewriteTo: '', maxClicks: '', dailyCap: '', expiredUrl: '', notes: '', cloak: '' }
 
 const splitTags = (v: string) => v.split(',').map((t) => t.trim()).filter(Boolean)
 
@@ -68,6 +73,27 @@ export function buildBulkEditChanges(form: BulkEditForm, now = new Date()): { ch
       ? { mode: 'text', find: from, replace: form.rewriteTo }
       : { mode: form.rewriteMode, from, to }
   }
+  for (const [key, raw, max, label] of [['maxClicks', form.maxClicks, 1_000_000_000, 'Click limit'], ['dailyClickCap', form.dailyCap, 1_000_000_000, 'Daily click cap']] as const) {
+    const v = raw.trim()
+    if (v === 'clear') changes[key] = null
+    else if (v) {
+      const n = Number(v)
+      if (!Number.isInteger(n) || n < 1 || n > max) return { error: `${label} must be a whole number of at least 1` }
+      changes[key] = n
+    }
+  }
+  const eu = form.expiredUrl.trim()
+  if (eu === 'clear') changes.expiredUrl = null
+  else if (eu) {
+    if (!/^https?:\/\/\S+$/i.test(eu) || eu.length > 2048) return { error: 'Fallback URL must start with http:// or https://' }
+    changes.expiredUrl = eu
+  }
+  if (form.notes === 'clear') changes.notes = null
+  else if (form.notes.trim()) {
+    if (form.notes.trim().length > 2000) return { error: 'Notes are limited to 2000 characters' }
+    changes.notes = form.notes.trim()
+  }
+  if (form.cloak) changes.cloaked = form.cloak === 'on'
   if (!Object.keys(changes).length) return { error: 'Choose at least one change' }
   return { changes }
 }
