@@ -65,3 +65,13 @@ Add `"dryRun": true` to preview a batch. It runs every check a real edit does (v
 - `{ "mode": "text", "find": "...", "replace": "..." }` literal (non-regex) replace.
 
 Every result must be http(s), at most 2048 chars and must not introduce a new link-safety concern; otherwise the whole batch is refused and nothing changes. Use `dryRun: true` to preview. Each rewrite writes a destination revision ("Bulk destination rewrite") and an audit event.
+
+## Retargeting pixels
+
+`changes.pixels` sets or clears retargeting pixel ids on every selected link in the same transaction:
+
+```json
+{ "links": ["promo", "sale"], "changes": { "pixels": { "meta": "1234567890", "google": "G-ABCD1234", "tiktok": null } } }
+```
+
+Providers: `meta`, `google`, `x`, `linkedin`, `tiktok`. `null` or an empty string clears that provider; providers you omit are untouched. Ids use the same format checks as the single-link editor, so a bad id rejects the whole request (400) before anything is written. Each changed link gets an audit event with before/after ids, and `dryRun` previews the diff.

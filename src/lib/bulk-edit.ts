@@ -7,6 +7,7 @@ import { applyUtmTemplate, normalizeUtmValues, UTM_KEYS, type UtmValues } from '
 import { invalidateLinks } from '@/lib/link-cache'
 import { parseRedirectStatus, assertStatusCompatible } from '@/lib/redirect-status'
 import { hashGatePassword } from '@/lib/password-gate'
+import { normalizePixelId, PIXEL_PROVIDERS, PixelValidationError, type PixelProvider } from '@/lib/retargeting-pixels'
 import { rewriteDestination, validateRewriteSpec, type RewriteSpec } from '@/lib/destination-rewrite'
 
 export const MAX_BULK_EDIT_LINKS = 500
@@ -50,6 +51,8 @@ export const bulkEditSchema = z.object({
     password: z.string().min(4).max(128).nullable().optional(),
     utm: z.object(Object.fromEntries(UTM_KEYS.map((k) => [k, z.string().max(120).nullable().optional()])) as Record<(typeof UTM_KEYS)[number], z.ZodOptional<z.ZodNullable<z.ZodString>>>).optional(),
     utmTemplateId: z.string().min(1).max(64).optional(),
+    /** Retargeting pixel ids per provider; null (or empty) clears that provider. Providers not listed are untouched. Ids are format-validated. */
+    pixels: z.object(Object.fromEntries(PIXEL_PROVIDERS.map((k) => [k, z.string().max(80).nullable().optional()])) as Record<PixelProvider, z.ZodOptional<z.ZodNullable<z.ZodString>>>).strict().optional(),
     /** Rewrite destinations: swap a hostname, a path prefix, or literal text. Refused for the whole batch if any result is invalid or newly risky. */
     rewriteDestination: z.discriminatedUnion('mode', [
       z.object({ mode: z.literal('host'), from: z.string().min(1).max(253), to: z.string().min(1).max(253) }).strict(),
@@ -66,6 +69,12 @@ export const bulkEditSchema = z.object({
     const err = validateRewriteSpec(c.rewriteDestination as RewriteSpec)
     if (err) ctx.addIssue({ code: 'custom', message: err })
     if (c.utm || c.utmTemplateId) ctx.addIssue({ code: 'custom', message: 'rewriteDestination cannot be combined with utm changes' })
+  }
+  if (c.pixels) {
+    if (!Object.values(c.pixels).some((v) => v !== undefined)) ctx.addIssue({ code: 'custom', message: 'pixels needs at least one provider' })
+    for (const k of PIXEL_PROVIDERS) {
+      try { normalizePixelId(k, c.pixels[k]) } catch (e) { if (e instanceof PixelValidationError) ctx.addIssue({ code: 'custom', message: e.message }) }
+    }
   }
   if (c.utm && c.utmTemplateId) ctx.addIssue({ code: 'custom', message: 'Send utm or utmTemplateId, not both' })
   if (c.extendExpiryDays !== undefined && c.expiresAt !== undefined) ctx.addIssue({ code: 'custom', message: 'Send expiresAt or extendExpiryDays, not both' })
@@ -94,8 +103,10 @@ export function nextTags(current: string[], c: Pick<BulkEditChanges, 'addTags' |
 
 type LinkRow = {
   id: string; shortCode: string; originalUrl: string; tags: string[]; isActive: boolean
-  expiresAt: Date | null; startsAt: Date | null; maxClicks: number | null; expiredUrl: string | null; notStartedUrl: string | null; cloaked: boolean; pinnedAt: Date | null; redirectStatus: number | null; notes: string | null; passwordHash: string | null; folderId: string | null; workspaceId: string | null; userId: string | null
+  expiresAt: Date | null; startsAt: Date | null; maxClicks: number | null; expiredUrl: string | null; notStartedUrl: string | null; cloaked: boolean; metaPixelId: string | null; googleTagId: string | null; xPixelId: string | null; linkedinPartnerId: string | null; tiktokPixelId: string | null; pinnedAt: Date | null; redirectStatus: number | null; notes: string | null; passwordHash: string | null; folderId: string | null; workspaceId: string | null; userId: string | null
 }
+
+const PIXEL_FIELDS = { meta: 'metaPixelId', google: 'googleTagId', x: 'xPixelId', linkedin: 'linkedinPartnerId', tiktok: 'tiktokPixelId' } as const satisfies Record<PixelProvider, 'metaPixelId' | 'googleTagId' | 'xPixelId' | 'linkedinPartnerId' | 'tiktokPixelId'>
 
 export type BulkEditFailure = { link: string; reason: string }
 export type BulkEditResult =
@@ -113,7 +124,7 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
   const c = input.changes
   const rows: LinkRow[] = await prisma.url.findMany({
     where: { AND: [{ deletedAt: null, OR: [{ id: { in: keys } }, { shortCode: { in: keys } }] }, visibleUrlWhere(userId)] },
-    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, startsAt: true, maxClicks: true, expiredUrl: true, notStartedUrl: true, cloaked: true, pinnedAt: true, redirectStatus: true, notes: true, passwordHash: true, folderId: true, workspaceId: true, userId: true },
+    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, startsAt: true, maxClicks: true, expiredUrl: true, notStartedUrl: true, cloaked: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, pinnedAt: true, redirectStatus: true, notes: true, passwordHash: true, folderId: true, workspaceId: true, userId: true },
   })
   const found = new Set(rows.flatMap((r) => [r.id, r.shortCode]))
   const failures: BulkEditFailure[] = keys.filter((k) => !found.has(k)).map((link) => ({ link, reason: 'Link not found' }))
@@ -210,6 +221,14 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
     }
     if (c.cloaked !== undefined && c.cloaked !== r.cloaked) {
       data.cloaked = c.cloaked; before.cloaked = r.cloaked; after.cloaked = c.cloaked
+    }
+    if (c.pixels) {
+      for (const k of PIXEL_PROVIDERS) {
+        if (c.pixels[k] === undefined) continue
+        const field = PIXEL_FIELDS[k]
+        const next = normalizePixelId(k, c.pixels[k])
+        if (next !== r[field]) { data[field] = next; before[field] = r[field]; after[field] = next }
+      }
     }
     if (c.pinned !== undefined && c.pinned !== Boolean(r.pinnedAt)) {
       data.pinnedAt = c.pinned ? new Date() : null; before.pinned = Boolean(r.pinnedAt); after.pinned = c.pinned

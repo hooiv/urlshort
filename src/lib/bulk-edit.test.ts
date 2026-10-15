@@ -77,3 +77,20 @@ describe('bulkEditSchema', () => {
     expect(bulkEditSchema.safeParse({ links: Array.from({ length: 501 }, (_, i) => `c${i}`), changes: { archived: true } }).success).toBe(false)
   })
 })
+
+describe('bulkEditSchema pixels', () => {
+  const links = ['abc']
+  it('accepts valid ids and null to clear', () => {
+    expect(bulkEditSchema.safeParse({ links, changes: { pixels: { meta: '1234567890', google: 'G-ABCD1234', tiktok: null } } }).success).toBe(true)
+  })
+  it('rejects malformed ids with the field name', () => {
+    const r = bulkEditSchema.safeParse({ links, changes: { pixels: { meta: 'abc' } } })
+    expect(r.success).toBe(false)
+    if (!r.success) expect(r.error.issues[0].message).toMatch(/metaPixelId/)
+  })
+  it('rejects empty pixels and unknown providers', () => {
+    expect(bulkEditSchema.safeParse({ links, changes: { pixels: {} } }).success).toBe(false)
+    expect(bulkEditSchema.safeParse({ links, changes: { pixels: { snap: '123' } } }).success).toBe(false)
+  })
+})
+
