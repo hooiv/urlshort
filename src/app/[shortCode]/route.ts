@@ -3,6 +3,7 @@ import { reserveDailyClick } from '@/lib/daily-click-cap'
 import { effectiveRedirectStatus } from '@/lib/redirect-status'
 import { applyRobotsHeader } from '@/lib/robots-header'
 import { NextRequest, NextResponse, after } from 'next/server'
+import { isWithinActiveHours, type ActiveHours } from '@/lib/active-hours'
 import { linkWindowState, notStartedTarget } from '@/lib/link-schedule'
 import { prisma } from '@/lib/prisma'
 import { appendClickId } from '@/lib/click-id-param'
@@ -92,6 +93,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
 
     if (linkWindowState(url) === 'scheduled') {
       return NextResponse.redirect(notStartedTarget(url, baseUrl), 307)
+    }
+
+    if (url.activeHours && !isWithinActiveHours(url.activeHours as ActiveHours)) {
+      return NextResponse.redirect(url.offHoursUrl || new URL('/coming-soon', baseUrl).toString(), 307)
     }
 
     if (url.expiresAt && new Date() > url.expiresAt) {
@@ -319,7 +324,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
       return applyRobotsHeader(response)
     }
 
-    const status = effectiveRedirectStatus(url.redirectStatus, { ruleMatched: destination !== url.originalUrl, gated: isBot || needsCap || !!url.expiresAt || !!url.startsAt || !!url.passwordHash })
+    const status = effectiveRedirectStatus(url.redirectStatus, { ruleMatched: destination !== url.originalUrl, gated: isBot || needsCap || !!url.expiresAt || !!url.startsAt || !!url.activeHours || !!url.passwordHash })
     const response = NextResponse.redirect(finalDestination, status)
     // Permanent codes are meant to be cached by browsers/CDNs; only the temporary ones are no-store.
     response.headers.set('Cache-Control', status === 301 || status === 308 ? 'public, max-age=3600' : 'private, no-store')

@@ -49,6 +49,8 @@ export type CachedLink = {
   expiredUrl: string | null
   startsAt: Date | null
   notStartedUrl: string | null
+  activeHours: unknown
+  offHoursUrl: string | null
   clickIdParam: string | null
   queryForwardMode: string
   queryForwardAllow: string[]
@@ -283,6 +285,8 @@ const linkSelect = {
   expiredUrl: true,
   startsAt: true,
   notStartedUrl: true,
+  activeHours: true,
+  offHoursUrl: true,
   clickIdParam: true,
   queryForwardMode: true,
   queryForwardAllow: true,

@@ -68,6 +68,8 @@ model Url {
   publicStatsEnabledAt       DateTime?
   startsAt                   DateTime?
   notStartedUrl              String?
+  activeHours                Json?
+  offHoursUrl                String?
   passwordHash               String?
   metaPixelId                String?
   googleTagId                String?
