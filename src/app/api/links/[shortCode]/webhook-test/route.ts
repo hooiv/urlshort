@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { createHmac } from 'node:crypto'
 import { getManageableUrl, EDIT_ROLES } from '@/lib/authorization'
 import { assertDestinationSafeForStorage } from '@/lib/destination-health'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
 export const webhookTestSchema = z.object({
   webhookUrl: z.string().trim().max(2048).optional(),
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
 
     // Probes trigger outbound requests to third parties — throttle per link.
     const limit = await rateLimit(request, { name: 'webhook-test', identifier: link.id, limit: 5, windowMs: 60_000 })
-    if (!limit.allowed) return NextResponse.json({ error: 'Too many webhook tests. Try again shortly.' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many webhook tests. Try again shortly.' }, { status: 429, headers: rateLimitHeaders(limit) })
 
     const parsedBody = webhookTestSchema.safeParse(await request.json().catch(() => ({})))
     if (!parsedBody.success) return NextResponse.json({ error: 'Invalid webhook URL' }, { status: 400 })

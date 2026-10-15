@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser, hashPassword, verifyPassword, validatePassword } from '@/lib/auth'
 import { recordAudit } from '@/lib/audit'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
 const SESSION_COOKIE = 'ql_session'
 
@@ -15,7 +15,7 @@ const SESSION_COOKIE = 'ql_session'
 export async function POST(request: NextRequest) {
   try {
     const limit = await rateLimit(request, { name: 'password-change', limit: 5, windowMs: 60 * 60_000 })
-    if (!limit.allowed) return NextResponse.json({ error: 'Too many attempts. Try again later.' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many attempts. Try again later.' }, { status: 429, headers: rateLimitHeaders(limit) })
 
     const user = await getCurrentUser(request)
     if (!user) return NextResponse.json({ error: 'Authentication required' }, { status: 401 })

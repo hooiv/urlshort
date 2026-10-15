@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { getManageableUrl } from '@/lib/authorization'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { recordAudit } from '@/lib/audit'
 import { edgeTarget, normalizeHost, verificationRecord } from '@/lib/domains'
 import { DomainOwnershipError, registerDomain } from '@/lib/domain-registration'
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
   const access = await getManageableUrl(request, shortCode)
   if (!access.url) return NextResponse.json({ error: access.error }, { status: access.status })
   const limit = await rateLimit(request, { name: 'domains-connect', identifier: access.url.id, limit: 5, windowMs: 60_000 })
-  if (!limit.allowed) return NextResponse.json({ error: 'Too many attempts. Try again shortly.' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
+  if (!limit.allowed) return NextResponse.json({ error: 'Too many attempts. Try again shortly.' }, { status: 429, headers: rateLimitHeaders(limit) })
 
   const parsed = ConnectBody.safeParse(await request.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Invalid request' }, { status: 400 })

@@ -23,4 +23,15 @@ describe('API 429 responses carry rate-limit headers', () => {
     }
     expect(offenders).toEqual([])
   })
+
+  it('no route hand-rolls Retry-After; rateLimitHeaders emits the full RateLimit-* set', () => {
+    const offenders: string[] = []
+    for (const file of walk(__dirname)) {
+      readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
+        if (/status: 429/.test(line) && /'Retry-After'/.test(line) && !/\.\.\.rateLimitHeaders/.test(line)) offenders.push(`${file}:${i + 1}`)
+      })
+    }
+    // (none)
+    expect(offenders).toEqual([])
+  })
 })

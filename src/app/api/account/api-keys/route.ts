@@ -4,7 +4,7 @@ import { getCurrentUser } from '@/lib/auth'
 import { recordAudit } from '@/lib/audit'
 import { createApiKey, parseApiKeyExpiry } from '@/lib/api-keys'
 import { parseAllowlist } from '@/lib/ip-allowlist'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
 /** GET /api/account/api-keys — list the current user's keys (no secrets). */
 export async function GET(request: NextRequest) {
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     if (!user) return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
 
     const limit = await rateLimit(request, { name: 'apikey-create', limit: 10, windowMs: 60 * 60_000 })
-    if (!limit.allowed) return NextResponse.json({ error: 'Too many key operations' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many key operations' }, { status: 429, headers: rateLimitHeaders(limit) })
 
     const body = (await request.json().catch(() => ({}))) as Record<string, unknown>
     const name = typeof body.name === 'string' ? body.name.trim().slice(0, 80) : ''

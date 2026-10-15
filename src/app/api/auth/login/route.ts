@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSession, normalizeEmail, setSessionCookie, verifyPassword } from '@/lib/auth'
 import { recordAudit } from '@/lib/audit'
 import { prisma } from '@/lib/prisma'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
 export async function POST(request: NextRequest) {
   try {
@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     if (!ipLimit.allowed) {
       return NextResponse.json(
         { error: 'Too many sign-in attempts. Please try again later.' },
-        { status: 429, headers: { 'Retry-After': String(ipLimit.retryAfterSeconds) } },
+        { status: 429, headers: rateLimitHeaders(ipLimit) },
       )
     }
 
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
     if (!accountLimit.allowed) {
       return NextResponse.json(
         { error: 'Too many sign-in attempts for this account. Please try again later.' },
-        { status: 429, headers: { 'Retry-After': String(accountLimit.retryAfterSeconds) } },
+        { status: 429, headers: rateLimitHeaders(accountLimit) },
       )
     }
 

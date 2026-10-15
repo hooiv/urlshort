@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { hasValidManagementToken } from '@/lib/management'
 import { probeDestination, normalizeHealthTarget } from '@/lib/destination-health'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
 import { invalidateLink } from '@/lib/link-cache'
 
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
   if ('response' in auth) return auth.response
   // Probes trigger outbound requests to third parties — throttle per link.
   const limit = await rateLimit(request, { name: 'health-probe', identifier: auth.url.id, limit: 10, windowMs: 60_000 })
-  if (!limit.allowed) return NextResponse.json({ error: 'Too many health checks. Try again shortly.' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
+  if (!limit.allowed) return NextResponse.json({ error: 'Too many health checks. Try again shortly.' }, { status: 429, headers: rateLimitHeaders(limit) })
   try {
     const body = (await request.json()) as Record<string, unknown>
     const target = typeof body.target === 'string' ? body.target : 'fallback'

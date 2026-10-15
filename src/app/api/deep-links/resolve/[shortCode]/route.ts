@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getOperatingSystem } from '@/lib/smart-routing'
 import { versionAtLeast } from '@/lib/deep-link'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
 export function isDeepLinkAccessible(url: { isActive: boolean; expiresAt: Date | null; riskStatus: string; passwordHash: string | null }): { allowed: boolean; reason?: string } {
   if (!url.isActive) return { allowed: false, reason: 'link_inactive' }
@@ -14,7 +14,7 @@ export function isDeepLinkAccessible(url: { isActive: boolean; expiresAt: Date |
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ shortCode: string }> }) {
   const limit = await rateLimit(request, { name: 'deeplink-resolve', limit: 120, windowMs: 60_000 })
-  if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
+  if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) })
   const { shortCode } = await params
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(shortCode)) return NextResponse.json({ error: 'Deep-link app is not configured' }, { status: 404 })
   const url = await prisma.url.findUnique({ where: { shortCode }, include: { deepLinkApp: true } })

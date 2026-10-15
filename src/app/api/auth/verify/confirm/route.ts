@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
 /**
  * POST /api/auth/verify/confirm — consume an email verification token.
@@ -10,7 +10,7 @@ import { rateLimit } from '@/lib/rate-limit'
 export async function POST(request: NextRequest) {
   try {
     const limit = await rateLimit(request, { name: 'verify-confirm', limit: 20, windowMs: 60 * 60_000 })
-    if (!limit.allowed) return NextResponse.json({ error: 'Too many attempts. Try again later.' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many attempts. Try again later.' }, { status: 429, headers: rateLimitHeaders(limit) })
 
     const body = (await request.json()) as Record<string, unknown>
     const token = String(body.token ?? '')

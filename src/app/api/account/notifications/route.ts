@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { recordAudit } from '@/lib/audit'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { parseAutoArchiveDays } from '@/lib/auto-archive'
 
 /** GET/PATCH /api/account/notifications — session-only email preferences (weekly performance digest). */
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   const limit = await rateLimit(request, { name: 'account-notifications', limit: 30, windowMs: 60_000 })
-  if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
+  if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) })
   const user = await getCurrentUser(request)
   if (!user) return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null

@@ -6,7 +6,7 @@ import { invalidateDomain } from '@/lib/link-cache'
 import { recordAudit } from '@/lib/audit'
 import { DomainOwnershipError, registerDomain } from '@/lib/domain-registration'
 import { getManageableUrl } from '@/lib/authorization'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
 export const domainBodySchema = z.object({
   host: z.string().max(253).optional(),
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
   const result = await getUrl(request, shortCode)
   if (result instanceof NextResponse) return result
   const limit = await rateLimit(request, { name: 'domains-bind', identifier: result.id, limit: 10, windowMs: 60_000 })
-  if (!limit.allowed) return NextResponse.json({ error: 'Too many domain requests. Try again shortly.' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
+  if (!limit.allowed) return NextResponse.json({ error: 'Too many domain requests. Try again shortly.' }, { status: 429, headers: rateLimitHeaders(limit) })
   try {
     const { host, path } = await parseDomainBody(request, shortCode)
     let domain
@@ -69,7 +69,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
   const result = await getUrl(request, shortCode)
   if (result instanceof NextResponse) return result
   const limit = await rateLimit(request, { name: 'domains-verify', identifier: result.id, limit: 10, windowMs: 60_000 })
-  if (!limit.allowed) return NextResponse.json({ error: 'Too many domain requests. Try again shortly.' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
+  if (!limit.allowed) return NextResponse.json({ error: 'Too many domain requests. Try again shortly.' }, { status: 429, headers: rateLimitHeaders(limit) })
   let host: string
   let path: string
   try {

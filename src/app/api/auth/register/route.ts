@@ -4,7 +4,7 @@ import { createSession, hashPassword, normalizeEmail, setSessionCookie, validate
 import { recordAudit } from '@/lib/audit'
 import { prisma } from '@/lib/prisma'
 import { slugifyWorkspace } from '@/lib/workspaces'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { renderEmailVerificationEmail, sendEmail } from '@/lib/email'
 
 const VERIFY_TTL_MS = 24 * 60 * 60_000
@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     if (!limit.allowed) {
       return NextResponse.json(
         { error: 'Too many accounts created from this network. Please try again later.' },
-        { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } },
+        { status: 429, headers: rateLimitHeaders(limit) },
       )
     }
 

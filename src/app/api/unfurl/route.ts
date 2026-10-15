@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { unfurlUrl } from '@/lib/unfurl'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
 export const unfurlSchema = z.object({ url: z.string().trim().min(1, { message: 'URL is required' }).max(2048, { message: 'URL is too long' }) })
 
@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     if (!limit.allowed) {
       return NextResponse.json(
         { error: 'Too many metadata requests. Please try again shortly.' },
-        { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } }
+        { status: 429, headers: rateLimitHeaders(limit) }
       )
     }
 

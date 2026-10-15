@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser, normalizeEmail } from '@/lib/auth'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { renderEmailVerificationEmail, sendEmail } from '@/lib/email'
 
 const VERIFY_TTL_MS = 24 * 60 * 60_000 // 24 hours
@@ -15,7 +15,7 @@ const VERIFY_TTL_MS = 24 * 60 * 60_000 // 24 hours
 export async function POST(request: NextRequest) {
   try {
     const limit = await rateLimit(request, { name: 'verify-request', limit: 5, windowMs: 60 * 60_000 })
-    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429, headers: rateLimitHeaders(limit) })
 
     const user = await getCurrentUser(request)
     if (!user) return NextResponse.json({ error: 'Authentication required' }, { status: 401 })

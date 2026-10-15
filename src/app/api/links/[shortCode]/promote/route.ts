@@ -5,7 +5,7 @@ import { getManageableUrl, EDIT_ROLES } from '@/lib/authorization'
 import { recordAudit } from '@/lib/audit'
 import { invalidateLink } from '@/lib/link-cache'
 import { assertDestinationSafeForStorage } from '@/lib/destination-health'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
 export const promoteSchema = z.object({
   ruleId: z.string().trim().min(1, { message: 'ruleId is required' }).max(100),
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
     const link = access.url
 
     const probeLimit = await rateLimit(request, { name: 'promote', identifier: link.id, limit: 10, windowMs: 60_000 })
-    if (!probeLimit.allowed) return NextResponse.json({ error: 'Too many promotion requests. Try again shortly.' }, { status: 429, headers: { 'Retry-After': String(probeLimit.retryAfterSeconds) } })
+    if (!probeLimit.allowed) return NextResponse.json({ error: 'Too many promotion requests. Try again shortly.' }, { status: 429, headers: rateLimitHeaders(probeLimit) })
 
     const parsedBody = promoteSchema.safeParse(await request.json().catch(() => ({})))
     if (!parsedBody.success) {

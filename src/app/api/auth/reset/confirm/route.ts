@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { hashPassword, validatePassword } from '@/lib/auth'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
 /**
  * POST /api/auth/reset/confirm — complete a password reset.
@@ -12,7 +12,7 @@ import { rateLimit } from '@/lib/rate-limit'
 export async function POST(request: NextRequest) {
   try {
     const limit = await rateLimit(request, { name: 'reset-confirm', limit: 10, windowMs: 60 * 60_000 })
-    if (!limit.allowed) return NextResponse.json({ error: 'Too many attempts. Try again later.' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many attempts. Try again later.' }, { status: 429, headers: rateLimitHeaders(limit) })
 
     const body = (await request.json()) as Record<string, unknown>
     const token = String(body.token ?? '')

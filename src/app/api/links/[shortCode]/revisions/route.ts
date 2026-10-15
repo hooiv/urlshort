@@ -7,7 +7,7 @@ import { getManageableUrl } from '@/lib/authorization'
 import { normalizeSafeUrl, parseOptionalDate } from '@/lib/smart-routing'
 import { assertDestinationSafeForStorage } from '@/lib/destination-health'
 import { invalidateLink } from '@/lib/link-cache'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
 export const revisionSchema = z.object({
   destinationUrl: z.string().trim().min(1, { message: 'Destination URL is required' }).max(2048),
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
   const auth = await authorize(request, shortCode)
   if ('response' in auth) return auth.response
   const limit = await rateLimit(request, { name: 'revisions', identifier: auth.url.id, limit: 20, windowMs: 60_000 })
-  if (!limit.allowed) return NextResponse.json({ error: 'Too many release requests. Try again shortly.' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
+  if (!limit.allowed) return NextResponse.json({ error: 'Too many release requests. Try again shortly.' }, { status: 429, headers: rateLimitHeaders(limit) })
   try {
     const parsedBody = revisionSchema.safeParse(await request.json().catch(() => ({})))
     if (!parsedBody.success) {

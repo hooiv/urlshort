@@ -5,7 +5,7 @@ import { normalizeEmail } from '@/lib/auth'
 import { ADMIN_ROLES, createInviteToken, hashInviteToken, requireWorkspaceRole } from '@/lib/workspaces'
 import { recordAudit } from '@/lib/audit'
 import { renderWorkspaceInviteEmail, sendEmail } from '@/lib/email'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
 export const inviteRoleSchema = z.enum(['admin', 'editor', 'analyst', 'viewer'])
 
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
   const access = await requireWorkspaceRole(request, workspaceId, ADMIN_ROLES)
   if (!access.membership) return NextResponse.json({ error: access.error }, { status: access.status })
   const limit = await rateLimit(request, { name: 'invite-create', identifier: workspaceId, limit: 20, windowMs: 60 * 60_000 })
-  if (!limit.allowed) return NextResponse.json({ error: 'Too many invites. Try again later.' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
+  if (!limit.allowed) return NextResponse.json({ error: 'Too many invites. Try again later.' }, { status: 429, headers: rateLimitHeaders(limit) })
   try {
     const body = (await request.json()) as Record<string, unknown>
     const email = normalizeEmail(String(body.email ?? ''))

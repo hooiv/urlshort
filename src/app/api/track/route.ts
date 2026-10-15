@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { verifyAttributionToken } from '@/lib/attribution'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { enforceUsage } from '@/lib/tenant-usage'
 import { getPrivacyPolicy, sanitizeAnalyticsMetadata, hashWithWorkspace } from '@/lib/privacy-ingestion'
 import { dispatchWebhooksForUrl } from '@/lib/webhooks'
@@ -36,7 +36,7 @@ export async function OPTIONS(request: NextRequest) { return new NextResponse(nu
 export async function POST(request: NextRequest) {
   try {
     const limit = await rateLimit(request, { name: 'track', limit: 60, windowMs: 60_000 })
-    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { ...corsHeaders(request.headers.get('origin')), 'Retry-After': String(limit.retryAfterSeconds) } })
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { ...corsHeaders(request.headers.get('origin')), ...rateLimitHeaders(limit) } })
 
     const body = (await request.json().catch(() => null)) as Record<string, unknown> | null
     const origin = request.headers.get('origin')

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getLinkByCode } from '@/lib/link-cache'
 import { createUnlockToken, verifyGatePassword } from '@/lib/password-gate'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
 const MAX_LINK_ATTEMPTS = 60
 const MAX_PASSWORD_LENGTH = 256
@@ -11,13 +11,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
   try {
     const limit = await rateLimit(request, { name: `password:${shortCode}`, limit: 10, windowMs: 5 * 60_000 })
     if (!limit.allowed) {
-      return NextResponse.json({ error: 'Too many password attempts. Try again later.' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
+      return NextResponse.json({ error: 'Too many password attempts. Try again later.' }, { status: 429, headers: rateLimitHeaders(limit) })
     }
     // Distributed guessing (many IPs, one link) bypasses the per-IP budget, so
     // every link also has a shared attempt budget across all clients.
     const linkLimit = await rateLimit(request, { name: 'password-link', limit: MAX_LINK_ATTEMPTS, windowMs: 10 * 60_000, identifier: shortCode })
     if (!linkLimit.allowed) {
-      return NextResponse.json({ error: 'Too many password attempts for this link. Try again later.' }, { status: 429, headers: { 'Retry-After': String(linkLimit.retryAfterSeconds) } })
+      return NextResponse.json({ error: 'Too many password attempts for this link. Try again later.' }, { status: 429, headers: rateLimitHeaders(linkLimit) })
     }
     let body: unknown
     try {

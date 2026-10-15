@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { normalizeEmail } from '@/lib/auth'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { renderPasswordResetEmail, sendEmail } from '@/lib/email'
 
 const RESET_TTL_MS = 60 * 60_000 // 1 hour
@@ -18,7 +18,7 @@ const RESET_TTL_MS = 60 * 60_000 // 1 hour
 export async function POST(request: NextRequest) {
   try {
     const limit = await rateLimit(request, { name: 'reset-request', limit: 5, windowMs: 60 * 60_000 })
-    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429, headers: { 'Retry-After': String(limit.retryAfterSeconds) } })
+    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests. Try again later.' }, { status: 429, headers: rateLimitHeaders(limit) })
 
     const body = (await request.json()) as Record<string, unknown>
     let email: string
