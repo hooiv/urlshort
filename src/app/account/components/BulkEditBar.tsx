@@ -8,12 +8,15 @@ import { buildBulkEditChanges, emptyBulkEditForm, type BulkEditForm } from '@/ap
 /** Sticky action bar for the links the user ticked. Sends one atomic PATCH /api/bulk/edit. */
 export default function BulkEditBar({
   selected,
+  shortCodes = [],
   workspaceId,
   sameWorkspace,
   onClear,
   onDone,
 }: {
   selected: string[]
+  /** Short codes of the selected links, used for the QR ZIP download (max 100). */
+  shortCodes?: string[]
   workspaceId: string | null
   /** False when the selection mixes workspaces: folder moves are then unavailable. */
   sameWorkspace: boolean
@@ -24,6 +27,35 @@ export default function BulkEditBar({
   const [busy, setBusy] = useState(false)
   const [form, setForm] = useState<BulkEditForm>(emptyBulkEditForm)
   const folders = useWritableFolders(open && sameWorkspace ? workspaceId : null)
+  const [qrBusy, setQrBusy] = useState(false)
+
+  async function downloadQrZip(format: 'png' | 'svg') {
+    if (shortCodes.length > 100) return toast.error('Select at most 100 links for a QR archive')
+    setQrBusy(true)
+    try {
+      const response = await fetch('/api/links/qr-zip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codes: shortCodes, format, track: true }),
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => null)
+        throw new Error(data?.error || 'QR download failed')
+      }
+      const skipped = response.headers.get('X-QR-Skipped')
+      const url = URL.createObjectURL(await response.blob())
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `quicklink-qr-${format}.zip`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success(skipped ? `Downloaded (skipped: ${skipped})` : `Downloaded ${shortCodes.length} QR codes`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'QR download failed')
+    } finally {
+      setQrBusy(false)
+    }
+  }
   const set = (patch: Partial<BulkEditForm>) => setForm((f) => ({ ...f, ...patch }))
 
   async function apply() {
@@ -60,6 +92,12 @@ export default function BulkEditBar({
         <span className="font-medium text-blue-300">{selected.length} selected</span>
         <button onClick={() => setOpen((v) => !v)} className="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-200 hover:border-slate-500">
           {open ? 'Hide options' : 'Edit selected'}
+        </button>
+        <button disabled={qrBusy || !shortCodes.length} onClick={() => downloadQrZip('png')} className="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-200 hover:border-slate-500 disabled:opacity-50">
+          {qrBusy ? 'Preparing…' : 'QR ZIP (PNG)'}
+        </button>
+        <button disabled={qrBusy || !shortCodes.length} onClick={() => downloadQrZip('svg')} className="rounded-lg border border-slate-700 px-3 py-1.5 text-slate-200 hover:border-slate-500 disabled:opacity-50">
+          QR ZIP (SVG)
         </button>
         <button onClick={onClear} className="ml-auto text-slate-400 hover:text-slate-200">Clear</button>
       </div>

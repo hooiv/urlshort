@@ -110,6 +110,7 @@ export default function LinksSection({
       )}
       <BulkEditBar
         selected={chosen.map((l) => l.id)}
+        shortCodes={chosen.map((l) => l.shortCode)}
         workspaceId={chosen[0]?.workspaceId ?? null}
         sameWorkspace={workspaces.size === 1 && Boolean(chosen[0]?.workspaceId)}
         onClear={() => setSelected([])}
