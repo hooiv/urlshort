@@ -77,6 +77,7 @@ const KEY_REACHABLE = [
   'analytics/trending/route.ts',
   'analytics/stale/route.ts',
   'analytics/spikes/route.ts',
+  'analytics/lifespan/route.ts',
   'analytics/concentration/route.ts',
   'analytics/drops/route.ts',
   'analytics/broken/route.ts',
