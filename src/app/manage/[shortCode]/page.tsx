@@ -16,6 +16,7 @@ import RoutingSimulator from '@/app/manage/[shortCode]/components/RoutingSimulat
 import WebhookSection from '@/app/manage/[shortCode]/components/WebhookSection'
 import PixelsCloakingSection from '@/app/manage/[shortCode]/components/PixelsCloakingSection'
 import ExpirationSection from '@/app/manage/[shortCode]/components/ExpirationSection'
+import ActiveHoursSection from '@/app/manage/[shortCode]/components/ActiveHoursSection'
 import TagsSection from '@/app/manage/[shortCode]/components/TagsSection'
 import NotesSection from '@/app/manage/[shortCode]/components/NotesSection'
 import DangerZone from '@/app/manage/[shortCode]/components/DangerZone'
@@ -153,6 +154,8 @@ export default function ManageLink() {
           onSaveExpiration={() => void controls.saveExpiration()}
           onSavePassword={() => void controls.savePassword()}
         />
+
+        <ActiveHoursSection shortCode={shortCode} token={controls.token} />
 
         <TagsSection
           tags={controls.tags}

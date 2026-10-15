@@ -15,3 +15,7 @@ Not covered: the edge-runtime redirect (`/edge/:code`) does not yet read `starts
 ## Owner email digest
 
 `/api/cron/expiry-digest` (daily 09:00 UTC, CRON_SECRET-protected) emails each owner the links expiring in ~7 days and ~1 day. Each link falls in one 24h window per threshold, so daily runs never repeat a link.
+
+## Active hours (weekly windows)
+
+Set `activeHours` (`{ timezone, windows: [{ days: [0-6], start: "HH:MM", end: "HH:MM" }] }`, up to 14 windows; an end at or before the start wraps past midnight) and optional `offHoursUrl` via `PATCH /api/links/:code`. Outside the windows visitors are redirected to `offHoursUrl`. Send `activeHours: null` to clear. Editable in the link studio under "Active Hours".
