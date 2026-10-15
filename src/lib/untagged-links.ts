@@ -31,11 +31,11 @@ export async function findUntaggedLinks(scope: AnalyticsScope, limit: number) {
     prisma.$queryRaw<Row[]>(Prisma.sql`
       SELECT u."id", u."shortCode", u."title", u."originalUrl", u."clicks", u."createdAt"
       FROM "urls" u
-      WHERE ${where} AND cardinality(u."tags") = 0
+      WHERE ${where} AND COALESCE(cardinality(u."tags"), 0) = 0
       ORDER BY u."clicks" DESC, u."createdAt" ASC, u."shortCode" ASC
       LIMIT ${limit}`),
     prisma.$queryRaw<{ total: bigint; untagged: bigint }[]>(Prisma.sql`
-      SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE cardinality(u."tags") = 0) AS untagged
+      SELECT COUNT(*) AS total, COUNT(*) FILTER (WHERE COALESCE(cardinality(u."tags"), 0) = 0) AS untagged
       FROM "urls" u WHERE ${where}`),
   ])
   const total = Number(counts[0]?.total ?? 0)
