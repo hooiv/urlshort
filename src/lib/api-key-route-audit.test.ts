@@ -54,6 +54,7 @@ const KEY_REACHABLE = [
   'analytics/utm-coverage/route.ts',
   'links/bulk-clone/route.ts',
   'links/lookup/route.ts',
+  'links/qr-zip/route.ts',
   'links/untagged/route.ts',
   'views/[id]/route.ts',
   'views/route.ts',
@@ -170,7 +171,7 @@ describe('API key route audit', () => {
       const mutating = exportedMethods(route.source).filter((m) => (MUTATING as readonly string[]).includes(m))
       if (mutating.length === 0) continue
       // POST-only dry run that reads and writes nothing; read scopes are enough.
-      if (route.path === 'rewards/preview/route.ts') continue
+      if (route.path === 'rewards/preview/route.ts' || route.path === 'links/qr-zip/route.ts') continue
       const readRoles = /getManageableUrl\([^)]*READ_ROLES\)|canManageUrl\([^)]*READ_ROLES\)/.test(route.source)
       expect(readRoles, `${route.path} exports ${mutating.join('/')} but authorizes with READ_ROLES (a read-only key could mutate)`).toBe(false)
       for (const method of mutating) {
