@@ -2,6 +2,10 @@ import { createHash } from 'node:crypto'
 import { prisma } from '@/lib/prisma'
 import type { NextRequest } from 'next/server'
 
+/** A claimed-but-unfinished request holds its key this long before a retry may take over. */
+export const IDEMPOTENCY_PENDING_TTL_MS = 30_000
+export const IDEMPOTENCY_IN_PROGRESS_MESSAGE = 'Idempotency-Key request is still in progress; retry shortly'
+
 export function hashIdempotencyKey(key: string): string { return createHash('sha256').update(key).digest('hex') }
 export function requestHash(body: unknown): string { return createHash('sha256').update(JSON.stringify(body ?? null)).digest('hex') }
 
@@ -11,7 +15,29 @@ export async function getIdempotentResponse(request: NextRequest, workspaceId: s
   if (key.length < 8 || key.length > 255) throw new Error('Invalid Idempotency-Key')
   const keyHash = hashIdempotencyKey(key)
   const existing = await prisma.idempotencyKey.findUnique({ where: { workspaceId_keyHash: { workspaceId, keyHash } } })
-  if (!existing || existing.expiresAt <= new Date()) return { keyHash, requestHash: requestHash(body), existing: null }
+  const now = new Date()
+  const reqHash = requestHash(body)
+  const pendingUntil = new Date(now.getTime() + IDEMPOTENCY_PENDING_TTL_MS)
+  // Claim the key before doing the work so two concurrent requests with the
+  // same key cannot both run the operation (check-then-act race).
+  if (!existing) {
+    try {
+      await prisma.idempotencyKey.create({ data: { workspaceId, keyHash, method: request.method, path: request.nextUrl.pathname, requestHash: reqHash, responseStatus: 0, responseJson: '', expiresAt: pendingUntil } })
+    } catch (error) {
+      if ((error as { code?: string })?.code === 'P2002') throw new Error(IDEMPOTENCY_IN_PROGRESS_MESSAGE)
+      throw error
+    }
+    return { keyHash, requestHash: reqHash, existing: null }
+  }
+  if (existing.expiresAt <= now) {
+    const taken = await prisma.idempotencyKey.updateMany({
+      where: { workspaceId, keyHash, expiresAt: { lte: now } },
+      data: { method: request.method, path: request.nextUrl.pathname, requestHash: reqHash, responseStatus: 0, responseJson: '', expiresAt: pendingUntil },
+    })
+    if (taken.count === 0) throw new Error(IDEMPOTENCY_IN_PROGRESS_MESSAGE)
+    return { keyHash, requestHash: reqHash, existing: null }
+  }
+  if (existing.responseStatus === 0) throw new Error(IDEMPOTENCY_IN_PROGRESS_MESSAGE)
   // Keys are bound to one endpoint: replaying the same key string with the
   // same body on a different method/path is a different operation, and
   // returning the stored response would leak another endpoint's payload.

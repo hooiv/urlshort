@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 const prismaMock = vi.hoisted(() => ({
-  idempotencyKey: { findUnique: vi.fn(), upsert: vi.fn() },
+  idempotencyKey: { findUnique: vi.fn(), upsert: vi.fn(), create: vi.fn(), updateMany: vi.fn() },
 }))
 vi.mock('./prisma', () => ({ prisma: prismaMock }))
 
@@ -28,8 +28,41 @@ describe('getIdempotentResponse', () => {
       keyHash: 'h', requestHash: 'old', method: 'POST', path: '/api/campaigns',
       responseStatus: 201, responseJson: '{}', expiresAt: new Date(Date.now() - 1_000),
     })
+    prismaMock.idempotencyKey.updateMany.mockResolvedValue({ count: 1 })
     const result = await getIdempotentResponse(postRequest('/api/campaigns', 'reuse-key-1'), 'ws1', { a: 2 })
     expect(result?.existing).toBeNull()
+    expect(prismaMock.idempotencyKey.updateMany).toHaveBeenCalled()
+  })
+
+  it('claims a fresh key before the work runs', async () => {
+    prismaMock.idempotencyKey.findUnique.mockResolvedValue(null)
+    prismaMock.idempotencyKey.create.mockResolvedValue({})
+    const result = await getIdempotentResponse(postRequest('/api/campaigns', 'fresh-key-1'), 'ws1', { a: 1 })
+    expect(result?.existing).toBeNull()
+    expect(prismaMock.idempotencyKey.create.mock.calls[0][0].data).toMatchObject({ responseStatus: 0, workspaceId: 'ws1' })
+  })
+
+  it('rejects a concurrent duplicate that loses the claim race', async () => {
+    prismaMock.idempotencyKey.findUnique.mockResolvedValue(null)
+    prismaMock.idempotencyKey.create.mockRejectedValue(Object.assign(new Error('unique'), { code: 'P2002' }))
+    await expect(getIdempotentResponse(postRequest('/api/campaigns', 'race-key-01'), 'ws1', { a: 1 })).rejects.toThrow(/still in progress/)
+  })
+
+  it('rejects a retry while the first request is still pending', async () => {
+    prismaMock.idempotencyKey.findUnique.mockResolvedValue({
+      keyHash: 'h', requestHash: requestHash({ a: 1 }), method: 'POST', path: '/api/campaigns',
+      responseStatus: 0, responseJson: '', expiresAt: new Date(Date.now() + 10_000),
+    })
+    await expect(getIdempotentResponse(postRequest('/api/campaigns', 'pending-key1'), 'ws1', { a: 1 })).rejects.toThrow(/still in progress/)
+  })
+
+  it('lets only one caller take over an expired key', async () => {
+    prismaMock.idempotencyKey.findUnique.mockResolvedValue({
+      keyHash: 'h', requestHash: 'old', method: 'POST', path: '/api/campaigns',
+      responseStatus: 201, responseJson: '{}', expiresAt: new Date(Date.now() - 1_000),
+    })
+    prismaMock.idempotencyKey.updateMany.mockResolvedValue({ count: 0 })
+    await expect(getIdempotentResponse(postRequest('/api/campaigns', 'takeover-k1'), 'ws1', { a: 2 })).rejects.toThrow(/still in progress/)
   })
 
   it('replays the stored response for the same endpoint and body', async () => {
