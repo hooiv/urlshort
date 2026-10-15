@@ -11,9 +11,12 @@ export type BulkEditForm = {
   utmSource: string
   utmMedium: string
   utmCampaign: string
+  rewriteMode: '' | 'host' | 'prefix' | 'text'
+  rewriteFrom: string
+  rewriteTo: string
 }
 
-export const emptyBulkEditForm: BulkEditForm = { addTags: '', removeTags: '', folder: '', expiry: '', extendDays: '', state: '', password: '', pin: '', redirect: '', utmSource: '', utmMedium: '', utmCampaign: '' }
+export const emptyBulkEditForm: BulkEditForm = { addTags: '', removeTags: '', folder: '', expiry: '', extendDays: '', state: '', password: '', pin: '', redirect: '', utmSource: '', utmMedium: '', utmCampaign: '', rewriteMode: '', rewriteFrom: '', rewriteTo: '' }
 
 const splitTags = (v: string) => v.split(',').map((t) => t.trim()).filter(Boolean)
 
@@ -56,6 +59,15 @@ export function buildBulkEditChanges(form: BulkEditForm, now = new Date()): { ch
   if (form.utmMedium.trim()) utm.medium = form.utmMedium.trim()
   if (form.utmCampaign.trim()) utm.campaign = form.utmCampaign.trim()
   if (Object.keys(utm).length) changes.utm = utm
+  if (form.rewriteMode) {
+    const from = form.rewriteFrom.trim()
+    const to = form.rewriteTo.trim()
+    if (!from) return { error: 'Enter the destination text to find' }
+    if (form.rewriteMode !== 'text' && !to) return { error: 'Enter the replacement' }
+    changes.rewriteDestination = form.rewriteMode === 'text'
+      ? { mode: 'text', find: from, replace: form.rewriteTo }
+      : { mode: form.rewriteMode, from, to }
+  }
   if (!Object.keys(changes).length) return { error: 'Choose at least one change' }
   return { changes }
 }

@@ -5,7 +5,7 @@ const now = new Date(2026, 9, 12, 12)
 describe('buildBulkEditChanges', () => {
   it('errors on an empty form', () => expect(buildBulkEditChanges(emptyBulkEditForm, now)).toEqual({ error: 'Choose at least one change' }))
   it('maps every field', () => {
-    const r = buildBulkEditChanges({ addTags: 'a, b,', removeTags: 'c', folder: 'none', expiry: '2026-12-31', extendDays: '', state: 'archive', password: '', pin: '', redirect: '', utmSource: ' news ', utmMedium: '', utmCampaign: 'q4' }, now)
+    const r = buildBulkEditChanges({ ...emptyBulkEditForm, addTags: 'a, b,', removeTags: 'c', folder: 'none', expiry: '2026-12-31', extendDays: '', state: 'archive', password: '', pin: '', redirect: '', utmSource: ' news ', utmMedium: '', utmCampaign: 'q4' }, now)
     expect(r).toMatchObject({ changes: { addTags: ['a', 'b'], removeTags: ['c'], folderId: null, archived: true, utm: { source: 'news', campaign: 'q4' } } })
     expect((r as { changes: { expiresAt: string } }).changes.expiresAt).toMatch(/^2026-12-31T|^2027-01-01T/)
   })
@@ -37,5 +37,15 @@ describe('trash state', () => {
   it('maps pin and redirect type', () => {
     expect(buildBulkEditChanges({ ...emptyBulkEditForm, pin: 'unpin', redirect: '301' })).toEqual({ changes: { pinned: false, redirectStatus: 301 } })
     expect(buildBulkEditChanges({ ...emptyBulkEditForm, redirect: 'default' })).toEqual({ changes: { redirectStatus: null } })
+  })
+})
+
+describe('destination rewrite form', () => {
+  it('builds host, prefix and text rewrites and validates input', async () => {
+    const { buildBulkEditChanges: build, emptyBulkEditForm: empty } = await import('./bulk-edit-form')
+    expect(build({ ...empty, rewriteMode: 'host', rewriteFrom: ' a.com ', rewriteTo: 'b.com' })).toEqual({ changes: { rewriteDestination: { mode: 'host', from: 'a.com', to: 'b.com' } } })
+    expect(build({ ...empty, rewriteMode: 'text', rewriteFrom: 'x', rewriteTo: '' })).toEqual({ changes: { rewriteDestination: { mode: 'text', find: 'x', replace: '' } } })
+    expect(build({ ...empty, rewriteMode: 'prefix', rewriteFrom: '/a', rewriteTo: '' })).toEqual({ error: 'Enter the replacement' })
+    expect(build({ ...empty, rewriteMode: 'host' })).toEqual({ error: 'Enter the destination text to find' })
   })
 })

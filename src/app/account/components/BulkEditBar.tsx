@@ -58,7 +58,7 @@ export default function BulkEditBar({
   }
   const set = (patch: Partial<BulkEditForm>) => setForm((f) => ({ ...f, ...patch }))
 
-  async function apply() {
+  async function apply(dryRun = false) {
     const built = buildBulkEditChanges(form)
     if ('error' in built) return toast.error(built.error)
     setBusy(true)
@@ -66,12 +66,16 @@ export default function BulkEditBar({
       const response = await fetch('/api/bulk/edit', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ links: selected, changes: built.changes }),
+        body: JSON.stringify({ links: selected, changes: built.changes, ...(dryRun ? { dryRun: true } : {}) }),
       })
       const data = await response.json().catch(() => null)
       if (!response.ok) {
         const first = data?.failures?.[0]
         throw new Error(first ? `${data.error}: /${first.link} — ${first.reason}` : data?.error || 'Bulk edit failed')
+      }
+      if (dryRun) {
+        toast.success(`Preview: ${data.wouldUpdate} would change, ${data.unchanged} already match. Nothing was saved.`)
+        return
       }
       toast.success(`${data.updated} updated${data.unchanged ? `, ${data.unchanged} already matched` : ''}`)
       setForm(emptyBulkEditForm)
@@ -164,8 +168,21 @@ export default function BulkEditBar({
             <label>utm_medium<input className="input mt-1 w-full" value={form.utmMedium} onChange={(e) => set({ utmMedium: e.target.value })} /></label>
             <label>utm_campaign<input className="input mt-1 w-full" value={form.utmCampaign} onChange={(e) => set({ utmCampaign: e.target.value })} /></label>
           </div>
+          <div className="grid grid-cols-[7rem_1fr_1fr] gap-2 text-xs text-slate-400 sm:col-span-2 lg:col-span-3">
+            <label>Rewrite destinations
+              <select className="input mt-1 w-full" value={form.rewriteMode} onChange={(e) => set({ rewriteMode: e.target.value as BulkEditForm['rewriteMode'] })}>
+                <option value="">Off</option>
+                <option value="host">Swap hostname</option>
+                <option value="prefix">Swap path prefix</option>
+                <option value="text">Find and replace</option>
+              </select>
+            </label>
+            <label>Find<input disabled={!form.rewriteMode} className="input mt-1 w-full" placeholder={form.rewriteMode === 'host' ? 'old.example.com' : form.rewriteMode === 'prefix' ? '/blog' : 'text'} value={form.rewriteFrom} onChange={(e) => set({ rewriteFrom: e.target.value })} /></label>
+            <label>Replace with<input disabled={!form.rewriteMode} className="input mt-1 w-full" placeholder={form.rewriteMode === 'host' ? 'new.example.com' : form.rewriteMode === 'prefix' ? '/articles' : ''} value={form.rewriteTo} onChange={(e) => set({ rewriteTo: e.target.value })} /></label>
+          </div>
           <div className="sm:col-span-2 lg:col-span-3 flex items-center gap-3">
-            <button disabled={busy} onClick={apply} className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+            <button disabled={busy} onClick={() => apply(true)} className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-slate-200 disabled:opacity-50">Preview</button>
+            <button disabled={busy} onClick={() => apply()} className="rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
               {busy ? 'Applying…' : `Apply to ${selected.length} link${selected.length === 1 ? '' : 's'}`}
             </button>
             <p className="text-xs text-slate-500">All-or-nothing: if any link can’t be changed, none are. UTM values never overwrite ones a link already has.</p>
