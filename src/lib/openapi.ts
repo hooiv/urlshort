@@ -87,6 +87,18 @@ export const OPERATIONS: OperationDef[] = [
   { path: '/api/analytics/conversions', method: 'get', summary: 'Conversion performance per link', tag: 'Analytics', scopes: ANALYTICS },
   { path: '/api/analytics/traffic-quality', method: 'get', summary: 'Human, bot and AI traffic split', tag: 'Analytics', scopes: ANALYTICS },
   { path: '/api/analytics/compare', method: 'get', summary: 'Period-over-period comparison', tag: 'Analytics', scopes: ANALYTICS },
+  { path: '/api/links/attention', method: 'get', summary: 'Links needing attention (broken, expiring, unsafe)', tag: 'Links', scopes: ANALYTICS },
+  { path: '/api/links/hygiene', method: 'get', summary: 'Link hygiene report', tag: 'Links', scopes: ANALYTICS },
+  { path: '/api/links/lookup', method: 'get', summary: 'Look up links by destination URL', tag: 'Links', scopes: ANALYTICS },
+  { path: '/api/links/untagged', method: 'get', summary: 'Links with no tags', tag: 'Links', scopes: ANALYTICS },
+  { path: '/api/links/chains', method: 'get', summary: 'Links whose destination is another short link', tag: 'Links', scopes: ANALYTICS },
+  { path: '/api/links/insecure', method: 'get', summary: 'Links with non-HTTPS destinations', tag: 'Links', scopes: ANALYTICS },
+  { path: '/api/links/missing-previews', method: 'get', summary: 'Links missing a social preview', tag: 'Links', scopes: ANALYTICS },
+  { path: '/api/links/tracking-params', method: 'get', summary: 'Links with tracking parameters in the destination', tag: 'Links', scopes: ANALYTICS },
+  { path: '/api/links/trace', method: 'get', summary: 'Follow a redirect chain', tag: 'Links', scopes: LINK_READ },
+  { path: '/api/links/trash', method: 'get', summary: 'List trashed links', tag: 'Links', scopes: LINK_READ },
+  { path: '/api/links/trash', method: 'post', summary: 'Restore or purge trashed links', tag: 'Links', scopes: ['links:write'] },
+  { path: '/api/links/qr-zip', method: 'post', summary: 'Download QR codes for many links as a ZIP', tag: 'Links', scopes: LINK_READ },
 ]
 
 type Json = Record<string, unknown>
