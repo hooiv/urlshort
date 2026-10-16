@@ -1,3 +1,4 @@
+import { maybeCsvResponse } from '@/lib/analytics-csv'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { ANALYTICS_READ_SCOPES, resolveActor } from '@/lib/request-actor'
@@ -9,7 +10,7 @@ import { getClickDrops } from '@/lib/click-drops'
 import { parseSpikeWindow, parseSpikeLimit } from '@/lib/click-spikes'
 
 /**
- * GET /api/analytics/drops?workspaceId=&windowHours=6|24|72&limit=25
+ * GET /api/analytics/drops?workspaceId=&windowHours=6|24|72&limit=25&format=csv
  * Links whose recent human clicks fell well below their 14-day baseline. Session auth or API key with analytics:read / links:read.
  */
 export async function GET(request: NextRequest) {
@@ -38,6 +39,8 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await getClickDrops(scope, { windowHours, limit: max })
+    const csv = maybeCsvResponse(params.get('format'), result.drops as unknown as Record<string, unknown>[], 'drops-' + windowHours + 'h')
+    if (csv) return csv
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, max-age=60' } })
   } catch (error) {
     console.error('Click drops failed:', error)
