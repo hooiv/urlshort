@@ -29,3 +29,13 @@ describe('qr-scans', () => {
     expect(out).toEqual([{ day: '2026-10-12', scans: 0 }, { day: '2026-10-13', scans: 4 }, { day: '2026-10-14', scans: 0 }])
   })
 })
+
+import { qrReportToCsvRows } from './qr-scans'
+describe('qrReportToCsvRows', () => {
+  it('emits totals, daily and top link rows', () => {
+    const rows = qrReportToCsvRows({ days: 7, totals: { scans: 3, clicks: 10, scanPercent: 30 }, daily: [{ day: '2026-10-01', scans: 3 }], topLinks: [{ id: 'a', shortCode: 'abc', title: null, scans: 3, totalClicks: 10, scanPercent: 30 }] })
+    expect(rows[0]).toEqual(['section', 'key', 'scans', 'total_clicks', 'scan_percent'])
+    expect(rows).toHaveLength(4)
+    expect(rows[3]).toEqual(['top_link', 'abc', 3, 10, 30])
+  })
+})

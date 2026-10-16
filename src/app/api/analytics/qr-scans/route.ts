@@ -5,10 +5,11 @@ import { READ_ROLES } from '@/lib/authorization'
 import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { canAdministerFolders } from '@/lib/folders'
 import type { AnalyticsScope } from '@/lib/aggregate-analytics'
-import { getQrScanReport, parseQrDays } from '@/lib/qr-scans'
+import { serializeCsv } from '@/lib/csv'
+import { getQrScanReport, parseQrDays, qrReportToCsvRows } from '@/lib/qr-scans'
 
 /**
- * GET /api/analytics/qr-scans?workspaceId=&days=1|7|14|30|90
+ * GET /api/analytics/qr-scans?workspaceId=&days=1|7|14|30|90[&format=csv]
  * QR scan totals (utm_medium=qr), daily series and top scanned links.
  * Session auth or API key with analytics:read / links:read.
  */
@@ -36,6 +37,11 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await getQrScanReport(scope, days)
+    if (params.get('format') === 'csv') {
+      return new NextResponse(serializeCsv(qrReportToCsvRows(result)), {
+        headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="qr-scans-${days}d.csv"`, 'Cache-Control': 'private, no-store' },
+      })
+    }
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, max-age=60' } })
   } catch (error) {
     console.error('Traffic quality failed:', error)

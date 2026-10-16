@@ -27,6 +27,16 @@ export type QrScanReport = {
   topLinks: QrTopLink[]
 }
 
+/** CSV rows: totals, then daily series, then top links, each section headed by a `section` column. */
+export function qrReportToCsvRows(r: QrScanReport): (string | number)[][] {
+  return [
+    ['section', 'key', 'scans', 'total_clicks', 'scan_percent'],
+    ['total', 'all', r.totals.scans, r.totals.clicks, r.totals.scanPercent],
+    ...r.daily.map((d) => ['daily', d.day, d.scans, '', '']),
+    ...r.topLinks.map((l) => ['top_link', l.shortCode, l.scans, l.totalClicks, l.scanPercent]),
+  ]
+}
+
 export function percentOf(part: number, whole: number): number {
   return whole === 0 ? 0 : Math.round((part / whole) * 1000) / 10
 }
