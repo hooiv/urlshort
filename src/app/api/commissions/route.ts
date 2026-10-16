@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { LINK_READ_SCOPES, LINK_WRITE_SCOPES, resolveActor } from '@/lib/request-actor'
+import { beginRouteIdempotency, releaseRouteIdempotency, storeRouteIdempotency } from '@/lib/idempotency-route'
 import { COMMISSION_STATUSES, transitionCommissions } from '@/lib/commissions'
 
 const PAGE_SIZE = 50
@@ -58,12 +59,22 @@ export async function POST(request: NextRequest) {
   if (allDue && action !== 'approve') return NextResponse.json({ error: 'allDue only applies to approve' }, { status: 400 })
   if (!allDue && !ids) return NextResponse.json({ error: 'Provide ids or allDue' }, { status: 400 })
   const userId = resolved.actor.userId
+  const idem = await beginRouteIdempotency(request, userId, parsed.data)
+  if (idem.invalid) return NextResponse.json({ error: idem.invalid }, { status: 400 })
+  if (idem.replay) return idem.replay as NextResponse
   const now = new Date()
-  const changed = await prisma.$transaction(async (tx) => {
-    const targets = allDue
-      ? (await tx.commission.findMany({ where: { userId, status: 'pending', holdUntil: { lte: now } }, select: { id: true }, take: 5000 })).map((r) => r.id)
-      : ids!
-    return transitionCommissions(tx, userId, action, targets, { payoutRef, now })
-  })
+  let changed
+  try {
+    changed = await prisma.$transaction(async (tx) => {
+      const targets = allDue
+        ? (await tx.commission.findMany({ where: { userId, status: 'pending', holdUntil: { lte: now } }, select: { id: true }, take: 5000 })).map((r) => r.id)
+        : ids!
+      return transitionCommissions(tx, userId, action, targets, { payoutRef, now })
+    })
+  } catch (error) {
+    await releaseRouteIdempotency(idem)
+    throw error
+  }
+  await storeRouteIdempotency(request, idem, 200, { changed })
   return NextResponse.json({ changed }, { headers: rateLimitHeaders(limit) })
 }
