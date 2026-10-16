@@ -32,6 +32,10 @@ export default function FunnelPage() {
     }
   }
 
+  const csvHref = result
+    ? `/api/analytics/${encodeURIComponent(shortCode.trim())}/funnel?${new URLSearchParams({ steps: steps.replace(/\s+/g, ''), days: String(days), format: 'csv' })}`
+    : null
+
   const rows = result ? [{ key: 'Human clicks', count: result.clicks, pct: 100, step: null as number | null, drop: 0 }, ...result.steps.map((s) => ({ key: s.key, count: s.count, pct: s.overallRatePct ?? 0, step: s.stepRatePct, drop: s.dropOff }))] : []
 
   return (
@@ -62,6 +66,7 @@ export default function FunnelPage() {
           ))}
         </ul>
       )}
+      {csvHref && <a href={csvHref} download className="mt-4 inline-block rounded border px-3 py-1 text-sm font-medium">Download CSV</a>}
     </main>
   )
 }
