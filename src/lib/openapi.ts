@@ -58,6 +58,20 @@ export const OPERATIONS: OperationDef[] = [
     path: '/api/analytics/stale', method: 'get', summary: 'Active links with no recent clicks', tag: 'Analytics', scopes: ANALYTICS,
     query: [{ name: 'days', description: '30, 60, 90, 180 or 365.' }, { name: 'limit', description: '1 to 200.' }],
   },
+  { path: '/api/links/{shortCode}/clone', method: 'post', summary: 'Clone a link with a fresh short code', tag: 'Links', scopes: ['links:write'] },
+  {
+    path: '/api/links/{shortCode}/rename', method: 'post', summary: 'Change a link short code', tag: 'Links', scopes: ['links:write'],
+    body: { newShortCode: { type: 'string', description: 'New short code.', required: true }, confirm: { type: 'boolean', description: 'Must be true; the old URL stops working.', required: true } },
+  },
+  { path: '/api/links/duplicates', method: 'get', summary: 'Find links sharing a destination', tag: 'Links', scopes: ANALYTICS },
+  { path: '/api/links/expiring', method: 'get', summary: 'Links expiring soon', tag: 'Links', scopes: LINK_READ },
+  { path: '/api/workspaces', method: 'get', summary: 'List your workspaces', tag: 'Workspaces', scopes: LINK_READ },
+  { path: '/api/webhooks', method: 'get', summary: 'List webhook endpoints', tag: 'Webhooks', scopes: ['webhooks:write'] },
+  { path: '/api/webhooks', method: 'post', summary: 'Create a webhook endpoint', tag: 'Webhooks', scopes: ['webhooks:write'] },
+  { path: '/api/analytics/countries', method: 'get', summary: 'Clicks and conversions by country', tag: 'Analytics', scopes: ANALYTICS },
+  { path: '/api/analytics/referrers', method: 'get', summary: 'Clicks and conversions by referrer', tag: 'Analytics', scopes: ANALYTICS },
+  { path: '/api/analytics/tags', method: 'get', summary: 'Performance per tag', tag: 'Analytics', scopes: ANALYTICS },
+  { path: '/api/analytics/folders', method: 'get', summary: 'Performance per folder', tag: 'Analytics', scopes: ANALYTICS },
 ]
 
 type Json = Record<string, unknown>

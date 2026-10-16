@@ -30,4 +30,20 @@ describe('openapi document', () => {
     expect(get['x-required-scopes-any-of']).toContain('links:read')
     expect(doc.paths['/api/shorten'].post.requestBody.content['application/json'].schema.required).toEqual(['url'])
   })
+
+  it('declared scopes match the constants each route passes to resolveActor', () => {
+    const consts: Record<string, string[]> = {
+      LINK_READ_SCOPES: ['links:read', 'links:write'],
+      LINK_WRITE_SCOPES: ['links:write'],
+      WEBHOOK_SCOPES: ['webhooks:write'],
+      ANALYTICS_READ_SCOPES: ['analytics:read', 'links:read', 'links:write'],
+    }
+    for (const op of OPERATIONS) {
+      const src = readFileSync(path.join(appDir, routeFileFor(op.path)), 'utf8')
+      const used = [...src.matchAll(/resolveActor\(\w+,\s*(\w+)\)/g)].map((m) => m[1]).filter((n) => consts[n])
+      if (used.length === 0) continue
+      const ok = used.some((n) => JSON.stringify(consts[n]) === JSON.stringify(op.scopes))
+      expect(ok, `${op.method} ${op.path} declares ${op.scopes} but route uses ${used}`).toBe(true)
+    }
+  })
 })
