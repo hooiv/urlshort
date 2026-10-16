@@ -56,3 +56,12 @@ export async function storeIdempotentResponse(args: { workspaceId: string; keyHa
     update: { method: args.method, path: args.path, requestHash: args.requestHash, responseStatus: args.status, responseJson: JSON.stringify(args.body), expiresAt: new Date(Date.now() + (args.ttlMs ?? 24 * 60 * 60 * 1000)) },
   })
 }
+
+/**
+ * Release a claim whose operation failed, so the client's retry with the same
+ * key runs immediately instead of waiting out the pending TTL. Only removes
+ * still-pending rows (responseStatus 0); a stored response is never deleted.
+ */
+export async function releaseIdempotencyClaim(workspaceId: string, keyHash: string) {
+  return prisma.idempotencyKey.deleteMany({ where: { workspaceId, keyHash, responseStatus: 0 } })
+}

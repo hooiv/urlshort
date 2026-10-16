@@ -6,7 +6,7 @@ import { CodeTakenError, cloneLink, validateCloneCode } from '@/lib/link-clone'
 import { recordAudit } from '@/lib/audit'
 import { getBaseUrl } from '@/lib/utils'
 import { prisma } from '@/lib/prisma'
-import { getIdempotentResponse, storeIdempotentResponse } from '@/lib/idempotency'
+import { getIdempotentResponse, releaseIdempotencyClaim, storeIdempotentResponse } from '@/lib/idempotency'
 
 /**
  * POST /api/links/:code/clone  { shortCode?: string }
@@ -55,6 +55,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
     try {
       clone = await cloneLink(access.url, code.code, actorUserId)
     } catch (error) {
+      if (idem && idemWorkspaceId) await releaseIdempotencyClaim(idemWorkspaceId, idem.keyHash).catch(() => undefined)
       if (error instanceof CodeTakenError) return NextResponse.json({ error: 'Short code already in use' }, { status: 409 })
       throw error
     }

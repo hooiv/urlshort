@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 const m = vi.hoisted(() => ({
-  getManageableUrl: vi.fn(), resolveActor: vi.fn(), cloneLink: vi.fn(), findMembership: vi.fn(), getIdem: vi.fn(), storeIdem: vi.fn(async () => ({})),
+  getManageableUrl: vi.fn(), resolveActor: vi.fn(), cloneLink: vi.fn(), findMembership: vi.fn(), getIdem: vi.fn(), storeIdem: vi.fn(async () => ({})), releaseIdem: vi.fn(async () => ({})),
 }))
 vi.mock('@/lib/authorization', () => ({ getManageableUrl: m.getManageableUrl }))
 vi.mock('@/lib/request-actor', () => ({ LINK_WRITE_SCOPES: ['links:write'], resolveActor: m.resolveActor }))
@@ -10,7 +10,7 @@ vi.mock('@/lib/rate-limit', () => ({ rateLimit: async () => ({ allowed: true }),
 vi.mock('@/lib/link-clone', async (orig) => ({ ...(await orig<typeof import('@/lib/link-clone')>()), cloneLink: m.cloneLink }))
 vi.mock('@/lib/audit', () => ({ recordAudit: vi.fn(async () => undefined) }))
 vi.mock('@/lib/prisma', () => ({ prisma: { membership: { findFirst: m.findMembership } } }))
-vi.mock('@/lib/idempotency', () => ({ getIdempotentResponse: m.getIdem, storeIdempotentResponse: m.storeIdem }))
+vi.mock('@/lib/idempotency', () => ({ getIdempotentResponse: m.getIdem, storeIdempotentResponse: m.storeIdem, releaseIdempotencyClaim: m.releaseIdem }))
 
 const ctx = { params: Promise.resolve({ shortCode: 'src' }) }
 const req = (headers: Record<string, string> = {}) => new NextRequest('http://x/api/links/src/clone', { method: 'POST', body: '{}', headers })
@@ -47,5 +47,12 @@ describe('POST /api/links/:code/clone idempotency', () => {
     const { POST } = await import('./route')
     expect((await POST(req(), ctx)).status).toBe(201)
     expect(m.getIdem).not.toHaveBeenCalled()
+  })
+  it('releases the claim when the clone fails so a retry is not locked out', async () => {
+    m.getIdem.mockResolvedValue({ keyHash: 'h', requestHash: 'r', existing: null })
+    m.cloneLink.mockRejectedValue(new Error('db down'))
+    const { POST } = await import('./route')
+    expect((await POST(req({ 'idempotency-key': 'key-12345678' }), ctx)).status).toBe(500)
+    expect(m.releaseIdem).toHaveBeenCalledWith('w1', 'h')
   })
 })

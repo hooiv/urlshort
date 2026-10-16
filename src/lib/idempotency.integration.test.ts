@@ -28,4 +28,26 @@ describe('real database: idempotency claim', () => {
       await db.$disconnect()
     }
   })
+  it.skipIf(!databaseUrl)('releases a pending claim so a retry runs at once, but never deletes a stored response', async () => {
+    process.env.DATABASE_URL = databaseUrl
+    process.env.DIRECT_DATABASE_URL = databaseUrl
+    const db = new PrismaClient({ datasources: { db: { url: databaseUrl } } })
+    const { getIdempotentResponse, storeIdempotentResponse, releaseIdempotencyClaim } = await import('./idempotency')
+    const tag = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const ws = await db.workspace.create({ data: { name: tag, slug: `r-${tag}` } })
+    const req = () => new NextRequest('http://localhost/api/shorten', { method: 'POST', headers: { 'idempotency-key': `key-${tag}` } })
+    try {
+      const first = await getIdempotentResponse(req(), ws.id, { u: 1 })
+      await expect(getIdempotentResponse(req(), ws.id, { u: 1 })).rejects.toThrow(/in progress/)
+      await releaseIdempotencyClaim(ws.id, first!.keyHash)
+      const retry = await getIdempotentResponse(req(), ws.id, { u: 1 })
+      expect(retry?.existing).toBeNull()
+      await storeIdempotentResponse({ workspaceId: ws.id, keyHash: retry!.keyHash, requestHash: retry!.requestHash, method: 'POST', path: '/api/shorten', status: 201, body: { ok: 1 } })
+      await releaseIdempotencyClaim(ws.id, retry!.keyHash)
+      expect((await getIdempotentResponse(req(), ws.id, { u: 1 }))?.existing?.responseStatus).toBe(201)
+    } finally {
+      await db.workspace.delete({ where: { id: ws.id } })
+      await db.$disconnect()
+    }
+  })
 })
