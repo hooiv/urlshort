@@ -68,6 +68,7 @@ const KEY_REACHABLE = [
   'views/route.ts',
   'analytics/[shortCode]/route.ts',
   'analytics/[shortCode]/heatmap/route.ts',
+  'analytics/[shortCode]/funnel/route.ts',
   'analytics/[shortCode]/clicks/route.ts',
   'analytics/qr-scans/route.ts',
   'links/trace/route.ts',
