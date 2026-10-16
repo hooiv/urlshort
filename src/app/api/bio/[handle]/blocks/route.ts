@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { requireWorkspaceRole, EDIT_ROLES } from '@/lib/workspaces';
 import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
+import { beginRouteIdempotency, releaseRouteIdempotency, storeRouteIdempotency } from '@/lib/idempotency-route';
 
 export const MAX_BIO_BLOCKS = 100;
 
@@ -67,22 +68,34 @@ export async function POST(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    const idem = await beginRouteIdempotency(request, user.id, { handle, type, title: title ?? null, url: url ?? null, content: content ?? null, metadataJson: metadataJson ?? null });
+    if (idem.invalid) return NextResponse.json({ error: idem.invalid }, { status: 400 });
+    if (idem.replay) return idem.replay as NextResponse;
+
     if (profile._count.blocks >= MAX_BIO_BLOCKS) {
+      await releaseRouteIdempotency(idem);
       return NextResponse.json({ error: 'Block limit reached' }, { status: 400 });
     }
 
-    const block = await prisma.bioBlock.create({
-      data: {
-        profileId: profile.id,
-        type,
-        position: profile._count.blocks,
-        title,
-        url,
-        content,
-        metadataJson,
-      },
-    });
+    let block;
+    try {
+      block = await prisma.bioBlock.create({
+        data: {
+          profileId: profile.id,
+          type,
+          position: profile._count.blocks,
+          title,
+          url,
+          content,
+          metadataJson,
+        },
+      });
+    } catch (error) {
+      await releaseRouteIdempotency(idem);
+      throw error;
+    }
 
+    await storeRouteIdempotency(request, idem, 201, JSON.parse(JSON.stringify(block)));
     return NextResponse.json(block, { status: 201 });
   } catch (error) {
     console.error('Error creating bio block:', error);
