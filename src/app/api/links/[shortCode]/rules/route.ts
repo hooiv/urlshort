@@ -7,6 +7,7 @@ import { getManageableUrl } from '@/lib/authorization'
 import { assessDestination } from '@/lib/link-safety'
 import { assertDestinationSafeForStorage } from '@/lib/destination-health'
 import { invalidateLink } from '@/lib/link-cache'
+import { beginRouteIdempotency, releaseRouteIdempotency, storeRouteIdempotency } from '@/lib/idempotency-route'
 import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import {
   normalizeCountryCodes,
@@ -98,19 +99,25 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
   const limit = await rateLimit(request, { name: 'rules-create', identifier: result.id, limit: 20, windowMs: 60_000 })
   if (!limit.allowed) return NextResponse.json({ error: 'Too many rule requests. Try again shortly.' }, { status: 429, headers: rateLimitHeaders(limit) })
 
+  let idem: Awaited<ReturnType<typeof beginRouteIdempotency>> | null = null
   try {
   const body = (await request.json()) as RuleInput
   const rule = parseRule(body)
     if (rule.trafficType && !TRAFFIC_TYPES.has(rule.trafficType)) throw new Error('Invalid traffic type')
     // SSRF guard: rule destinations must be publicly routable, same as creation.
     await assertDestinationSafeForStorage(rule.destinationUrl)
+    idem = await beginRouteIdempotency(request, result.userId ?? null, { shortCode: result.shortCode, rule })
+    if (idem.invalid) return NextResponse.json({ error: idem.invalid }, { status: 400 })
+    if (idem.replay) return idem.replay as NextResponse
     const risk = assessDestination(rule.destinationUrl)
     const created = await prisma.linkRule.create({ data: { ...rule, urlId: result.id, riskStatus: risk.status, riskReason: risk.reason, riskCheckedAt: new Date() } })
     await invalidateLink(result.shortCode, result.id)
     if (result.workspaceId) await publishWorkspaceRoutingConfig(result.workspaceId)
     await recordAudit(request, { action: 'routing_rule.create', urlId: result.id, resourceType: 'link_rule', resourceId: created.id, after: { ...rule, riskStatus: risk.status, riskReason: risk.reason } })
+    await storeRouteIdempotency(request, idem, 201, JSON.parse(JSON.stringify(created)))
     return NextResponse.json(created, { status: 201 })
   } catch (error) {
+    if (idem) await releaseRouteIdempotency(idem)
     const message = error instanceof Error ? error.message : 'Invalid rule'
     return NextResponse.json({ error: message }, { status: 400 })
   }
