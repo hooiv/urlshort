@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { getWorkspaceMembership, EDIT_ROLES } from '@/lib/workspaces'
 import { LINK_READ_SCOPES } from '@/lib/request-actor'
 import { recordAudit } from '@/lib/audit'
+import { beginRouteIdempotency, releaseRouteIdempotency, storeRouteIdempotency } from '@/lib/idempotency-route'
 import { normalizeUtmTemplateName, normalizeUtmValues } from '@/lib/utm-templates'
 
 export const MAX_UTM_TEMPLATES = 100
@@ -41,13 +42,19 @@ export async function POST(request: NextRequest, context: { params: Promise<{ wo
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 400 })
   }
-  if ((await prisma.utmTemplate.count({ where: { workspaceId } })) >= MAX_UTM_TEMPLATES) return NextResponse.json({ error: `A workspace can have at most ${MAX_UTM_TEMPLATES} UTM templates` }, { status: 409 })
+  const idem = await beginRouteIdempotency(request, membership.userId, { workspaceId, name, ...values })
+  if (idem.invalid) return NextResponse.json({ error: idem.invalid }, { status: 400 })
+  if (idem.replay) return idem.replay as NextResponse
+  const reject = async (body: Record<string, unknown>, status: number) => { await releaseRouteIdempotency(idem); return NextResponse.json(body, { status }) }
+  if ((await prisma.utmTemplate.count({ where: { workspaceId } })) >= MAX_UTM_TEMPLATES) return reject({ error: `A workspace can have at most ${MAX_UTM_TEMPLATES} UTM templates` }, 409)
   try {
     const template = await prisma.utmTemplate.create({ data: { workspaceId, name, ...values, createdById: membership.userId } })
     await recordAudit(request, { action: 'utm_template.create', urlId: null, resourceType: 'utm_template', resourceId: template.id, after: { workspaceId, name } })
+    await storeRouteIdempotency(request, idem, 201, JSON.parse(JSON.stringify(template)))
     return NextResponse.json(template, { status: 201 })
   } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return NextResponse.json({ error: 'A template with that name already exists' }, { status: 409 })
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return reject({ error: 'A template with that name already exists' }, 409)
+    await releaseRouteIdempotency(idem)
     throw error
   }
 }
