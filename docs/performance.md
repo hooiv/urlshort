@@ -29,3 +29,4 @@ Backlog: totals/time series already read `click_daily`; the remaining raw scans 
 ## Best-time heatmap
 
 `GET /api/analytics/:shortCode/heatmap?tz=<IANA zone>&days=1..90` returns human clicks bucketed by weekday (0 = Sunday) and hour in the requested timezone: a dense 7×24 `grid`, `total`, `peak` and the `topSlots` (up to three). Bucketing runs in Postgres (`AT TIME ZONE`) over the `(urlId, createdAt)` index so only ≤168 rows leave the database; bots are excluded. Auth: session or API key with `analytics:read`/`links:read`. Invalid `tz` or `days` return 400. Shown on the link analytics page as "Best time to post".
+- Added ?format=csv on /api/analytics/{tags,folders,cities,referrers,countries}
