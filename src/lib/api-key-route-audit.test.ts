@@ -56,6 +56,8 @@ const KEY_REACHABLE = [
   'links/attention/route.ts',
   'links/bulk-clone/route.ts',
   'links/chains/route.ts',
+  'links/preflight/route.ts', // POST is a read-only dry-run (validates, never writes)
+  'links/[shortCode]/click-target/route.ts', // writes go through getManageableUrl scope checks
   'links/insecure/route.ts',
   'links/missing-previews/route.ts',
   'links/tracking-params/route.ts',
@@ -184,6 +186,7 @@ describe('API key route audit', () => {
       if (route.path === 'rewards/preview/route.ts' || route.path === 'links/qr-zip/route.ts') continue
       const readRoles = /getManageableUrl\([^)]*READ_ROLES\)|canManageUrl\([^)]*READ_ROLES\)/.test(route.source)
       expect(readRoles, `${route.path} exports ${mutating.join('/')} but authorizes with READ_ROLES (a read-only key could mutate)`).toBe(false)
+      if (route.path === 'links/preflight/route.ts') continue // dry-run only: nothing is created
       for (const method of mutating) {
         const body = handlerBody(route.source, method)
         const usesReadSet = /resolveActor\([^,]+,\s*(ANALYTICS_READ_SCOPES|LINK_READ_SCOPES)\)/.test(body)

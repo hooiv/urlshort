@@ -5,6 +5,8 @@ import { RenameConflictError, renameLink, validateRename } from '@/lib/link-rena
 import { invalidateLink } from '@/lib/link-cache'
 import { recordAudit } from '@/lib/audit'
 import { getBaseUrl } from '@/lib/utils'
+import { resolveActor, LINK_WRITE_SCOPES } from '@/lib/request-actor'
+import { beginRouteIdempotency, releaseRouteIdempotency, storeRouteIdempotency } from '@/lib/idempotency-route'
 
 /**
  * POST /api/links/:code/rename  { newShortCode: string, confirm: true }
@@ -31,17 +33,25 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
     if (!checked.ok) return NextResponse.json({ error: checked.error }, { status: 400 })
     if (body.confirm !== true) return NextResponse.json({ error: 'The old short URL will stop working. Resend with confirm: true.' }, { status: 400 })
 
+    const resolved = await resolveActor(request, LINK_WRITE_SCOPES)
+    const idem = await beginRouteIdempotency(request, resolved.actor?.userId ?? null, { from: access.url.shortCode, to: checked.code })
+    if (idem.invalid) return NextResponse.json({ error: idem.invalid }, { status: 400 })
+    if (idem.replay) return idem.replay as NextResponse
+
     let renamed
     try {
       renamed = await renameLink(access.url.id, checked.code)
     } catch (error) {
+      await releaseRouteIdempotency(idem)
       if (error instanceof RenameConflictError) return NextResponse.json({ error: 'Short code already in use' }, { status: 409 })
       throw error
     }
     await invalidateLink(access.url.shortCode, access.url.id)
     await invalidateLink(renamed.shortCode, renamed.id)
     await recordAudit(request, { action: 'link.rename', urlId: renamed.id, resourceType: 'url', resourceId: renamed.id, before: { shortCode: access.url.shortCode }, after: { shortCode: renamed.shortCode } })
-    return NextResponse.json({ id: renamed.id, shortCode: renamed.shortCode, previousShortCode: access.url.shortCode, shortUrl: `${getBaseUrl()}/${renamed.shortCode}` })
+    const payload = { id: renamed.id, shortCode: renamed.shortCode, previousShortCode: access.url.shortCode, shortUrl: `${getBaseUrl()}/${renamed.shortCode}` }
+    await storeRouteIdempotency(request, idem, 200, payload)
+    return NextResponse.json(payload)
   } catch (error) {
     console.error('Rename link failed:', error)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
