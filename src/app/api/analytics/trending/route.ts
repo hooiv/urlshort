@@ -5,10 +5,11 @@ import { READ_ROLES } from '@/lib/authorization'
 import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { canAdministerFolders } from '@/lib/folders'
 import type { AnalyticsScope } from '@/lib/aggregate-analytics'
+import { maybeCsvResponse } from '@/lib/analytics-csv'
 import { getTrendingLinks, parseTrendingDays, parseTrendingDirection, parseTrendingLimit } from '@/lib/trending-links'
 
 /**
- * GET /api/analytics/trending?workspaceId=&days=1|7|14|30|90&direction=rising|falling&limit=10
+ * GET /api/analytics/trending?workspaceId=&days=1|7|14|30|90&direction=rising|falling&limit=10&format=csv
  * Links whose human clicks changed the most versus the previous equally long window.
  * Session auth or API key with analytics:read / links:read.
  */
@@ -40,6 +41,8 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await getTrendingLinks(scope, { days, direction, limit: max })
+    const csv = maybeCsvResponse(params.get('format'), result.links as unknown as Record<string, unknown>[], 'trending-links-' + days + 'd')
+    if (csv) return csv
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, max-age=60' } })
   } catch (error) {
     console.error('Trending links failed:', error)
