@@ -4,7 +4,7 @@
  * path maps to a real route file and every method is exported by it, so the
  * spec cannot silently drift from the code.
  */
-export type HttpMethod = 'get' | 'post' | 'patch' | 'delete'
+export type HttpMethod = 'get' | 'post' | 'patch' | 'put' | 'delete'
 
 export type OperationDef = {
   path: string
@@ -22,6 +22,10 @@ const LINK_READ = ['links:read', 'links:write']
 const ANALYTICS = ['analytics:read', 'links:read', 'links:write']
 
 export const OPERATIONS: OperationDef[] = [
+  { path: '/api/commissions', method: 'post', summary: 'Approve, pay or void commissions (idempotent)', tag: 'Rewards', scopes: ['links:write'] },
+  { path: '/api/rewards/config', method: 'get', summary: 'List reward rules (account default and per-link overrides)', tag: 'Rewards', scopes: LINK_READ },
+  { path: '/api/rewards/config', method: 'put', summary: 'Replace the reward rules for one scope', tag: 'Rewards', scopes: ['links:write'] },
+  { path: '/api/rewards/config', method: 'delete', summary: 'Remove a reward rule override', tag: 'Rewards', scopes: ['links:write'] },
   { path: '/api/bulk', method: 'post', summary: 'Bulk create or import links', tag: 'Links', scopes: ['links:write'] },
   { path: '/api/commissions', method: 'get', summary: 'List reward commissions', tag: 'Rewards', scopes: LINK_READ },
   { path: '/api/commissions/export', method: 'get', summary: 'Export commissions as CSV', tag: 'Rewards', scopes: LINK_READ },
