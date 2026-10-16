@@ -5,10 +5,11 @@ import { READ_ROLES } from '@/lib/authorization'
 import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { canAdministerFolders } from '@/lib/folders'
 import type { AnalyticsScope } from '@/lib/aggregate-analytics'
+import { maybeCsvResponse } from '@/lib/analytics-csv'
 import { getBrokenLinks, parseBrokenStatus, parseBrokenLimit } from '@/lib/broken-links'
 
 /**
- * GET /api/analytics/broken?workspaceId=&status=down|degraded|all&limit=50
+ * GET /api/analytics/broken?workspaceId=&status=down|degraded|all&limit=50&format=csv
  * Active links whose last health probe was down or degraded. Session auth or API key with analytics:read / links:read.
  */
 export async function GET(request: NextRequest) {
@@ -37,6 +38,8 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await getBrokenLinks(scope, { statuses, limit: max })
+    const csv = maybeCsvResponse(params.get('format'), result.links as unknown as Record<string, unknown>[], 'broken-links')
+    if (csv) return csv
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, max-age=60' } })
   } catch (error) {
     console.error('Broken links failed:', error)
