@@ -7,6 +7,8 @@ import { recordAudit } from '@/lib/audit'
 import { DomainOwnershipError, registerDomain } from '@/lib/domain-registration'
 import { getManageableUrl } from '@/lib/authorization'
 import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
+import { resolveActor, LINK_WRITE_SCOPES } from '@/lib/request-actor'
+import { beginRouteIdempotency, releaseRouteIdempotency, storeRouteIdempotency } from '@/lib/idempotency-route'
 
 export const domainBodySchema = z.object({
   host: z.string().max(253).optional(),
@@ -42,24 +44,37 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
   if (result instanceof NextResponse) return result
   const limit = await rateLimit(request, { name: 'domains-bind', identifier: result.id, limit: 10, windowMs: 60_000 })
   if (!limit.allowed) return NextResponse.json({ error: 'Too many domain requests. Try again shortly.' }, { status: 429, headers: rateLimitHeaders(limit) })
+  let idem: Awaited<ReturnType<typeof beginRouteIdempotency>> | null = null
   try {
     const { host, path } = await parseDomainBody(request, shortCode)
+    const resolved = await resolveActor(request, LINK_WRITE_SCOPES)
+    idem = await beginRouteIdempotency(request, resolved.actor?.userId ?? null, { shortCode, host, path })
+    if (idem.invalid) return NextResponse.json({ error: idem.invalid }, { status: 400 })
+    if (idem.replay) return idem.replay as NextResponse
     let domain
     try {
       domain = await registerDomain(result.id, host)
     } catch (error) {
-      if (error instanceof DomainOwnershipError) return NextResponse.json({ error: error.message }, { status: 409 })
+      if (error instanceof DomainOwnershipError) {
+        await releaseRouteIdempotency(idem)
+        return NextResponse.json({ error: error.message }, { status: 409 })
+      }
       throw error
     }
     if (domain.status !== 'verified') {
       const record = verificationRecord(host, domain.verificationToken)
-      return NextResponse.json({ verified: false, domain, dns: { ...record, cname: { name: host, type: 'CNAME', value: edgeTarget() } } })
+      const pending = { verified: false, domain, dns: { ...record, cname: { name: host, type: 'CNAME', value: edgeTarget() } } }
+      // Pending verification is retryable once DNS propagates, so never pin it to the key.
+      await releaseRouteIdempotency(idem)
+      return NextResponse.json(pending)
     }
     const link = await prisma.domainLink.upsert({ where: { domainId_path: { domainId: domain.id, path } }, update: { urlId: result.id }, create: { domainId: domain.id, urlId: result.id, path } })
     await invalidateDomain(host)
     await recordAudit(request, { action: 'branded_domain.bind', urlId: result.id, resourceType: 'domain_link', resourceId: link.id, after: { host, path, verified: true } })
+    await storeRouteIdempotency(request, idem, 201, JSON.parse(JSON.stringify({ verified: true, domain, link })))
     return NextResponse.json({ verified: true, domain, link }, { status: 201 })
   } catch (error) {
+    if (idem) await releaseRouteIdempotency(idem)
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not add branded domain' }, { status: 400 })
   }
 }
