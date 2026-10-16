@@ -6,6 +6,8 @@ import type { NextRequest } from 'next/server'
 export const IDEMPOTENCY_PENDING_TTL_MS = 30_000
 export const IDEMPOTENCY_IN_PROGRESS_MESSAGE = 'Idempotency-Key request is still in progress; retry shortly'
 
+const claims = new WeakMap<object, { workspaceId: string; keyHash: string }>()
+
 export function hashIdempotencyKey(key: string): string { return createHash('sha256').update(key).digest('hex') }
 export function requestHash(body: unknown): string { return createHash('sha256').update(JSON.stringify(body ?? null)).digest('hex') }
 
@@ -27,6 +29,7 @@ export async function getIdempotentResponse(request: NextRequest, workspaceId: s
       if ((error as { code?: string })?.code === 'P2002') throw new Error(IDEMPOTENCY_IN_PROGRESS_MESSAGE)
       throw error
     }
+    claims.set(request, { workspaceId, keyHash })
     return { keyHash, requestHash: reqHash, existing: null }
   }
   if (existing.expiresAt <= now) {
@@ -35,6 +38,7 @@ export async function getIdempotentResponse(request: NextRequest, workspaceId: s
       data: { method: request.method, path: request.nextUrl.pathname, requestHash: reqHash, responseStatus: 0, responseJson: '', expiresAt: pendingUntil },
     })
     if (taken.count === 0) throw new Error(IDEMPOTENCY_IN_PROGRESS_MESSAGE)
+    claims.set(request, { workspaceId, keyHash })
     return { keyHash, requestHash: reqHash, existing: null }
   }
   if (existing.responseStatus === 0) throw new Error(IDEMPOTENCY_IN_PROGRESS_MESSAGE)
@@ -64,4 +68,26 @@ export async function storeIdempotentResponse(args: { workspaceId: string; keyHa
  */
 export async function releaseIdempotencyClaim(workspaceId: string, keyHash: string) {
   return prisma.idempotencyKey.deleteMany({ where: { workspaceId, keyHash, responseStatus: 0 } })
+}
+
+/**
+ * Wrap a route handler so a pending Idempotency-Key claim never outlives a
+ * failed request. Whatever the handler returns or throws (400/409/503/500...),
+ * a claim that was never completed is released so the client's retry runs
+ * at once instead of hitting "still in progress" for the pending TTL. A
+ * stored response (status != 0) is never touched.
+ */
+export function withIdempotencyCleanup<A extends [NextRequest, ...unknown[]], R>(handler: (...args: A) => Promise<R>): (...args: A) => Promise<R> {
+  return async (...args: A) => {
+    const request = args[0]
+    try {
+      return await handler(...args)
+    } finally {
+      const claim = claims.get(request)
+      if (claim) {
+        claims.delete(request)
+        await releaseIdempotencyClaim(claim.workspaceId, claim.keyHash).catch(() => undefined)
+      }
+    }
+  }
 }

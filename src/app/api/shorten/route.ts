@@ -21,7 +21,7 @@ import { assessDestination } from '@/lib/link-safety'
 import { assertDestinationSafeForStorage } from '@/lib/destination-health'
 import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { hashGatePassword } from '@/lib/password-gate'
-import { getIdempotentResponse, storeIdempotentResponse } from '@/lib/idempotency'
+import { withIdempotencyCleanup, getIdempotentResponse, storeIdempotentResponse } from '@/lib/idempotency'
 import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
 import { dispatchWebhooksForUrl } from '@/lib/webhooks'
 import { invalidateLink } from '@/lib/link-cache'
@@ -77,7 +77,7 @@ function isUniqueViolation(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002'
 }
 
-export async function POST(request: NextRequest) {
+async function handlePost(request: NextRequest) {
   try {
     const limit = await rateLimit(request, { name: 'shorten', limit: 20, windowMs: 60_000 })
     if (!limit.allowed) {
@@ -433,3 +433,5 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
+
+export const POST = withIdempotencyCleanup(handlePost)

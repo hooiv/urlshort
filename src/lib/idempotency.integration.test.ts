@@ -50,4 +50,37 @@ describe('real database: idempotency claim', () => {
       await db.$disconnect()
     }
   })
+
+  it.skipIf(!databaseUrl)('withIdempotencyCleanup frees the claim on a failed handler but keeps a stored response', async () => {
+    process.env.DATABASE_URL = databaseUrl
+    process.env.DIRECT_DATABASE_URL = databaseUrl
+    const db = new PrismaClient({ datasources: { db: { url: databaseUrl } } })
+    const { getIdempotentResponse, storeIdempotentResponse, withIdempotencyCleanup } = await import('./idempotency')
+    const tag = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const ws = await db.workspace.create({ data: { name: tag, slug: `w-${tag}` } })
+    const req = (k: string) => new NextRequest('http://localhost/api/shorten', { method: 'POST', headers: { 'idempotency-key': `${k}-${tag}` } })
+    try {
+      const failing = withIdempotencyCleanup(async (r: NextRequest) => {
+        await getIdempotentResponse(r, ws.id, { u: 1 })
+        throw new Error('boom')
+      })
+      await expect(failing(req('fail'))).rejects.toThrow('boom')
+      // Retry with the same key is admitted immediately, not "still in progress".
+      const retry = await getIdempotentResponse(req('fail'), ws.id, { u: 1 })
+      expect(retry?.existing).toBeNull()
+      await db.idempotencyKey.deleteMany({ where: { workspaceId: ws.id } })
+
+      const ok = withIdempotencyCleanup(async (r: NextRequest) => {
+        const claim = await getIdempotentResponse(r, ws.id, { u: 2 })
+        await storeIdempotentResponse({ workspaceId: ws.id, keyHash: claim!.keyHash, requestHash: claim!.requestHash, method: 'POST', path: '/api/shorten', status: 201, body: { done: true } })
+        return 'ok'
+      })
+      await expect(ok(req('good'))).resolves.toBe('ok')
+      const replay = await getIdempotentResponse(req('good'), ws.id, { u: 2 })
+      expect(replay?.existing?.responseStatus).toBe(201)
+    } finally {
+      await db.workspace.delete({ where: { id: ws.id } })
+      await db.$disconnect()
+    }
+  })
 })

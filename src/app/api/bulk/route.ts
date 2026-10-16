@@ -8,7 +8,7 @@ import { getBaseUrl } from '@/lib/utils'
 import { assertDestinationSafeForStorage } from '@/lib/destination-health'
 import { assessDestination } from '@/lib/link-safety'
 import { EDIT_ROLES } from '@/lib/workspaces'
-import { getIdempotentResponse, storeIdempotentResponse } from '@/lib/idempotency'
+import { withIdempotencyCleanup, getIdempotentResponse, storeIdempotentResponse } from '@/lib/idempotency'
 import { recordAudit } from '@/lib/audit'
 import { ProviderImportError, fetchProviderImport } from '@/lib/provider-import'
 import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
@@ -60,7 +60,7 @@ const INSERT_CHUNK = 500
  * conflicts resolved with one query; links + revisions inserted in a single
  * transaction with createManyAndReturn; and a per-row report.
  */
-export async function POST(request: NextRequest) {
+async function handlePost(request: NextRequest) {
   try {
     const resolved = await resolveActor(request, LINK_WRITE_SCOPES)
     if (!resolved.actor) return NextResponse.json({ error: resolved.error }, { status: resolved.status })
@@ -252,3 +252,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
+
+export const POST = withIdempotencyCleanup(handlePost)

@@ -4,7 +4,7 @@ import { NextRequest } from 'next/server'
 const { resolveActor, applyBulkEdit } = vi.hoisted(() => ({ resolveActor: vi.fn(), applyBulkEdit: vi.fn() }))
 const { findMembership, getIdem, storeIdem } = vi.hoisted(() => ({ findMembership: vi.fn(), getIdem: vi.fn(), storeIdem: vi.fn(async () => ({})) }))
 vi.mock('@/lib/prisma', () => ({ prisma: { membership: { findFirst: findMembership } } }))
-vi.mock('@/lib/idempotency', () => ({ getIdempotentResponse: getIdem, storeIdempotentResponse: storeIdem }))
+vi.mock('@/lib/idempotency', () => ({ getIdempotentResponse: getIdem, storeIdempotentResponse: storeIdem, withIdempotencyCleanup: <T,>(h: T) => h }))
 vi.mock('@/lib/link-cache', () => ({ invalidateLinks: vi.fn() }))
 vi.mock('@/lib/folders', () => ({ folderWriteError: vi.fn(), visibleUrlWhere: vi.fn() }))
 vi.mock('@/lib/request-actor', () => ({ LINK_WRITE_SCOPES: ['links:write'], resolveActor }))

@@ -4,14 +4,14 @@ import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { applyBulkEdit, bulkEditSchema } from '@/lib/bulk-edit'
 import { dispatchWebhooksForUrls } from '@/lib/webhooks'
 import { prisma } from '@/lib/prisma'
-import { getIdempotentResponse, storeIdempotentResponse } from '@/lib/idempotency'
+import { withIdempotencyCleanup, getIdempotentResponse, storeIdempotentResponse } from '@/lib/idempotency'
 
 /**
  * Bulk edit: apply tags / folder / expiry / archive / UTM changes to up to
  * 500 links in one transaction. Either every link is updated or none is, and
  * each changed link gets its own audit event with before/after values.
  */
-export async function PATCH(request: NextRequest) {
+async function handlePatch(request: NextRequest) {
   const resolved = await resolveActor(request, LINK_WRITE_SCOPES)
   if (!resolved.actor) return NextResponse.json({ error: resolved.error }, { status: resolved.status })
   const limit = await rateLimit(request, { name: 'bulk-edit', limit: 20, windowMs: 60_000, identifier: resolved.actor.userId })
@@ -61,3 +61,5 @@ export async function PATCH(request: NextRequest) {
   }
   return NextResponse.json(payload)
 }
+
+export const PATCH = withIdempotencyCleanup(handlePatch)
