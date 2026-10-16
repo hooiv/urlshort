@@ -8,3 +8,4 @@ meaningful. Each step reports `count`, `stepRatePct` (of the previous step), `ov
 Auth: session or API key with `analytics:read` / `links:read`. Bots are excluded.
 
 UI: /manage/funnel lets you enter a short code, ordered goal keys and a window, and renders the step bars with drop-off.
+- CSV export: add `&format=csv` to download the funnel as CSV.

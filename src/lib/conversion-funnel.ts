@@ -36,6 +36,15 @@ export type FunnelStep = {
   dropOff: number
 }
 
+/** CSV rows for a shaped funnel: a leading "clicks" row then one row per step. */
+export function funnelToCsvRows(f: { clicks: number; steps: FunnelStep[] }) {
+  return [
+    ['step', 'count', 'step_rate_pct', 'overall_rate_pct', 'drop_off'],
+    ['clicks', f.clicks, '', '', ''],
+    ...f.steps.map((s) => [s.key, s.count, s.stepRatePct ?? '', s.overallRatePct ?? '', s.dropOff]),
+  ]
+}
+
 const pct = (a: number, b: number) => (b > 0 ? Math.round((a / b) * 1000) / 10 : null)
 
 export function shapeFunnel(clicks: number, steps: string[], counts: number[]): { clicks: number; steps: FunnelStep[] } {

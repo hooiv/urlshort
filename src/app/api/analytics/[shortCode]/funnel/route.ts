@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getManageableUrl, READ_ROLES } from '@/lib/authorization'
 import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
-import { getLinkFunnel, parseFunnelSteps, parseFunnelWindow, FUNNEL_MAX_STEPS } from '@/lib/conversion-funnel'
+import { getLinkFunnel, parseFunnelSteps, parseFunnelWindow, funnelToCsvRows, FUNNEL_MAX_STEPS } from '@/lib/conversion-funnel'
+import { serializeCsv } from '@/lib/csv'
 
 /**
- * GET /api/analytics/:shortCode/funnel?steps=lead,sale&days=30
+ * GET /api/analytics/:shortCode/funnel?steps=lead,sale&days=30[&format=csv]
  * Ordered goal funnel: human clicks -> each goal key, strictly click-attributed.
  * Session auth or API key with analytics:read / links:read.
  */
@@ -24,6 +25,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     if (days === null) return NextResponse.json({ error: 'days must be one of 7, 30, 90' }, { status: 400 })
 
     const funnel = await getLinkFunnel(access.url.id, steps, days)
+    if (params.get('format') === 'csv') {
+      return new NextResponse(serializeCsv(funnelToCsvRows(funnel)), {
+        headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="funnel-${shortCode}.csv"`, 'Cache-Control': 'private, no-store' },
+      })
+    }
     return NextResponse.json(funnel, { headers: { 'Cache-Control': 'private, max-age=60' } })
   } catch (error) {
     console.error('Conversion funnel failed:', error)

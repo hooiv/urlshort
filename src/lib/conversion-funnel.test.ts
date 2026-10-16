@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseFunnelSteps, parseFunnelWindow, shapeFunnel } from './conversion-funnel'
+import { parseFunnelSteps, parseFunnelWindow, shapeFunnel, funnelToCsvRows } from './conversion-funnel'
 
 describe('parseFunnelSteps', () => {
   it('parses ordered unique keys', () => expect(parseFunnelSteps('signup, purchase')).toEqual(['signup', 'purchase']))
@@ -29,5 +29,14 @@ describe('shapeFunnel', () => {
     expect(shapeFunnel(10, ['a', 'b'], [5, 9]).steps[1].count).toBe(5)
     const z = shapeFunnel(0, ['a'], [3])
     expect(z.steps[0]).toMatchObject({ count: 0, stepRatePct: null, overallRatePct: null })
+  })
+})
+
+describe('funnelToCsvRows', () => {
+  it('emits header, clicks row and step rows', () => {
+    const rows = funnelToCsvRows(shapeFunnel(100, ['lead', 'sale'], [40, 10]))
+    expect(rows[0]).toEqual(['step', 'count', 'step_rate_pct', 'overall_rate_pct', 'drop_off'])
+    expect(rows[1]).toEqual(['clicks', 100, '', '', ''])
+    expect(rows[3]).toEqual(['sale', 10, 25, 10, 30])
   })
 })
