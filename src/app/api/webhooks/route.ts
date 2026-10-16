@@ -7,6 +7,7 @@ import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
 import crypto from 'crypto';
 import { isSlackWebhookUrl } from '@/lib/slack-format';
 import { parseLinkFilterInput } from '@/lib/webhook-filters';
+import { beginRouteIdempotency, releaseRouteIdempotency, storeRouteIdempotency, type RouteIdempotency } from '@/lib/idempotency-route';
 import { isWorkspaceAdmin, manageableEndpointWhere, resolveEndpointFilter } from '@/lib/webhook-endpoint-access';
 
 /**
@@ -115,6 +116,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  let idem: RouteIdempotency | null = null;
   try {
     const resolved = await resolveActor(request, WEBHOOK_SCOPES);
     if (!resolved.actor) return NextResponse.json({ error: resolved.status === 401 ? 'Unauthorized' : resolved.error }, { status: resolved.status });
@@ -160,6 +162,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: message }, { status: 400 });
     }
 
+    // A retried create with the same Idempotency-Key must not mint a second endpoint.
+    idem = await beginRouteIdempotency(request, user.id, { url: normalizedUrl, events: normalizedEvents, workspaceId, filter: resolvedFilter.value });
+    if (idem.invalid) return NextResponse.json({ error: idem.invalid }, { status: 400 });
+    if (idem.replay) return idem.replay as NextResponse;
+
     const secret = crypto.randomBytes(24).toString('hex');
 
     const endpoint = await prisma.webhookEndpoint.create({
@@ -174,9 +181,13 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // The full secret is returned exactly once, at creation time.
+    // The full secret is returned exactly once; the stored replay omits it.
+    const { secret: _omit, ...withoutSecret } = endpoint;
+    void _omit;
+    await storeRouteIdempotency(request, idem, 201, withoutSecret);
     return NextResponse.json(endpoint, { status: 201 });
   } catch (error) {
+    if (idem) await releaseRouteIdempotency(idem);
     console.error('Create webhook endpoint failed:', error);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
