@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { getCurrentUser } from '@/lib/auth';
 import { requireWorkspaceRole, EDIT_ROLES } from '@/lib/workspaces';
 import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit';
+import { beginRouteIdempotency, releaseRouteIdempotency, storeRouteIdempotency } from '@/lib/idempotency-route';
 
 export const MAX_BIO_HANDLE_LENGTH = 64;
 const BIO_HANDLE_RE = /^[a-z0-9]([a-z0-9-]{0,62}[a-z0-9])?$/;
@@ -82,18 +83,21 @@ export async function POST(request: NextRequest) {
     }
     const { handle, displayName, bioText, theme, workspaceId } = parsed.data;
 
-    const existing = await prisma.bioProfile.findUnique({
-      where: { handle },
-    });
-
-    if (existing) {
-      return NextResponse.json({ error: 'Handle already taken' }, { status: 409 });
-    }
-
     if (workspaceId) {
       const access = await requireWorkspaceRole(request, workspaceId, EDIT_ROLES);
       if (access.error) return NextResponse.json({ error: access.error }, { status: access.status });
     }
+
+    const idem = await beginRouteIdempotency(request, user.id, { handle, displayName: displayName ?? null, bioText: bioText ?? null, theme: theme ?? null, workspaceId: workspaceId ?? null });
+    if (idem.invalid) return NextResponse.json({ error: idem.invalid }, { status: 400 });
+    if (idem.replay) return idem.replay as NextResponse;
+    const reject = async (body: Record<string, unknown>, status: number) => { await releaseRouteIdempotency(idem); return NextResponse.json(body, { status }); };
+
+    const existing = await prisma.bioProfile.findUnique({
+      where: { handle },
+    });
+
+    if (existing) return reject({ error: 'Handle already taken' }, 409);
 
     let profile;
     try {
@@ -108,11 +112,13 @@ export async function POST(request: NextRequest) {
       });
     } catch (error) {
       if ((error as { code?: string }).code === 'P2002') {
-        return NextResponse.json({ error: 'Handle already taken' }, { status: 409 });
+        return reject({ error: 'Handle already taken' }, 409);
       }
+      await releaseRouteIdempotency(idem);
       throw error;
     }
 
+    await storeRouteIdempotency(request, idem, 201, JSON.parse(JSON.stringify(profile)));
     return NextResponse.json(profile, { status: 201 });
   } catch (error) {
     console.error('Error creating bio profile:', error);
