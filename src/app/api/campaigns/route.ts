@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { getDefaultWorkspace } from '@/lib/workspaces'
-import { getIdempotentResponse, storeIdempotentResponse } from '@/lib/idempotency'
+import { getIdempotentResponse, releaseIdempotencyClaim, storeIdempotentResponse } from '@/lib/idempotency'
 import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
 import { requireWorkspaceRole, EDIT_ROLES, ANALYTICS_ROLES } from '@/lib/workspaces'
 import { assertDestinationSafeForStorage } from '@/lib/destination-health'
@@ -61,7 +61,9 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(campaigns.map(serializeCampaign))
 }
 export async function POST(request: NextRequest) {
+ let claim: { workspaceId: string; keyHash: string } | null = null
  const workspace = await workspaceFor(request); if (!workspace) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+ const reject = async (res: NextResponse) => { if (claim) { await releaseIdempotencyClaim(claim.workspaceId, claim.keyHash).catch(() => undefined); claim = null } return res }
  try {
    const limit = await rateLimit(request, { name: 'campaigns-create', limit: 30, windowMs: 60_000 })
    if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) })
@@ -70,14 +72,15 @@ export async function POST(request: NextRequest) {
    const body = createSchema.parse(await request.json())
    const idem = await getIdempotentResponse(request, workspace.id, body)
    if (idem?.existing) return new NextResponse(idem.existing.responseJson,{status:idem.existing.responseStatus,headers:{'Content-Type':'application/json','Idempotent-Replay':'true'}})
-   if (!hasSingleControl(body.variants)) return NextResponse.json({error:'Only one control variant is allowed'},{status:400})
-   if (!areVariantWeightsValid(body.variants)) return NextResponse.json({error:'Variant weights must total 100'},{status:400})
+   if (idem) claim = { workspaceId: workspace.id, keyHash: idem.keyHash }
+   if (!hasSingleControl(body.variants)) return reject(NextResponse.json({error:'Only one control variant is allowed'},{status:400}))
+   if (!areVariantWeightsValid(body.variants)) return reject(NextResponse.json({error:'Variant weights must total 100'},{status:400}))
 
    const primaryUrl = await prisma.url.findFirst({ where: { id: body.primaryUrlId, workspaceId: workspace.id, deletedAt: null }, select: { id: true, shortCode: true } })
-   if (!primaryUrl) return NextResponse.json({ error: 'Choose a link from this workspace as the campaign entrypoint' }, { status: 400 })
+   if (!primaryUrl) return reject(NextResponse.json({ error: 'Choose a link from this workspace as the campaign entrypoint' }, { status: 400 }))
    for (const variant of body.variants) {
      try { await assertDestinationSafeForStorage(variant.destinationUrl) }
-     catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : 'Variant destination is not allowed' }, { status: 400 }) }
+     catch (error) { return reject(NextResponse.json({ error: error instanceof Error ? error.message : 'Variant destination is not allowed' }, { status: 400 })) }
    }
 
    const campaign=await prisma.$transaction(async tx => {
@@ -87,8 +90,8 @@ export async function POST(request: NextRequest) {
    })
    await publishWorkspaceRoutingConfig(workspace.id)
    const responseBody={campaign: serializeCampaign(campaign)}
-   if(idem) await storeIdempotentResponse({workspaceId:workspace.id,keyHash:idem.keyHash,requestHash:idem.requestHash,method:request.method,path:request.nextUrl.pathname,status:201,body:responseBody})
+   if(idem) { claim = null; await storeIdempotentResponse({workspaceId:workspace.id,keyHash:idem.keyHash,requestHash:idem.requestHash,method:request.method,path:request.nextUrl.pathname,status:201,body:responseBody}) }
    await recordAudit(request, { action: 'campaign.create', resourceType: 'campaign', resourceId: campaign.id, after: { name: campaign.name, slug: campaign.slug, primaryUrlId: primaryUrl.id, variantCount: campaign.variants.length } })
    return NextResponse.json(responseBody,{status:201})
- } catch(e){console.error('Campaign create failed:', e);const safe=toCampaignCreateError(e);return NextResponse.json({error:safe.error},{status:safe.status})}
+ } catch(e){if(claim) await releaseIdempotencyClaim(claim.workspaceId, claim.keyHash).catch(()=>undefined);console.error('Campaign create failed:', e);const safe=toCampaignCreateError(e);return NextResponse.json({error:safe.error},{status:safe.status})}
 }
