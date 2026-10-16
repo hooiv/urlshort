@@ -22,6 +22,33 @@ const LINK_READ = ['links:read', 'links:write']
 const ANALYTICS = ['analytics:read', 'links:read', 'links:write']
 
 export const OPERATIONS: OperationDef[] = [
+  { path: '/api/bulk', method: 'post', summary: 'Bulk create or import links', tag: 'Links', scopes: ['links:write'] },
+  { path: '/api/commissions', method: 'get', summary: 'List reward commissions', tag: 'Rewards', scopes: LINK_READ },
+  { path: '/api/commissions/export', method: 'get', summary: 'Export commissions as CSV', tag: 'Rewards', scopes: LINK_READ },
+  { path: '/api/commissions/statement', method: 'get', summary: 'Partner payout statement', tag: 'Rewards', scopes: LINK_READ },
+  { path: '/api/links/{shortCode}/domains', method: 'get', summary: 'List domains attached to a link', tag: 'Domains', scopes: ['links:write'] },
+  { path: '/api/links/{shortCode}/domains', method: 'post', summary: 'Attach a domain to a link', tag: 'Domains', scopes: ['links:write'] },
+  { path: '/api/links/{shortCode}/domains', method: 'patch', summary: 'Update the domain on a link', tag: 'Domains', scopes: ['links:write'] },
+  { path: '/api/links/{shortCode}/domains', method: 'delete', summary: 'Detach a domain from a link', tag: 'Domains', scopes: ['links:write'] },
+  { path: '/api/links/{shortCode}/folder', method: 'patch', summary: 'Move a link to a folder', tag: 'Links', scopes: ['links:write'] },
+  { path: '/api/links/{shortCode}/goals', method: 'get', summary: 'List conversion goals for a link', tag: 'Links', scopes: ['links:write'] },
+  { path: '/api/links/{shortCode}/goals', method: 'post', summary: 'Create a conversion goal', tag: 'Links', scopes: ['links:write'] },
+  { path: '/api/links/bulk-clone', method: 'post', summary: 'Clone several links at once', tag: 'Links', scopes: ['links:write'] },
+  { path: '/api/links/preflight', method: 'post', summary: 'Check a destination URL before creating a link', tag: 'Links', scopes: LINK_READ },
+  { path: '/api/rewards/preview', method: 'post', summary: 'Preview a reward calculation', tag: 'Rewards', scopes: LINK_READ },
+  { path: '/api/tags/rename', method: 'post', summary: 'Rename or merge a tag', tag: 'Tags', scopes: ['links:write'] },
+  { path: '/api/tags/suggest', method: 'get', summary: 'Suggest tags for a destination', tag: 'Tags', scopes: LINK_READ },
+  { path: '/api/views/{id}', method: 'delete', summary: 'Delete a saved view', tag: 'Views', scopes: ['links:write'] },
+  { path: '/api/webhooks/{id}', method: 'patch', summary: 'Update a webhook', tag: 'Webhooks', scopes: ['webhooks:write'] },
+  { path: '/api/webhooks/{id}', method: 'delete', summary: 'Delete a webhook', tag: 'Webhooks', scopes: ['webhooks:write'] },
+  { path: '/api/webhooks/{id}/deliveries', method: 'get', summary: 'List webhook deliveries', tag: 'Webhooks', scopes: ['webhooks:write'] },
+  { path: '/api/webhooks/{id}/deliveries/{deliveryId}', method: 'get', summary: 'Get one webhook delivery', tag: 'Webhooks', scopes: ['webhooks:write'] },
+  { path: '/api/webhooks/{id}/deliveries/{deliveryId}/replay', method: 'post', summary: 'Replay a delivery', tag: 'Webhooks', scopes: ['webhooks:write'] },
+  { path: '/api/webhooks/{id}/deliveries/replay-failed', method: 'post', summary: 'Replay all failed deliveries', tag: 'Webhooks', scopes: ['webhooks:write'] },
+  { path: '/api/webhooks/{id}/test', method: 'post', summary: 'Send a test event', tag: 'Webhooks', scopes: ['webhooks:write'] },
+  { path: '/api/zapier/hooks', method: 'post', summary: 'Subscribe a Zapier REST hook', tag: 'Zapier', scopes: ['webhooks:write'] },
+  { path: '/api/zapier/hooks/{id}', method: 'delete', summary: 'Unsubscribe a Zapier REST hook', tag: 'Zapier', scopes: ['webhooks:write'] },
+  { path: '/api/zapier/me', method: 'get', summary: 'Zapier connection test', tag: 'Zapier', scopes: LINK_READ },
   {
     path: '/api/shorten', method: 'post', summary: 'Create a short link', tag: 'Links', scopes: ['links:write'],
     body: {
