@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { maybeCsvResponse } from '@/lib/analytics-csv'
 import { prisma } from '@/lib/prisma'
 import { ANALYTICS_READ_SCOPES, resolveActor } from '@/lib/request-actor'
 import { READ_ROLES } from '@/lib/authorization'
@@ -30,6 +31,8 @@ export async function GET(request: NextRequest) {
     const viewer = canAdministerFolders(membership.role) ? undefined : { userId }
 
     const result = await getLanguagePerformance(workspaceId, viewer, days)
+    const csv = maybeCsvResponse(params.get('format'), result.languages as unknown as Record<string, unknown>[], 'languages-' + days + 'd')
+    if (csv) return csv
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, max-age=60' } })
   } catch (error) {
     console.error('Country performance failed:', error)
