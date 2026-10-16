@@ -72,6 +72,12 @@ export const OPERATIONS: OperationDef[] = [
   { path: '/api/analytics/referrers', method: 'get', summary: 'Clicks and conversions by referrer', tag: 'Analytics', scopes: ANALYTICS },
   { path: '/api/analytics/tags', method: 'get', summary: 'Performance per tag', tag: 'Analytics', scopes: ANALYTICS },
   { path: '/api/analytics/folders', method: 'get', summary: 'Performance per folder', tag: 'Analytics', scopes: ANALYTICS },
+  { path: '/api/analytics/cities', method: 'get', summary: 'Clicks and conversions by city', tag: 'Analytics', scopes: ANALYTICS },
+  { path: '/api/analytics/languages', method: 'get', summary: 'Clicks and conversions by language', tag: 'Analytics', scopes: ANALYTICS },
+  { path: '/api/analytics/creators', method: 'get', summary: 'Performance per creator', tag: 'Analytics', scopes: ANALYTICS },
+  { path: '/api/analytics/conversions', method: 'get', summary: 'Conversion performance per link', tag: 'Analytics', scopes: ANALYTICS },
+  { path: '/api/analytics/traffic-quality', method: 'get', summary: 'Human, bot and AI traffic split', tag: 'Analytics', scopes: ANALYTICS },
+  { path: '/api/analytics/compare', method: 'get', summary: 'Period-over-period comparison', tag: 'Analytics', scopes: ANALYTICS },
 ]
 
 type Json = Record<string, unknown>
