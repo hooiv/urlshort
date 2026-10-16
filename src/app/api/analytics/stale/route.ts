@@ -5,10 +5,11 @@ import { READ_ROLES } from '@/lib/authorization'
 import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { canAdministerFolders } from '@/lib/folders'
 import type { AnalyticsScope } from '@/lib/aggregate-analytics'
+import { maybeCsvResponse } from '@/lib/analytics-csv'
 import { getStaleLinks, parseStaleDays, parseStaleLimit } from '@/lib/stale-links'
 
 /**
- * GET /api/analytics/stale?workspaceId=&days=30|60|90|180|365&limit=50
+ * GET /api/analytics/stale?workspaceId=&days=30|60|90|180|365&limit=50&format=csv
  * Active links with no human click for N days. Session auth or API key with analytics:read / links:read.
  */
 export async function GET(request: NextRequest) {
@@ -37,6 +38,8 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await getStaleLinks(scope, { days, limit: max })
+    const csv = maybeCsvResponse(params.get('format'), result.links as unknown as Record<string, unknown>[], 'stale-links-' + days + 'd')
+    if (csv) return csv
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, max-age=60' } })
   } catch (error) {
     console.error('Stale links failed:', error)
