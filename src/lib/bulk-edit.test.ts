@@ -65,6 +65,12 @@ describe('bulkEditSchema', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { offHoursUrl: 'javascript:alert(1)' } }).success).toBe(false)
   })
 
+  it('validates visitorBlock changes', () => {
+    expect(bulkEditSchema.safeParse({ links, changes: { visitorBlock: null } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { visitorBlock: { cidrs: ['10.0.0.0/8'], referrerHosts: ['spam.example'] } } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { visitorBlock: { cidrs: ['not-an-ip'] } } }).success).toBe(false)
+  })
+
   it('validates geoFence changes', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { geoFence: { mode: 'deny', countries: ['us', 'DE'] } } }).success).toBe(true)
     expect(bulkEditSchema.safeParse({ links, changes: { geoFence: null } }).success).toBe(true)
