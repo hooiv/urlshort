@@ -251,6 +251,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
         language,
         ...utm,
         visitorIdHash,
+        privacySignal: request.headers.get('sec-gpc')?.trim() === '1' || request.headers.get('dnt')?.trim() === '1',
         dateKey,
         shortCode: url!.shortCode,
         usageReserved,

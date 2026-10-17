@@ -6,11 +6,11 @@ import { ShieldOff } from 'lucide-react'
 type Workspace = { id: string; name: string; role: string }
 type Policy = {
   region: string; retentionDays: number; hashIp: boolean; hashVisitor: boolean
-  storeUserAgent: boolean; storeReferrer: boolean; aggregateOnly: boolean
+  storeUserAgent: boolean; storeReferrer: boolean; aggregateOnly: boolean; honorPrivacySignals?: boolean
   analyticsExclusions?: string[] | null
 }
 const EDIT_ROLES = ['owner', 'admin']
-const POLICY_KEYS = ['region', 'retentionDays', 'hashIp', 'hashVisitor', 'storeUserAgent', 'storeReferrer', 'aggregateOnly'] as const
+const POLICY_KEYS = ['region', 'retentionDays', 'hashIp', 'hashVisitor', 'storeUserAgent', 'storeReferrer', 'aggregateOnly', 'honorPrivacySignals'] as const
 
 export default function PrivacyExclusionsPage() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
@@ -93,6 +93,18 @@ export default function PrivacyExclusionsPage() {
           {workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
         </select>
       )}
+      <label className="flex items-start gap-3 text-sm">
+        <input
+          type="checkbox"
+          checked={policy?.honorPrivacySignals ?? false}
+          disabled={!canEdit || !policy}
+          onChange={(e) => setPolicy((c) => (c ? { ...c, honorPrivacySignals: e.target.checked } : c))}
+          className="mt-1"
+        />
+        <span>
+          Honor Global Privacy Control and Do Not Track. Visitors who send these signals are still counted, but without IP, visitor ID, user agent, referrer or UTM details.
+        </span>
+      </label>
       <textarea
         aria-label="Excluded IPs and CIDR ranges"
         value={text}

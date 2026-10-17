@@ -30,6 +30,8 @@ export type ClickData = {
   utmTerm?: string | null
   utmContent?: string | null
   visitorIdHash?: string | null
+  /** True when the visitor sent Sec-GPC: 1 or DNT: 1. */
+  privacySignal?: boolean
   dateKey: string
   shortCode: string
   /** True when tenant click quota was reserved before the redirect was accepted. */

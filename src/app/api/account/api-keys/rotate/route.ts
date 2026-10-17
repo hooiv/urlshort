@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
         data: { userId: user.id, name: old.name, keyHash, prefix, scopes: old.scopes, expiresAt: null, allowedIps: old.allowedIps },
         select: { id: true, name: true, prefix: true, scopes: true, expiresAt: true, allowedIps: true, createdAt: true },
       }),
-      prisma.apiKey.update(graceHours === 0 ? { where: { id: old.id }, data: { revokedAt: now } } : { where: { id: old.id }, data: { expiresAt: oldExpiry } }),
+      prisma.apiKey.update({ where: { id: old.id }, data: graceHours === 0 ? { revokedAt: now } : { expiresAt: oldExpiry } }),
     ])
     await recordAudit(request, { action: 'api_key.rotate', resourceType: 'api_key', resourceId: old.id, actorUserId: user.id, after: { newKeyId: created.id, graceHours, oldKeyExpiresAt: graceHours === 0 ? now.toISOString() : oldExpiry.toISOString() } })
     return NextResponse.json({ ...created, key, rotatedFrom: old.id, previousKeyExpiresAt: graceHours === 0 ? now : oldExpiry }, { status: 201 })

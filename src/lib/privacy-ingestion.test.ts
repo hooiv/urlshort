@@ -40,3 +40,20 @@ describe('privacy ingestion',()=>{
     expect(await sanitizeClickForIngestion({...base,ip:'198.51.100.1'},'ws')).not.toBeNull()
   })
 })
+
+describe('privacy signals (GPC/DNT)',()=>{
+  const base={clickEventId:'c',urlId:'u',ip:'203.0.113.4',visitorIdHash:'v',userAgent:'ua',referer:'https://r.example',referrerHost:'r.example',country:'IN',utmSource:'s',dateKey:'2026-09-01',shortCode:'x'}
+  beforeEach(()=>{findUnique.mockReset();clearPrivacyCache()})
+  it('anonymizes signalled clicks when the workspace honors signals but keeps them counted',async()=>{
+    findUnique.mockResolvedValue({hashIp:true,hashVisitor:true,storeUserAgent:true,storeReferrer:true,aggregateOnly:false,honorPrivacySignals:true})
+    const r=await sanitizeClickForIngestion({...base,privacySignal:true},'ws')
+    expect(r).toMatchObject({ip:null,visitorIdHash:null,userAgent:null,referer:null,utmSource:null,country:null})
+  })
+  it('leaves clicks untouched without a signal or when the option is off',async()=>{
+    findUnique.mockResolvedValue({hashIp:true,hashVisitor:true,storeUserAgent:true,storeReferrer:true,aggregateOnly:false,honorPrivacySignals:true})
+    expect((await sanitizeClickForIngestion(base,'ws'))?.ip).toHaveLength(64)
+    clearPrivacyCache()
+    findUnique.mockResolvedValue({hashIp:true,hashVisitor:true,storeUserAgent:true,storeReferrer:true,aggregateOnly:false,honorPrivacySignals:false})
+    expect((await sanitizeClickForIngestion({...base,privacySignal:true},'ws'))?.ip).toHaveLength(64)
+  })
+})

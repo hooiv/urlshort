@@ -1119,6 +1119,7 @@ model PrivacyPolicy {
   storeReferrer            Boolean   @default(true)
   aggregateOnly            Boolean   @default(false)
   analyticsExclusions      String[]  @default([])
+  honorPrivacySignals      Boolean   @default(false)
   analyticsConsentRequired Boolean   @default(false)
   dataResidency            String    @default("global")
   auditRetentionDays       Int       @default(365)
