@@ -22,10 +22,10 @@ function hashToken(token: string): string { return createHash('sha256').update(t
 export async function hashPassword(password: string): Promise<string> { return bcrypt.hash(password, 12) }
 export async function verifyPassword(password: string, hash: string): Promise<boolean> { return bcrypt.compare(password, hash) }
 
-export async function createSession(userId: string, userAgent: string | null) {
+export async function createSession(userId: string, userAgent: string | null, origin?: { ipPrefix: string | null; country: string | null }) {
   const token = randomBytes(32).toString('base64url')
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000)
-  const session = await prisma.session.create({ data: { tokenHash: hashToken(token), userId, expiresAt, userAgent } })
+  const session = await prisma.session.create({ data: { tokenHash: hashToken(token), userId, expiresAt, userAgent, ipPrefix: origin?.ipPrefix ?? null, country: origin?.country ?? null } })
   return { id: session.id, token, expiresAt }
 }
 

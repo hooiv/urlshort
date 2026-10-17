@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma'
 export async function GET(request: NextRequest) {
   const current = await getCurrentSession(request)
   if (!current) return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
-  const sessions = await prisma.session.findMany({ where: { userId: current.user.id, revokedAt: null, expiresAt: { gt: new Date() } }, orderBy: { lastSeenAt: 'desc' }, select: { id: true, userAgent: true, createdAt: true, lastSeenAt: true, expiresAt: true } })
+  const sessions = await prisma.session.findMany({ where: { userId: current.user.id, revokedAt: null, expiresAt: { gt: new Date() } }, orderBy: { lastSeenAt: 'desc' }, select: { id: true, userAgent: true, ipPrefix: true, country: true, createdAt: true, lastSeenAt: true, expiresAt: true } })
   return NextResponse.json(sessions.map((session) => ({ ...session, current: session.id === current.id })))
 }
 

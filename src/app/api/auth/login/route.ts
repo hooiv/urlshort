@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { sessionOriginFromHeaders } from '@/lib/session-origin'
 import { createSession, normalizeEmail, setSessionCookie, verifyPassword } from '@/lib/auth'
 import { recordAudit } from '@/lib/audit'
 import { verifySecondFactor } from '@/lib/mfa'
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
     }
     const userAgent = request.headers.get('user-agent')
     await notifyIfNewDevice(user, userAgent, request.nextUrl.origin)
-    const session = await createSession(user.id, request.headers.get('user-agent'))
+    const session = await createSession(user.id, request.headers.get('user-agent'), sessionOriginFromHeaders(request.headers))
     const mobile = request.headers.get('x-mobile-client') === '1'
     const response = NextResponse.json({ user: { id: user.id, email: user.email, name: user.name }, ...(mobile ? { token: session.token, expiresAt: session.expiresAt } : {}) })
     setSessionCookie(response, session.token, session.expiresAt)

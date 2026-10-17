@@ -1,6 +1,8 @@
 export type Session = {
   id: string
   userAgent: string | null
+  ipPrefix?: string | null
+  country?: string | null
   createdAt: string
   lastSeenAt: string
   expiresAt: string
@@ -35,4 +37,9 @@ export function validatePasswordChange(input: {
 export function buildRevokeBody(sessionId?: string): Record<string, string> {
   const trimmed = (sessionId ?? '').trim()
   return trimmed ? { sessionId: trimmed } : {}
+}
+
+/** "IN · 203.0.113.0/24" style origin label; empty string when nothing is known. */
+export function labelSessionOrigin(session: { ipPrefix?: string | null; country?: string | null }): string {
+  return [session.country, session.ipPrefix].filter(Boolean).join(' · ')
 }

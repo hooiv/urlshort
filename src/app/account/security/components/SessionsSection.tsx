@@ -2,7 +2,7 @@
 
 import { Laptop, LogOut } from 'lucide-react'
 import type { Session } from '@/app/account/security/components/session-utils'
-import { labelSessionDevice } from '@/app/account/security/components/session-utils'
+import { labelSessionDevice, labelSessionOrigin } from '@/app/account/security/components/session-utils'
 
 export default function SessionsSection({
   sessions,
@@ -48,7 +48,7 @@ export default function SessionsSection({
                     )}
                   </div>
                   <div className="mt-1 text-xs text-slate-600">
-                    Last seen {new Date(session.lastSeenAt).toLocaleString()} · Created{' '}
+                    {labelSessionOrigin(session) ? `${labelSessionOrigin(session)} · ` : ''}Last seen {new Date(session.lastSeenAt).toLocaleString()} · Created{' '}
                     {new Date(session.createdAt).toLocaleDateString()}
                   </div>
                 </div>

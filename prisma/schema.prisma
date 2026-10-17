@@ -386,6 +386,8 @@ model Session {
   expiresAt  DateTime
   revokedAt  DateTime?
   userAgent  String?
+  ipPrefix   String?
+  country    String?
   lastSeenAt DateTime  @default(now())
   createdAt  DateTime  @default(now())
 

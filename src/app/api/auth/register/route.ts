@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
+import { sessionOriginFromHeaders } from '@/lib/session-origin'
 import { NextRequest, NextResponse } from 'next/server'
 import { createSession, hashPassword, normalizeEmail, setSessionCookie, validatePassword } from '@/lib/auth'
 import { recordAudit } from '@/lib/audit'
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
     const user = await prisma.user.create({ data: { email, name, password: await hashPassword(password) }, select: { id: true, email: true, name: true } })
     const workspaceName = name ? `${name}'s Workspace` : 'My Workspace'
     const workspace = await prisma.workspace.create({ data: { name: workspaceName, slug: slugifyWorkspace(workspaceName), members: { create: { userId: user.id, role: 'owner' } } } })
-    const session = await createSession(user.id, request.headers.get('user-agent'))
+    const session = await createSession(user.id, request.headers.get('user-agent'), sessionOriginFromHeaders(request.headers))
 
     // Send the verification email (best-effort; registration never blocks on it).
     try {
