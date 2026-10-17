@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildCompare, dayRange, parseCompareCodes, parseCompareDays } from './link-compare'
+import { leadConfidence, buildCompare, dayRange, parseCompareCodes, parseCompareDays } from './link-compare'
 
 describe('link compare', () => {
   it('validates codes and days', () => {
@@ -29,5 +29,19 @@ describe('link compare', () => {
     const f = [{ shortCode: 'a', title: null }, { shortCode: 'b', title: null }]
     expect(buildCompare(['a', 'b'], f, [], days).leader).toBeNull()
     expect(buildCompare(['a', 'b'], f, [{ shortCode: 'a', title: null, day: days[0], clicks: 1 }, { shortCode: 'b', title: null, day: days[1], clicks: 1 }], days).leader).toBeNull()
+  })
+})
+
+describe('leadConfidence', () => {
+  it('is null for tiny samples and non-leads', () => {
+    expect(leadConfidence(5, 3)).toBeNull()
+    expect(leadConfidence(50, 50)).toBeNull()
+  })
+  it('grows with the gap', () => {
+    const close = leadConfidence(110, 100)!
+    const wide = leadConfidence(200, 100)!
+    expect(close).toBeLessThan(0.85)
+    expect(wide).toBeGreaterThan(0.999)
+    expect(wide).toBeGreaterThan(close)
   })
 })

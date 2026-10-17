@@ -26,7 +26,7 @@ export function parseCompareDays(raw: string | null): number | null {
 }
 
 export type CompareSeries = { shortCode: string; title: string | null; total: number; peakDay: string | null; daily: number[] }
-export type CompareResult = { days: string[]; links: CompareSeries[]; missing: string[]; leader: string | null }
+export type CompareResult = { days: string[]; links: CompareSeries[]; missing: string[]; leader: string | null; leaderConfidence: number | null }
 
 export function utcDayKey(d: Date): string {
   return d.toISOString().slice(0, 10)
@@ -58,7 +58,28 @@ export function buildCompare(codes: string[], found: { shortCode: string; title:
   })
   const top = [...links].sort((a, b) => b.total - a.total)
   const leader = top.length > 0 && top[0].total > 0 && (top.length === 1 || top[0].total > top[1].total) ? top[0].shortCode : null
-  return { days: dayKeys, links, missing: codes.filter((c) => !byCode.has(c)), leader }
+  const leaderConfidence = leader && top.length > 1 ? leadConfidence(top[0].total, top[1].total) : null
+  return { days: dayKeys, links, missing: codes.filter((c) => !byCode.has(c)), leader, leaderConfidence }
+}
+
+/** Standard normal CDF (Abramowitz-Stegun 7.1.26 via erf). */
+function normalCdf(z: number): number {
+  const t = 1 / (1 + 0.3275911 * Math.abs(z) / Math.SQRT2)
+  const x = Math.abs(z) / Math.SQRT2
+  const erf = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x)
+  return z >= 0 ? 0.5 * (1 + erf) : 0.5 * (1 - erf)
+}
+
+/**
+ * Probability (0..1) that the leader's true click rate really exceeds the runner-up's,
+ * for equal exposure windows: conditional on a+b total clicks, a ~ Binomial(a+b, 0.5),
+ * so z = (a-b)/sqrt(a+b) (normal approximation with continuity correction).
+ */
+export function leadConfidence(a: number, b: number): number | null {
+  const n = a + b
+  if (n < 10 || a <= b) return null
+  const z = (a - b - 1) / Math.sqrt(n)
+  return Math.round(normalCdf(Math.max(z, 0)) * 10000) / 10000
 }
 
 export async function compareLinks(scope: AnalyticsScope, codes: string[], days: number, now = new Date()): Promise<CompareResult> {
