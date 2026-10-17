@@ -30,6 +30,7 @@
 | `geoFence` | `{ mode: "allow"\|"deny", countries: ["US"] }` applied to every link, or `null` to remove the restriction (also in the bulk bar's Country restriction control) |
 | `notStartedUrl` | http(s) URL visitors see before the link's `startsAt`, or `null` to clear it |
 | `notes` | Private internal note set on every link; `null` or empty string clears it |
+| `clickIdParam` | Click-ID passthrough parameter name (e.g. `clickid`); `null` or empty disables it. Reserved names are rejected |
 | `autoFailoverEnabled` | `false` to stop automatic failover to backup destinations when the primary is down, `true` to re-enable |
 | `queryForwarding` | `{ mode: 'all' \| 'none' \| 'allowlist', allow?: string[] }` sets which incoming query parameters are forwarded to the destination (allowlist needs 1–25 names; `ql_*` and credential-like params are never forwarded) |
 | `cloaked` | `true` to serve the destination inside a masked frame (URL cloaking), `false` to turn it off |

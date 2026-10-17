@@ -12,6 +12,7 @@ import { parseActiveHours } from '@/lib/active-hours'
 import { hashGatePassword } from '@/lib/password-gate'
 import { validateOgFields } from '@/lib/og-preview'
 import { normalizePixelId, PIXEL_PROVIDERS, PixelValidationError, type PixelProvider } from '@/lib/retargeting-pixels'
+import { parseClickIdParam } from '@/lib/click-id-param'
 import { parseGeoFence } from '@/lib/geo-fence'
 import { rewriteDestination, validateRewriteSpec, type RewriteSpec } from '@/lib/destination-rewrite'
 
@@ -60,6 +61,8 @@ export const bulkEditSchema = z.object({
     pinned: z.boolean().optional(),
     /** 301/302/307/308; null resets to the 307 default. Permanent codes are refused on links with a password, schedule, click limit or rules. */
     redirectStatus: z.union([z.literal(301), z.literal(302), z.literal(307), z.literal(308)]).nullable().optional(),
+    /** Click-ID passthrough parameter name appended to destinations (e.g. `clickid`); null or empty turns it off. Validated like the single-link editor. */
+    clickIdParam: z.string().max(64).nullable().optional(),
     /** Private internal note on every link; null or empty clears it. */
     notes: z.string().trim().max(2000).nullable().optional(),
     /** String sets the same gate password on every link; null removes it. Never echoed back or audited. */
@@ -100,6 +103,9 @@ export const bulkEditSchema = z.object({
       try { normalizePixelId(k, c.pixels[k]) } catch (e) { if (e instanceof PixelValidationError) ctx.addIssue({ code: 'custom', message: e.message }) }
     }
   }
+  if (c.clickIdParam !== undefined) {
+    try { parseClickIdParam(c.clickIdParam) } catch (e) { ctx.addIssue({ code: 'custom', message: (e as Error).message }) }
+  }
   if (c.utm && c.utmTemplateId) ctx.addIssue({ code: 'custom', message: 'Send utm or utmTemplateId, not both' })
   if (c.extendExpiryDays !== undefined && c.expiresAt !== undefined) ctx.addIssue({ code: 'custom', message: 'Send expiresAt or extendExpiryDays, not both' })
   if (c.startsAt && c.expiresAt && new Date(c.startsAt).getTime() >= new Date(c.expiresAt).getTime()) ctx.addIssue({ code: 'custom', message: 'startsAt must be before expiresAt' })
@@ -127,7 +133,7 @@ export function nextTags(current: string[], c: Pick<BulkEditChanges, 'addTags' |
 
 type LinkRow = {
   id: string; shortCode: string; originalUrl: string; tags: string[]; isActive: boolean
-  expiresAt: Date | null; startsAt: Date | null; maxClicks: number | null; dailyClickCap: number | null; expiredUrl: string | null; notStartedUrl: string | null; cloaked: boolean; queryForwardMode: string; queryForwardAllow: string[]; autoFailoverEnabled: boolean; metaPixelId: string | null; googleTagId: string | null; xPixelId: string | null; linkedinPartnerId: string | null; tiktokPixelId: string | null; pinnedAt: Date | null; redirectStatus: number | null; notes: string | null; title: string | null; description: string | null; ogImage: string | null; passwordHash: string | null; geoFence: unknown; activeHours: unknown; offHoursUrl: string | null; folderId: string | null; workspaceId: string | null; userId: string | null
+  expiresAt: Date | null; startsAt: Date | null; maxClicks: number | null; dailyClickCap: number | null; expiredUrl: string | null; notStartedUrl: string | null; cloaked: boolean; queryForwardMode: string; queryForwardAllow: string[]; autoFailoverEnabled: boolean; metaPixelId: string | null; googleTagId: string | null; xPixelId: string | null; linkedinPartnerId: string | null; tiktokPixelId: string | null; pinnedAt: Date | null; redirectStatus: number | null; notes: string | null; clickIdParam: string | null; title: string | null; description: string | null; ogImage: string | null; passwordHash: string | null; geoFence: unknown; activeHours: unknown; offHoursUrl: string | null; folderId: string | null; workspaceId: string | null; userId: string | null
 }
 
 const PIXEL_FIELDS = { meta: 'metaPixelId', google: 'googleTagId', x: 'xPixelId', linkedin: 'linkedinPartnerId', tiktok: 'tiktokPixelId' } as const satisfies Record<PixelProvider, 'metaPixelId' | 'googleTagId' | 'xPixelId' | 'linkedinPartnerId' | 'tiktokPixelId'>
@@ -148,7 +154,7 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
   const c = input.changes
   const rows: LinkRow[] = await prisma.url.findMany({
     where: { AND: [{ deletedAt: null, OR: [{ id: { in: keys } }, { shortCode: { in: keys } }] }, visibleUrlWhere(userId)] },
-    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, startsAt: true, maxClicks: true, dailyClickCap: true, expiredUrl: true, notStartedUrl: true, cloaked: true, queryForwardMode: true, queryForwardAllow: true, autoFailoverEnabled: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, pinnedAt: true, redirectStatus: true, notes: true, title: true, description: true, ogImage: true, passwordHash: true, geoFence: true, activeHours: true, offHoursUrl: true, folderId: true, workspaceId: true, userId: true },
+    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, startsAt: true, maxClicks: true, dailyClickCap: true, expiredUrl: true, notStartedUrl: true, cloaked: true, queryForwardMode: true, queryForwardAllow: true, autoFailoverEnabled: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, pinnedAt: true, redirectStatus: true, notes: true, clickIdParam: true, title: true, description: true, ogImage: true, passwordHash: true, geoFence: true, activeHours: true, offHoursUrl: true, folderId: true, workspaceId: true, userId: true },
   })
   const found = new Set(rows.flatMap((r) => [r.id, r.shortCode]))
   const failures: BulkEditFailure[] = keys.filter((k) => !found.has(k)).map((link) => ({ link, reason: 'Link not found' }))
@@ -274,6 +280,10 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
     if (c.redirectStatus !== undefined) {
       const next = parseRedirectStatus(c.redirectStatus)
       if (next !== (r.redirectStatus ?? null)) { data.redirectStatus = next; before.redirectStatus = r.redirectStatus ?? 307; after.redirectStatus = next ?? 307 }
+    }
+    if (c.clickIdParam !== undefined) {
+      const next = parseClickIdParam(c.clickIdParam)
+      if (next !== (r.clickIdParam ?? null)) { data.clickIdParam = next; before.clickIdParam = r.clickIdParam ?? null; after.clickIdParam = next }
     }
     if (c.notes !== undefined) {
       const next = c.notes && c.notes.length ? c.notes : null

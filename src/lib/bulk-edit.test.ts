@@ -72,6 +72,13 @@ describe('bulkEditSchema', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { geoFence: { mode: 'deny', countries: ['USA'] } } }).success).toBe(false)
   })
 
+  it('validates clickIdParam like the single-link editor', () => {
+    expect(bulkEditSchema.safeParse({ links, changes: { clickIdParam: 'clickid' } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { clickIdParam: null } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { clickIdParam: '1bad' } }).success).toBe(false)
+    expect(bulkEditSchema.safeParse({ links, changes: { clickIdParam: 'token' } }).success).toBe(false)
+  })
+
   it('accepts notes as trimmed string or null, rejects oversize', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { notes: 'Q4 promo' } }).success).toBe(true)
     expect(bulkEditSchema.safeParse({ links, changes: { notes: null } }).success).toBe(true)
