@@ -30,6 +30,8 @@ export type ApiKeyRow = {
   id: string
   name: string
   prefix: string
+  scopes?: string
+  expiresAt?: string | null
   lastUsedAt: string | null
   revokedAt: string | null
   allowedIps?: string[]

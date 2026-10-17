@@ -16,6 +16,8 @@ export function useApiKeys() {
   const [newKeyName, setNewKeyName] = useState('')
   const [createdKey, setCreatedKey] = useState<string | null>(null)
   const [newKeyIps, setNewKeyIps] = useState('')
+  const [newKeyScopes, setNewKeyScopes] = useState<string[]>(['*'])
+  const [newKeyExpiryDays, setNewKeyExpiryDays] = useState(0)
   const [busy, setBusy] = useState(false)
   const seqRef = useRef(0)
 
@@ -47,7 +49,10 @@ export function useApiKeys() {
         const response = await fetch('/api/account/api-keys', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: newKeyName.trim(), allowedIps: splitIps(newKeyIps) }),
+          body: JSON.stringify({ name: newKeyName.trim(), allowedIps: splitIps(newKeyIps),
+            scopes: newKeyScopes.length ? newKeyScopes : ['*'],
+            ...(newKeyExpiryDays > 0 ? { expiresInDays: newKeyExpiryDays } : {}),
+          }),
         })
         const data = await response.json().catch(() => null)
         if (!response.ok) throw new Error(data?.error || 'Could not create key')
@@ -62,7 +67,7 @@ export function useApiKeys() {
         setBusy(false)
       }
     },
-    [newKeyName, newKeyIps, loadKeys],
+    [newKeyName, newKeyIps, newKeyScopes, newKeyExpiryDays, loadKeys],
   )
 
   const revokeKey = useCallback(
@@ -104,9 +109,34 @@ export function useApiKeys() {
     [loadKeys],
   )
 
+  const rotateKey = useCallback(
+    async (id: string) => {
+      if (typeof window === 'undefined') return
+      const input = window.prompt('Keep the old key working for how many hours? (0 = revoke now, max 168)', '24')
+      if (input === null) return
+      const graceHours = Number(input.trim())
+      if (!Number.isInteger(graceHours) || graceHours < 0 || graceHours > 168) return toast.error('Enter a whole number from 0 to 168')
+      try {
+        const response = await fetch('/api/account/api-keys/rotate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, graceHours }),
+        })
+        const data = await response.json().catch(() => null)
+        if (!response.ok) throw new Error(data?.error || 'Could not rotate key')
+        setCreatedKey(data.key)
+        await loadKeys()
+        toast.success('Replacement key issued — copy it now')
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Could not rotate key')
+      }
+    },
+    [loadKeys],
+  )
+
   const dismissCreatedKey = useCallback(() => {
     setCreatedKey(null)
   }, [])
 
-  return { keys, newKeyName, setNewKeyName, newKeyIps, setNewKeyIps, editAllowlist, createdKey, busy, createKey, revokeKey, dismissCreatedKey }
+  return { rotateKey, newKeyScopes, setNewKeyScopes, newKeyExpiryDays, setNewKeyExpiryDays, keys, newKeyName, setNewKeyName, newKeyIps, setNewKeyIps, editAllowlist, createdKey, busy, createKey, revokeKey, dismissCreatedKey }
 }

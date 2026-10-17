@@ -6,8 +6,16 @@ import toast from 'react-hot-toast'
 import CardAction from '@/app/account/components/CardAction'
 import { useApiKeys } from '@/app/account/components/useApiKeys'
 
+const SCOPE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'links:read', label: 'Read links' },
+  { value: 'links:write', label: 'Write links' },
+  { value: 'analytics:read', label: 'Read analytics' },
+  { value: 'campaigns:write', label: 'Campaigns' },
+  { value: 'webhooks:write', label: 'Webhooks' },
+]
+
 export default function ApiKeysSection() {
-  const { keys, newKeyName, setNewKeyName, newKeyIps, setNewKeyIps, editAllowlist, createdKey, busy, createKey, revokeKey, dismissCreatedKey } = useApiKeys()
+  const { rotateKey, newKeyScopes, setNewKeyScopes, newKeyExpiryDays, setNewKeyExpiryDays, keys, newKeyName, setNewKeyName, newKeyIps, setNewKeyIps, editAllowlist, createdKey, busy, createKey, revokeKey, dismissCreatedKey } = useApiKeys()
 
   async function copyCreatedKey() {
     if (!createdKey) return
@@ -76,6 +84,41 @@ export default function ApiKeysSection() {
           Create key
         </button>
       </form>
+      <fieldset className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-400">
+        <legend className="sr-only">Key permissions</legend>
+        <label className="flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={newKeyScopes.includes('*')}
+            onChange={(e) => setNewKeyScopes(e.target.checked ? ['*'] : ['links:read'])}
+          />
+          Full access
+        </label>
+        {!newKeyScopes.includes('*') &&
+          SCOPE_OPTIONS.map((option) => (
+            <label key={option.value} className="flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={newKeyScopes.includes(option.value)}
+                onChange={(e) =>
+                  setNewKeyScopes(
+                    e.target.checked ? [...newKeyScopes, option.value] : newKeyScopes.filter((v) => v !== option.value).length ? newKeyScopes.filter((v) => v !== option.value) : newKeyScopes,
+                  )
+                }
+              />
+              {option.label}
+            </label>
+          ))}
+        <label className="ml-auto flex items-center gap-1.5">
+          Expires
+          <select value={newKeyExpiryDays} onChange={(e) => setNewKeyExpiryDays(Number(e.target.value))} className="rounded-md bg-slate-800 px-2 py-1">
+            <option value={0}>never</option>
+            <option value={30}>30 days</option>
+            <option value={90}>90 days</option>
+            <option value={365}>1 year</option>
+          </select>
+        </label>
+      </fieldset>
       {keys.length > 0 && (
         <div className="mt-5 divide-y divide-slate-800">
           {keys.map((apiKey) => (
@@ -107,14 +150,16 @@ export default function ApiKeysSection() {
                   <p className="mt-0.5 text-xs text-amber-200/80">{apiKey.health.advice}</p>
                 )}
                 <div className="mt-0.5 font-mono text-xs text-slate-600">
-                  {apiKey.prefix}… · created {new Date(apiKey.createdAt).toLocaleDateString()}
+                  {apiKey.prefix}… · {apiKey.scopes && apiKey.scopes !== '*' ? `scopes: ${apiKey.scopes.split(',').join(', ')} · ` : ''}created {new Date(apiKey.createdAt).toLocaleDateString()}
                   {apiKey.lastUsedAt
                     ? ` · last used ${new Date(apiKey.lastUsedAt).toLocaleDateString()}`
                     : ' · never used'}
+                  {apiKey.expiresAt ? ` · expires ${new Date(apiKey.expiresAt).toLocaleDateString()}` : ''}
                   {apiKey.allowedIps?.length ? ` · IPs: ${apiKey.allowedIps.join(', ')}` : ''}
                 </div>
               </div>
               {!apiKey.revokedAt && <CardAction onClick={() => void editAllowlist(apiKey.id, apiKey.allowedIps ?? [])} label="IPs" />}
+              {!apiKey.revokedAt && <CardAction onClick={() => void rotateKey(apiKey.id)} label="Rotate" />}
               {!apiKey.revokedAt && <CardAction onClick={() => void revokeKey(apiKey.id)} label="Revoke" danger />}
             </div>
           ))}
