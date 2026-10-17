@@ -12,6 +12,7 @@ import { parseActiveHours } from '@/lib/active-hours'
 import { hashGatePassword } from '@/lib/password-gate'
 import { validateOgFields } from '@/lib/og-preview'
 import { normalizePixelId, PIXEL_PROVIDERS, PixelValidationError, type PixelProvider } from '@/lib/retargeting-pixels'
+import { LINK_NOTES_MAX, validateLinkNotes } from '@/lib/link-notes'
 import { parseClickIdParam } from '@/lib/click-id-param'
 import { parseGeoFence } from '@/lib/geo-fence'
 import { rewriteDestination, validateRewriteSpec, type RewriteSpec } from '@/lib/destination-rewrite'
@@ -64,7 +65,10 @@ export const bulkEditSchema = z.object({
     /** Click-ID passthrough parameter name appended to destinations (e.g. `clickid`); null or empty turns it off. Validated like the single-link editor. */
     clickIdParam: z.string().max(64).nullable().optional(),
     /** Private internal note on every link; null or empty clears it. */
-    notes: z.string().trim().max(2000).nullable().optional(),
+    notes: z.string().max(LINK_NOTES_MAX * 2).nullable().optional().superRefine((v, ctx) => {
+      if (typeof v !== 'string') return
+      try { validateLinkNotes(v) } catch (e) { ctx.addIssue({ code: 'custom', message: (e as Error).message }) }
+    }),
     /** String sets the same gate password on every link; null removes it. Never echoed back or audited. */
     password: z.string().min(4).max(128).nullable().optional(),
     /** Social preview overrides for crawlers; null or empty clears a field. Fields not listed are untouched. Validated like the single-link editor. */
@@ -286,7 +290,7 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
       if (next !== (r.clickIdParam ?? null)) { data.clickIdParam = next; before.clickIdParam = r.clickIdParam ?? null; after.clickIdParam = next }
     }
     if (c.notes !== undefined) {
-      const next = c.notes && c.notes.length ? c.notes : null
+      const next = validateLinkNotes(c.notes)
       if (next !== (r.notes ?? null)) { data.notes = next; before.notes = r.notes ?? null; after.notes = next }
     }
     if (c.og) {

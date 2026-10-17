@@ -79,10 +79,15 @@ describe('bulkEditSchema', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { clickIdParam: 'token' } }).success).toBe(false)
   })
 
+  it('strips control characters from notes and matches the single-link cap', () => {
+    expect(bulkEditSchema.safeParse({ links, changes: { notes: ' a\u0000b\r\nc ' } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { notes: 'x'.repeat(1000) } }).success).toBe(true)
+  })
+
   it('accepts notes as trimmed string or null, rejects oversize', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { notes: 'Q4 promo' } }).success).toBe(true)
     expect(bulkEditSchema.safeParse({ links, changes: { notes: null } }).success).toBe(true)
-    expect(bulkEditSchema.safeParse({ links, changes: { notes: 'x'.repeat(2001) } }).success).toBe(false)
+    expect(bulkEditSchema.safeParse({ links, changes: { notes: 'x'.repeat(1001) } }).success).toBe(false)
   })
 
   it('accepts autoFailoverEnabled boolean only', () => {
