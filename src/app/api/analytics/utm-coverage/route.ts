@@ -5,6 +5,7 @@ import { READ_ROLES } from '@/lib/authorization'
 import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { canAdministerFolders } from '@/lib/folders'
 import type { AnalyticsScope } from '@/lib/aggregate-analytics'
+import { maybeCsvResponse } from '@/lib/analytics-csv'
 import { getUtmCoverage, parseCoverageLimit } from '@/lib/utm-coverage'
 
 /**
@@ -35,6 +36,12 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await getUtmCoverage(scope, { limit: max })
+    const csv = maybeCsvResponse(
+      params.get('format'),
+      (result.links as unknown as { missing: string[] }[]).map((l) => ({ ...l, missing: l.missing.join(' ') })),
+      'utm-coverage',
+    )
+    if (csv) return csv
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, max-age=60' } })
   } catch (error) {
     console.error('UTM coverage failed:', error)
