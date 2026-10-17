@@ -69,6 +69,7 @@ model Url {
   startsAt                   DateTime?
   notStartedUrl              String?
   geoFence                   Json?
+  visitorBlock               Json?
   activeHours                Json?
   clickTarget                Int?
   clickTargetDeadline        DateTime?

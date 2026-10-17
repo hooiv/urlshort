@@ -50,6 +50,7 @@ export type CachedLink = {
   startsAt: Date | null
   notStartedUrl: string | null
   geoFence: unknown
+  visitorBlock: unknown
   activeHours: unknown
   offHoursUrl: string | null
   clickIdParam: string | null
@@ -287,6 +288,7 @@ const linkSelect = {
   startsAt: true,
   notStartedUrl: true,
   geoFence: true,
+  visitorBlock: true,
   activeHours: true,
   offHoursUrl: true,
   clickIdParam: true,

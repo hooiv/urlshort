@@ -8,6 +8,8 @@ import { linkWindowState, notStartedTarget } from '@/lib/link-schedule'
 import { prisma } from '@/lib/prisma'
 import { appendClickId } from '@/lib/click-id-param'
 import { appendAttribution, createAttributionToken, hashVisitorId } from '@/lib/attribution'
+import { getClientIp } from '@/lib/rate-limit'
+import { evaluateVisitorBlock, type VisitorBlock } from '@/lib/visitor-block'
 import { isCountryAllowed, type GeoFence } from '@/lib/geo-fence'
 import { chooseSmartRule, getAiAgent, getBrowser, getCountry, getDeviceType, getLanguage, getOperatingSystem, getReferrerHost, getTrafficType, getTrafficConfidence, getVisitorId } from '@/lib/smart-routing'
 import { getBaseUrl } from '@/lib/utils'
@@ -97,6 +99,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     }
 
     if (url.geoFence && !isCountryAllowed(url.geoFence as GeoFence, getCountry(request))) {
+      return NextResponse.redirect(new URL('/region-unavailable', baseUrl), 307)
+    }
+
+    if (url.visitorBlock && evaluateVisitorBlock(url.visitorBlock as VisitorBlock, { ip: getClientIp(request), referer: request.headers.get('referer') })) {
       return NextResponse.redirect(new URL('/region-unavailable', baseUrl), 307)
     }
 
