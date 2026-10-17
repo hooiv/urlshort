@@ -145,6 +145,7 @@ const KEY_REACHABLE = [
   'webhooks/[id]/deliveries/route.ts',
   'webhooks/[id]/route.ts',
   'webhooks/[id]/test/route.ts',
+  'webhooks/[id]/rotate-secret/route.ts',
   'webhooks/route.ts',
   'workspaces/route.ts',
   'zapier/hooks/[id]/route.ts',
