@@ -127,3 +127,23 @@ describe('parseApiKeyExpiry', () => {
   it('treats absent as no expiry', () => { expect(parseApiKeyExpiry(undefined, now)).toBeUndefined() })
   it.each([0, 731, 1.5, '30', NaN])('rejects %s', (v) => { expect(parseApiKeyExpiry(v, now)).toBeNull() })
 })
+
+import { parseRotationGrace as _prg, rotatedKeyExpiry as _rke } from './api-keys'
+import { describe as d2, it as i2, expect as e2 } from 'vitest'
+d2('key rotation helpers', () => {
+  const now = new Date('2026-01-01T00:00:00Z')
+  i2('parses grace hours', () => {
+    e2(_prg(undefined)).toBe(24)
+    e2(_prg(0)).toBe(0)
+    e2(_prg(168)).toBe(168)
+    e2(_prg(169)).toBeNull()
+    e2(_prg(-1)).toBeNull()
+    e2(_prg(1.5)).toBeNull()
+    e2(_prg('5')).toBeNull()
+  })
+  i2('caps old key expiry at its own earlier expiry', () => {
+    e2(_rke(null, 24, now).toISOString()).toBe('2026-01-02T00:00:00.000Z')
+    e2(_rke(new Date('2026-01-01T06:00:00Z'), 24, now).toISOString()).toBe('2026-01-01T06:00:00.000Z')
+    e2(_rke(new Date('2026-03-01T00:00:00Z'), 2, now).toISOString()).toBe('2026-01-01T02:00:00.000Z')
+  })
+})

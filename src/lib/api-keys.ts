@@ -80,3 +80,22 @@ export function hasApiScope(auth: ApiKeyAuth, scope: string): boolean { return a
  * accepts several equivalent scopes, e.g. `campaign:read` or `mcp:read`.
  */
 export function hasAnyApiScope(auth: ApiKeyAuth, scopes: string[]): boolean { return scopes.some((scope) => hasApiScope(auth, scope)) }
+
+export const DEFAULT_ROTATION_GRACE_HOURS = 24
+export const MAX_ROTATION_GRACE_HOURS = 168
+
+/** Parse `graceHours` for key rotation (0..168, integer). Undefined → default; null → invalid. */
+export function parseRotationGrace(value: unknown): number | null {
+  if (value === undefined || value === null) return DEFAULT_ROTATION_GRACE_HOURS
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > MAX_ROTATION_GRACE_HOURS) return null
+  return value
+}
+
+/**
+ * Compute the old key's new expiry when rotating: it keeps working for `graceHours`
+ * (never beyond its own existing expiry) so deployments can swap secrets without downtime.
+ */
+export function rotatedKeyExpiry(existing: Date | null, graceHours: number, now = new Date()): Date {
+  const graceEnd = new Date(now.getTime() + graceHours * 3_600_000)
+  return existing && existing < graceEnd ? existing : graceEnd
+}
