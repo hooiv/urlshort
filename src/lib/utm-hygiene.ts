@@ -28,25 +28,37 @@ export function normalizeUtmValue(value: string): string {
 export function lintUtm(url: string): { fixedUrl: string; issues: UtmIssue[] } | null {
   let u: URL
   try { u = new URL(url) } catch { return null }
+  if (!u.search) return null
   const issues: UtmIssue[] = []
   const seen = new Map<string, number>()
-  const next = new URLSearchParams()
-  for (const [rawKey, value] of u.searchParams) {
-    const lower = rawKey.toLowerCase()
-    if (!(UTM_KEYS as readonly string[]).includes(lower)) { next.append(rawKey, value); continue }
+  const parts: string[] = []
+  // Work on raw segments so untouched params keep their exact original encoding.
+  for (const segment of u.search.slice(1).split('&')) {
+    if (segment === '') continue
+    const eq = segment.indexOf('=')
+    const rawKey = eq === -1 ? segment : segment.slice(0, eq)
+    const rawValue = eq === -1 ? '' : segment.slice(eq + 1)
+    let key: string
+    let value: string
+    try {
+      key = decodeURIComponent(rawKey.replace(/\+/g, ' '))
+      value = decodeURIComponent(rawValue.replace(/\+/g, ' '))
+    } catch { parts.push(segment); continue }
+    const lower = key.toLowerCase()
+    if (!(UTM_KEYS as readonly string[]).includes(lower)) { parts.push(segment); continue }
     const count = (seen.get(lower) ?? 0) + 1
     seen.set(lower, count)
     if (count > 1) { issues.push({ key: lower, value, suggested: '', reason: 'duplicate-key' }); continue }
     const fixed = normalizeUtmValue(value)
-    if (rawKey !== lower && fixed === value) issues.push({ key: lower, value, suggested: value, reason: 'uppercase' })
+    if (key !== lower && fixed === value) issues.push({ key: lower, value, suggested: value, reason: 'uppercase' })
     else if (fixed !== value) {
       issues.push({ key: lower, value, suggested: fixed, reason: value.trim() !== value || /\s/.test(value) ? 'whitespace' : 'uppercase' })
     }
-    next.append(lower, fixed)
+    parts.push(`${lower}=${encodeURIComponent(fixed)}`)
   }
   if (!issues.length) return null
   const out = new URL(u.toString())
-  out.search = next.toString()
+  out.search = parts.length ? `?${parts.join('&')}` : ''
   return { fixedUrl: out.toString(), issues }
 }
 

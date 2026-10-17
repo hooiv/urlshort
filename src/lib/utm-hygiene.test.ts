@@ -29,4 +29,15 @@ describe('utm hygiene', () => {
     expect(parseUtmHygieneLimit('201')).toBeNull()
     expect(parseUtmHygieneLimit('abc')).toBeNull()
   })
+  it('keeps untouched params byte-for-byte and the fragment', () => {
+    const r = lintUtm('https://a.com/p?x=a%20b&y=1+2&utm_source=Fb#top')!
+    expect(r.fixedUrl).toBe('https://a.com/p?x=a%20b&y=1+2&utm_source=fb#top')
+  })
+  it('treats plus as a space in utm values', () => {
+    const r = lintUtm('https://a.com/?utm_campaign=spring+sale')!
+    expect(r.fixedUrl).toBe('https://a.com/?utm_campaign=spring-sale')
+  })
+  it('ignores malformed percent-encoding instead of throwing', () => {
+    expect(lintUtm('https://a.com/?utm_source=%E0%A4%A')).toBeNull()
+  })
 })
