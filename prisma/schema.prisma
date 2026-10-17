@@ -337,6 +337,10 @@ model User {
   rewardConfigs           RewardConfig[]
   commissions             Commission[]
   savedViews              SavedView[]
+  totpSecretEnc           String?
+  totpEnabledAt           DateTime?
+  totpLastCounter         Int?
+  recoveryCodes           RecoveryCode[]
 
   @@map("users")
 }
@@ -1446,4 +1450,16 @@ model WorkspaceAutoTagRules {
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@map("workspace_auto_tag_rules")
+}
+
+model RecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, codeHash])
+  @@map("recovery_codes")
 }
