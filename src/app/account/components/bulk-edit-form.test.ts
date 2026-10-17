@@ -60,4 +60,11 @@ describe('bulk edit limits', () => {
     expect(buildBulkEditChanges({ ...emptyBulkEditForm, dailyCap: '1.5' })).toHaveProperty('error')
     expect(buildBulkEditChanges({ ...emptyBulkEditForm, expiredUrl: 'javascript:alert(1)' })).toHaveProperty('error')
   })
+
+  it('builds geo-fence changes', () => {
+    expect(buildBulkEditChanges({ ...emptyBulkEditForm, geoMode: 'deny', geoCountries: 'us, de de' })).toEqual({ changes: { geoFence: { mode: 'deny', countries: ['US', 'DE'] } } })
+    expect(buildBulkEditChanges({ ...emptyBulkEditForm, geoMode: 'clear' })).toEqual({ changes: { geoFence: null } })
+    expect(buildBulkEditChanges({ ...emptyBulkEditForm, geoMode: 'allow' })).toHaveProperty('error')
+    expect(buildBulkEditChanges({ ...emptyBulkEditForm, geoMode: 'allow', geoCountries: 'USA' })).toHaveProperty('error')
+  })
 })

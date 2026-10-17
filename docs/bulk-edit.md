@@ -25,6 +25,7 @@
 | `startsAt` | ISO datetime go-live time, or `null` to clear; must be before the effective `expiresAt` per link |
 | `expiresAt` | future ISO datetime, or `null` to clear |
 | `expiredUrl` | http(s) fallback URL for expired or click-capped links, or `null` to clear it |
+| `geoFence` | `{ mode: "allow"\|"deny", countries: ["US"] }` applied to every link, or `null` to remove the restriction (also in the bulk bar's Country restriction control) |
 | `notStartedUrl` | http(s) URL visitors see before the link's `startsAt`, or `null` to clear it |
 | `notes` | Private internal note set on every link; `null` or empty string clears it |
 | `cloaked` | `true` to serve the destination inside a masked frame (URL cloaking), `false` to turn it off |

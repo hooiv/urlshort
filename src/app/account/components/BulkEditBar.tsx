@@ -181,6 +181,17 @@ export default function BulkEditBar({
               <button type="button" className="whitespace-nowrap rounded-lg border border-slate-700 px-2 text-slate-300" onClick={() => set({ expiredUrl: form.expiredUrl === 'clear' ? '' : 'clear' })}>{form.expiredUrl === 'clear' ? 'Will clear' : 'Clear'}</button>
             </div>
           </label>
+          <label className="text-xs text-slate-400">Country restriction
+            <div className="mt-1 flex gap-2">
+              <select className="input" value={form.geoMode} onChange={(e) => set({ geoMode: e.target.value as typeof form.geoMode })}>
+                <option value="">Leave as is</option>
+                <option value="allow">Only allow</option>
+                <option value="deny">Block</option>
+                <option value="clear">Remove restriction</option>
+              </select>
+              <input className="input w-full" placeholder="US, DE, IN" disabled={!form.geoMode || form.geoMode === 'clear'} value={form.geoCountries} onChange={(e) => set({ geoCountries: e.target.value })} />
+            </div>
+          </label>
           <label className="text-xs text-slate-400">Internal note
             <div className="mt-1 flex gap-2">
               <input className="input w-full" value={form.notes === 'clear' ? '' : form.notes} onChange={(e) => set({ notes: e.target.value })} />

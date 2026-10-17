@@ -19,9 +19,11 @@ export type BulkEditForm = {
   expiredUrl: '' | 'clear' | string
   notes: '' | 'clear' | string
   cloak: '' | 'on' | 'off'
+  geoMode: '' | 'allow' | 'deny' | 'clear'
+  geoCountries: string // comma/space separated ISO codes
 }
 
-export const emptyBulkEditForm: BulkEditForm = { addTags: '', removeTags: '', folder: '', expiry: '', extendDays: '', state: '', password: '', pin: '', redirect: '', utmSource: '', utmMedium: '', utmCampaign: '', rewriteMode: '', rewriteFrom: '', rewriteTo: '', maxClicks: '', dailyCap: '', expiredUrl: '', notes: '', cloak: '' }
+export const emptyBulkEditForm: BulkEditForm = { addTags: '', removeTags: '', folder: '', expiry: '', extendDays: '', state: '', password: '', pin: '', redirect: '', utmSource: '', utmMedium: '', utmCampaign: '', rewriteMode: '', rewriteFrom: '', rewriteTo: '', maxClicks: '', dailyCap: '', expiredUrl: '', notes: '', cloak: '', geoMode: '', geoCountries: '' }
 
 const splitTags = (v: string) => v.split(',').map((t) => t.trim()).filter(Boolean)
 
@@ -92,6 +94,14 @@ export function buildBulkEditChanges(form: BulkEditForm, now = new Date()): { ch
   else if (form.notes.trim()) {
     if (form.notes.trim().length > 2000) return { error: 'Notes are limited to 2000 characters' }
     changes.notes = form.notes.trim()
+  }
+  if (form.geoMode === 'clear') changes.geoFence = null
+  else if (form.geoMode) {
+    const countries = [...new Set(form.geoCountries.split(/[\s,;]+/).map((c) => c.trim().toUpperCase()).filter(Boolean))]
+    if (!countries.length) return { error: 'Enter at least one country code for the geo-fence' }
+    const bad = countries.find((c) => !/^[A-Z]{2}$/.test(c))
+    if (bad) return { error: `"${bad.slice(0, 8)}" is not a two-letter country code` }
+    changes.geoFence = { mode: form.geoMode, countries }
   }
   if (form.cloak) changes.cloaked = form.cloak === 'on'
   if (!Object.keys(changes).length) return { error: 'Choose at least one change' }
