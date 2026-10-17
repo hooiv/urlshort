@@ -126,3 +126,16 @@ describe('bulkEditSchema og', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { og: { title: 'x'.repeat(500) } } }).success).toBe(false)
   })
 })
+
+describe('bulk queryForwarding', () => {
+  const links = ['a']
+  it('accepts none and allowlist', () => {
+    expect(bulkEditSchema.safeParse({ links, changes: { queryForwarding: { mode: 'none' } } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { queryForwarding: { mode: 'allowlist', allow: ['utm_source', 'ref'] } } }).success).toBe(true)
+  })
+  it('rejects empty allowlist, bad names and unknown modes', () => {
+    expect(bulkEditSchema.safeParse({ links, changes: { queryForwarding: { mode: 'allowlist' } } }).success).toBe(false)
+    expect(bulkEditSchema.safeParse({ links, changes: { queryForwarding: { mode: 'allowlist', allow: ['bad name!'] } } }).success).toBe(false)
+    expect(bulkEditSchema.safeParse({ links, changes: { queryForwarding: { mode: 'some' } } }).success).toBe(false)
+  })
+})

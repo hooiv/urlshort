@@ -29,6 +29,7 @@
 | `notStartedUrl` | http(s) URL visitors see before the link's `startsAt`, or `null` to clear it |
 | `notes` | Private internal note set on every link; `null` or empty string clears it |
 | `autoFailoverEnabled` | `false` to stop automatic failover to backup destinations when the primary is down, `true` to re-enable |
+| `queryForwarding` | `{ mode: 'all' \| 'none' \| 'allowlist', allow?: string[] }` sets which incoming query parameters are forwarded to the destination (allowlist needs 1–25 names; `ql_*` and credential-like params are never forwarded) |
 | `cloaked` | `true` to serve the destination inside a masked frame (URL cloaking), `false` to turn it off |
 | `pinned` | `true` pins the links to the top of the links view, `false` unpins |
 | `redirectStatus` | `301`, `302`, `307` or `308` (`null` resets to the 307 default). Permanent codes are refused, for the whole batch, on any link that ends up with a password, expiry, go-live date, click limit or targeting rules |
