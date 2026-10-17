@@ -5,10 +5,11 @@ import { READ_ROLES } from '@/lib/authorization'
 import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { canAdministerFolders } from '@/lib/folders'
 import type { AnalyticsScope } from '@/lib/aggregate-analytics'
+import { maybeCsvResponse } from '@/lib/analytics-csv'
 import { getLinkLifespans, parseLifespanLimit } from '@/lib/click-lifespan'
 
 /**
- * GET /api/analytics/lifespan?workspaceId=&limit=25
+ * GET /api/analytics/lifespan?workspaceId=&limit=25[&format=csv]
  * Burst vs evergreen: share of each link's human clicks in its first 48h. Session auth or API key with analytics:read / links:read.
  */
 export async function GET(request: NextRequest) {
@@ -35,6 +36,8 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await getLinkLifespans(scope, { limit: max })
+    const csv = maybeCsvResponse(params.get('format'), result.links as unknown as Record<string, unknown>[], 'link-lifespan')
+    if (csv) return csv
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, max-age=60' } })
   } catch (error) {
     console.error('Link lifespan failed:', error)
