@@ -48,6 +48,7 @@ export const bulkEditSchema = z.object({
     /** Move the links to the trash (restorable for the retention window). Cannot be combined with other changes. */
     trash: z.literal(true).optional(),
     cloaked: z.boolean().optional(),
+    autoFailoverEnabled: z.boolean().optional(),
     /** Pin or unpin the links in the account view (max 20 pinned per account is enforced client-side by ordering). */
     pinned: z.boolean().optional(),
     /** 301/302/307/308; null resets to the 307 default. Permanent codes are refused on links with a password, schedule, click limit or rules. */
@@ -116,7 +117,7 @@ export function nextTags(current: string[], c: Pick<BulkEditChanges, 'addTags' |
 
 type LinkRow = {
   id: string; shortCode: string; originalUrl: string; tags: string[]; isActive: boolean
-  expiresAt: Date | null; startsAt: Date | null; maxClicks: number | null; dailyClickCap: number | null; expiredUrl: string | null; notStartedUrl: string | null; cloaked: boolean; metaPixelId: string | null; googleTagId: string | null; xPixelId: string | null; linkedinPartnerId: string | null; tiktokPixelId: string | null; pinnedAt: Date | null; redirectStatus: number | null; notes: string | null; title: string | null; description: string | null; ogImage: string | null; passwordHash: string | null; geoFence: unknown; folderId: string | null; workspaceId: string | null; userId: string | null
+  expiresAt: Date | null; startsAt: Date | null; maxClicks: number | null; dailyClickCap: number | null; expiredUrl: string | null; notStartedUrl: string | null; cloaked: boolean; autoFailoverEnabled: boolean; metaPixelId: string | null; googleTagId: string | null; xPixelId: string | null; linkedinPartnerId: string | null; tiktokPixelId: string | null; pinnedAt: Date | null; redirectStatus: number | null; notes: string | null; title: string | null; description: string | null; ogImage: string | null; passwordHash: string | null; geoFence: unknown; folderId: string | null; workspaceId: string | null; userId: string | null
 }
 
 const PIXEL_FIELDS = { meta: 'metaPixelId', google: 'googleTagId', x: 'xPixelId', linkedin: 'linkedinPartnerId', tiktok: 'tiktokPixelId' } as const satisfies Record<PixelProvider, 'metaPixelId' | 'googleTagId' | 'xPixelId' | 'linkedinPartnerId' | 'tiktokPixelId'>
@@ -137,7 +138,7 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
   const c = input.changes
   const rows: LinkRow[] = await prisma.url.findMany({
     where: { AND: [{ deletedAt: null, OR: [{ id: { in: keys } }, { shortCode: { in: keys } }] }, visibleUrlWhere(userId)] },
-    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, startsAt: true, maxClicks: true, dailyClickCap: true, expiredUrl: true, notStartedUrl: true, cloaked: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, pinnedAt: true, redirectStatus: true, notes: true, title: true, description: true, ogImage: true, passwordHash: true, geoFence: true, folderId: true, workspaceId: true, userId: true },
+    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, startsAt: true, maxClicks: true, dailyClickCap: true, expiredUrl: true, notStartedUrl: true, cloaked: true, autoFailoverEnabled: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, pinnedAt: true, redirectStatus: true, notes: true, title: true, description: true, ogImage: true, passwordHash: true, geoFence: true, folderId: true, workspaceId: true, userId: true },
   })
   const found = new Set(rows.flatMap((r) => [r.id, r.shortCode]))
   const failures: BulkEditFailure[] = keys.filter((k) => !found.has(k)).map((link) => ({ link, reason: 'Link not found' }))
@@ -234,6 +235,9 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
     }
     if (c.notStartedUrl !== undefined && c.notStartedUrl !== r.notStartedUrl) {
       data.notStartedUrl = c.notStartedUrl; before.notStartedUrl = r.notStartedUrl; after.notStartedUrl = c.notStartedUrl
+    }
+    if (c.autoFailoverEnabled !== undefined && c.autoFailoverEnabled !== r.autoFailoverEnabled) {
+      data.autoFailoverEnabled = c.autoFailoverEnabled; before.autoFailoverEnabled = r.autoFailoverEnabled; after.autoFailoverEnabled = c.autoFailoverEnabled
     }
     if (c.cloaked !== undefined && c.cloaked !== r.cloaked) {
       data.cloaked = c.cloaked; before.cloaked = r.cloaked; after.cloaked = c.cloaked

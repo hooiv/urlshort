@@ -69,6 +69,11 @@ describe('bulkEditSchema', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { notes: 'x'.repeat(2001) } }).success).toBe(false)
   })
 
+  it('accepts autoFailoverEnabled boolean only', () => {
+    expect(bulkEditSchema.safeParse({ links, changes: { autoFailoverEnabled: false } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { autoFailoverEnabled: 0 } }).success).toBe(false)
+  })
+
   it('accepts cloaked boolean only', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { cloaked: true } }).success).toBe(true)
     expect(bulkEditSchema.safeParse({ links, changes: { cloaked: 'yes' } }).success).toBe(false)
