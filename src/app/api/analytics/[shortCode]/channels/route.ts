@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { maybeCsvResponse } from '@/lib/analytics-csv'
 import { getManageableUrl, READ_ROLES } from '@/lib/authorization'
 import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { getChannelBreakdown, parseChannelDays } from '@/lib/referrer-channels'
 
 /**
- * GET /api/analytics/:shortCode/channels?days=30
+ * GET /api/analytics/:shortCode/channels?days=30[&format=csv]
  * Human clicks grouped into traffic channels (search, social, email, messaging, other, direct).
  * Session auth or API key with analytics:read / links:read.
  */
@@ -21,6 +22,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     if (days === null) return NextResponse.json({ error: 'days must be an integer from 1 to 365' }, { status: 400 })
 
     const result = await getChannelBreakdown(access.url.id, days)
+    const csv = maybeCsvResponse(request.nextUrl.searchParams.get('format'), result.channels.map((c) => ({ channel: c.channel, clicks: c.clicks, share: c.share, topHosts: c.topHosts.map((h) => h.host + ':' + h.clicks).join(' ') })), 'channels-' + shortCode + '-' + days + 'd')
+    if (csv) return csv
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, max-age=60' } })
   } catch (error) {
     console.error('Channel breakdown failed:', error)

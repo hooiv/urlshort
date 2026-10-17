@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { maybeCsvResponse } from '@/lib/analytics-csv'
 import { prisma } from '@/lib/prisma'
 import { ANALYTICS_READ_SCOPES, resolveActor } from '@/lib/request-actor'
 import { READ_ROLES } from '@/lib/authorization'
@@ -8,7 +9,7 @@ import type { AnalyticsScope } from '@/lib/aggregate-analytics'
 import { getTrafficQuality, parseQualityDays } from '@/lib/traffic-quality'
 
 /**
- * GET /api/analytics/traffic-quality?workspaceId=&days=1|7|14|30|90
+ * GET /api/analytics/traffic-quality?workspaceId=&days=1|7|14|30|90[&format=csv]
  * Human vs bot vs AI-agent split, AI agents seen, links with a high non-human share.
  * Session auth or API key with analytics:read / links:read.
  */
@@ -36,6 +37,8 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await getTrafficQuality(scope, days)
+    const csv = maybeCsvResponse(params.get('format'), result.suspiciousLinks as unknown as Record<string, unknown>[], 'traffic-quality-' + days + 'd')
+    if (csv) return csv
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, max-age=60' } })
   } catch (error) {
     console.error('Traffic quality failed:', error)
