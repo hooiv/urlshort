@@ -56,6 +56,13 @@ describe('bulkEditSchema', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { password: 'abc' } }).success).toBe(false)
   })
 
+  it('validates geoFence changes', () => {
+    expect(bulkEditSchema.safeParse({ links, changes: { geoFence: { mode: 'deny', countries: ['us', 'DE'] } } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { geoFence: null } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { geoFence: { mode: 'allow', countries: [] } } }).success).toBe(false)
+    expect(bulkEditSchema.safeParse({ links, changes: { geoFence: { mode: 'deny', countries: ['USA'] } } }).success).toBe(false)
+  })
+
   it('accepts notes as trimmed string or null, rejects oversize', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { notes: 'Q4 promo' } }).success).toBe(true)
     expect(bulkEditSchema.safeParse({ links, changes: { notes: null } }).success).toBe(true)

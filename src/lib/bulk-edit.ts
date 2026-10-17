@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { Prisma } from '@prisma/client'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { EDIT_ROLES } from '@/lib/workspaces'
 import { folderWriteError, visibleUrlWhere } from '@/lib/folders'
@@ -10,6 +10,7 @@ import { MAX_DAILY_CLICK_CAP } from '@/lib/daily-click-cap'
 import { hashGatePassword } from '@/lib/password-gate'
 import { validateOgFields } from '@/lib/og-preview'
 import { normalizePixelId, PIXEL_PROVIDERS, PixelValidationError, type PixelProvider } from '@/lib/retargeting-pixels'
+import { parseGeoFence } from '@/lib/geo-fence'
 import { rewriteDestination, validateRewriteSpec, type RewriteSpec } from '@/lib/destination-rewrite'
 
 export const MAX_BULK_EDIT_LINKS = 500
@@ -41,6 +42,8 @@ export const bulkEditSchema = z.object({
     expiredUrl: z.string().trim().url().max(2048).refine((u) => /^https?:\/\//i.test(u), 'expiredUrl must be http(s)').nullable().optional(),
     /** Where visitors land before the link's go-live time; null clears it. */
     notStartedUrl: z.string().trim().url().max(2048).refine((u) => /^https?:\/\//i.test(u), 'notStartedUrl must be http(s)').nullable().optional(),
+    /** Country allow/deny list applied to every link; null clears the fence. Validated like the single-link editor. */
+    geoFence: z.unknown().optional().refine((v) => v === undefined || parseGeoFence(v).ok, { message: 'Invalid geoFence' }),
     archived: z.boolean().optional(),
     /** Move the links to the trash (restorable for the retention window). Cannot be combined with other changes. */
     trash: z.literal(true).optional(),
@@ -113,7 +116,7 @@ export function nextTags(current: string[], c: Pick<BulkEditChanges, 'addTags' |
 
 type LinkRow = {
   id: string; shortCode: string; originalUrl: string; tags: string[]; isActive: boolean
-  expiresAt: Date | null; startsAt: Date | null; maxClicks: number | null; dailyClickCap: number | null; expiredUrl: string | null; notStartedUrl: string | null; cloaked: boolean; metaPixelId: string | null; googleTagId: string | null; xPixelId: string | null; linkedinPartnerId: string | null; tiktokPixelId: string | null; pinnedAt: Date | null; redirectStatus: number | null; notes: string | null; title: string | null; description: string | null; ogImage: string | null; passwordHash: string | null; folderId: string | null; workspaceId: string | null; userId: string | null
+  expiresAt: Date | null; startsAt: Date | null; maxClicks: number | null; dailyClickCap: number | null; expiredUrl: string | null; notStartedUrl: string | null; cloaked: boolean; metaPixelId: string | null; googleTagId: string | null; xPixelId: string | null; linkedinPartnerId: string | null; tiktokPixelId: string | null; pinnedAt: Date | null; redirectStatus: number | null; notes: string | null; title: string | null; description: string | null; ogImage: string | null; passwordHash: string | null; geoFence: unknown; folderId: string | null; workspaceId: string | null; userId: string | null
 }
 
 const PIXEL_FIELDS = { meta: 'metaPixelId', google: 'googleTagId', x: 'xPixelId', linkedin: 'linkedinPartnerId', tiktok: 'tiktokPixelId' } as const satisfies Record<PixelProvider, 'metaPixelId' | 'googleTagId' | 'xPixelId' | 'linkedinPartnerId' | 'tiktokPixelId'>
@@ -134,7 +137,7 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
   const c = input.changes
   const rows: LinkRow[] = await prisma.url.findMany({
     where: { AND: [{ deletedAt: null, OR: [{ id: { in: keys } }, { shortCode: { in: keys } }] }, visibleUrlWhere(userId)] },
-    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, startsAt: true, maxClicks: true, dailyClickCap: true, expiredUrl: true, notStartedUrl: true, cloaked: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, pinnedAt: true, redirectStatus: true, notes: true, title: true, description: true, ogImage: true, passwordHash: true, folderId: true, workspaceId: true, userId: true },
+    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, startsAt: true, maxClicks: true, dailyClickCap: true, expiredUrl: true, notStartedUrl: true, cloaked: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, pinnedAt: true, redirectStatus: true, notes: true, title: true, description: true, ogImage: true, passwordHash: true, geoFence: true, folderId: true, workspaceId: true, userId: true },
   })
   const found = new Set(rows.flatMap((r) => [r.id, r.shortCode]))
   const failures: BulkEditFailure[] = keys.filter((k) => !found.has(k)).map((link) => ({ link, reason: 'Link not found' }))
@@ -259,6 +262,14 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
       for (const k of ['title', 'description', 'ogImage'] as const) {
         const next = og[k]
         if (next !== undefined && next !== r[k]) { data[k] = next; before[k] = r[k]; after[k] = next }
+      }
+    }
+    if (c.geoFence !== undefined) {
+      const parsed = parseGeoFence(c.geoFence)
+      const next = parsed.ok ? parsed.fence : null
+      if (JSON.stringify(next) !== JSON.stringify(r.geoFence ?? null)) {
+        data.geoFence = next === null ? Prisma.DbNull : (next as unknown as Prisma.InputJsonValue)
+        before.geoFence = r.geoFence ?? null; after.geoFence = next
       }
     }
     if (c.password !== undefined) {
