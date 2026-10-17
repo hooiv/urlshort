@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getManageableUrl, READ_ROLES } from '@/lib/authorization'
 import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
+import { maybeCsvResponse } from '@/lib/analytics-csv'
 import { getUtmBreakdown, parseUtmDays, parseUtmDimension, parseUtmLimit } from '@/lib/utm-breakdown'
 
 /**
- * GET /api/analytics/:shortCode/utm?by=source|medium|campaign|term|content&days=30&limit=10
+ * GET /api/analytics/:shortCode/utm?by=source|medium|campaign|term|content&days=30&limit=10&format=csv
  * Human clicks grouped by one UTM dimension. Session auth or API key with analytics:read / links:read.
  */
 export async function GET(request: NextRequest, context: { params: Promise<{ shortCode: string }> }) {
@@ -25,6 +26,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     if (max === null) return NextResponse.json({ error: 'limit must be an integer from 1 to 50' }, { status: 400 })
 
     const result = await getUtmBreakdown(access.url.id, dimension, days, max)
+    const csv = maybeCsvResponse(params.get('format'), result.rows as unknown as Record<string, unknown>[], `utm-${dimension}-${shortCode}`)
+    if (csv) return csv
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, max-age=60' } })
   } catch (error) {
     console.error('UTM breakdown failed:', error)
