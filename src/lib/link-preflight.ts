@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { getBaseUrl } from '@/lib/utils'
 import { assessDestination } from '@/lib/link-safety'
 import { normalizeDestination } from '@/lib/duplicate-links'
 import { probeDestination, type HealthProbe } from '@/lib/destination-health'
@@ -24,6 +25,14 @@ export type PreflightDeps = {
   findDuplicates: (normalized: string) => Promise<PreflightDuplicate[]>
 }
 
+/** True when the destination host is the app's own short-link host (redirect-loop risk). */
+export function pointsAtOwnShortener(url: URL): boolean {
+  let own: string
+  try { own = new URL(getBaseUrl()).hostname.toLowerCase() } catch { return false }
+  const host = url.hostname.toLowerCase().replace(/\.$/, '')
+  return host === own && url.pathname.replace(/\/+$/, '').split('/').filter(Boolean).length <= 1
+}
+
 /** Pure static checks that need no network: shape, scheme, length, tracking params, risk heuristics. */
 export function staticIssues(raw: string): { url: URL | null; issues: PreflightIssue[] } {
   const issues: PreflightIssue[] = []
@@ -41,6 +50,9 @@ export function staticIssues(raw: string): { url: URL | null; issues: PreflightI
   }
   if (url.username || url.password) {
     issues.push({ code: 'credentials', severity: 'error', message: 'URLs with embedded credentials are not allowed.' })
+  }
+  if (pointsAtOwnShortener(url)) {
+    issues.push({ code: 'self_loop', severity: 'error', message: 'This destination is on your own short-link domain, so visitors could be redirected in a loop.' })
   }
   if (url.protocol === 'http:') {
     issues.push({ code: 'insecure', severity: 'warning', message: 'Destination uses http; visitors may see browser warnings. Prefer https.' })

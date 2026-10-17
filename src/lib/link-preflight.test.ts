@@ -71,3 +71,16 @@ describe('runPreflight', () => {
     expect(r.duplicates).toEqual([])
   })
 })
+
+describe('self loop detection', () => {
+  it('flags short links on the app host', async () => {
+    const { staticIssues } = await import('@/lib/link-preflight')
+    const { getBaseUrl } = await import('@/lib/utils')
+    const r = staticIssues(`${getBaseUrl()}/abc123`)
+    expect(r.issues.some((i) => i.code === 'self_loop' && i.severity === 'error')).toBe(true)
+  })
+  it('allows external hosts', async () => {
+    const { staticIssues } = await import('@/lib/link-preflight')
+    expect(staticIssues('https://example.org/abc').issues.some((i) => i.code === 'self_loop')).toBe(false)
+  })
+})
