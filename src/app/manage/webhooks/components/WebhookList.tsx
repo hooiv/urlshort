@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { DeliveryLog } from './DeliveryLog';
+import { RotateSecret } from './RotateSecret';
 import { Activity, ListChecks, Filter, RefreshCw, Server, Trash2 } from 'lucide-react';
 import { describeLinkScope } from './validateWebhook';
 import { formatNumber } from '@/lib/format';
@@ -71,6 +72,7 @@ export function WebhookList({
               </button>
             </div>
           </div>
+          <RotateSecret endpointId={webhook.id} />
           {expanded === webhook.id ? <DeliveryLog endpointId={webhook.id} isActive={webhook.isActive} /> : null}
           </div>
         ))

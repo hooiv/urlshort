@@ -693,6 +693,10 @@ model WebhookEndpoint {
   userId         String?
   url            String
   secret         String
+  /// Previous secret kept signing deliveries until previousSecretExpiresAt so receivers can roll over without dropping events.
+  previousSecret          String?
+  previousSecretExpiresAt DateTime?
+  secretRotatedAt         DateTime?
   isActive       Boolean   @default(true)
   events         String[] // Array of event names like "click", "conversion"
   /// 'all' | 'tags' | 'links' | 'folders' - which of the owner's links fire this endpoint.

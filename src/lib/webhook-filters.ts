@@ -122,6 +122,15 @@ export function signWebhookPayload(payload: string, secret: string, timestampSec
   return `t=${timestampSeconds},v1=${mac}`
 }
 
+/**
+ * Signature header carrying one v1 entry per active secret (current first,
+ * then the rotating-out one), so receivers verifying with either succeed.
+ */
+export function signWebhookPayloadMulti(payload: string, secrets: string[], timestampSeconds: number): string {
+  const macs = secrets.map(secret => crypto.createHmac('sha256', secret).update(`${timestampSeconds}.${payload}`).digest('hex'))
+  return `t=${timestampSeconds},${macs.map(m => `v1=${m}`).join(',')}`
+}
+
 export function verifyTimestampedWebhookSignature(
   payload: string,
   secret: string,

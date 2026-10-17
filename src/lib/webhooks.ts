@@ -5,7 +5,8 @@ import { assertDestinationSafeForStorage } from './destination-health';
 import { reserveUsageInTransaction } from './tenant-usage';
 import { CircuitBreaker } from './resilience';
 import { isSlackWebhookUrl, slackBodyForDelivery } from './slack-format';
-import { endpointMatchesLink, signWebhookPayload } from './webhook-filters';
+import { endpointMatchesLink, signWebhookPayloadMulti } from './webhook-filters';
+import { activeWebhookSecrets } from './webhook-secret-rotation';
 
 import { evaluateEndpointHealth } from './webhook-health';
 export const WEBHOOK_MAX_RETRIES = 5;
@@ -132,7 +133,7 @@ export async function processWebhookDelivery(deliveryId: string): Promise<Webhoo
   // timestamped v1 signature lets receivers reject replayed deliveries.
   const signature = generateWebhookSignature(payloadStr, endpoint.secret);
   const timestampSeconds = Math.floor(Date.now() / 1000);
-  const timestampedSignature = signWebhookPayload(payloadStr, endpoint.secret, timestampSeconds);
+  const timestampedSignature = signWebhookPayloadMulti(payloadStr, activeWebhookSecrets(endpoint), timestampSeconds);
 
   const currentAttempt = delivery.attempts + 1;
 
