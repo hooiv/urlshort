@@ -8,6 +8,7 @@ import { applyUtmTemplate, normalizeUtmValues, UTM_KEYS, type UtmValues } from '
 import { invalidateLinks } from '@/lib/link-cache'
 import { parseRedirectStatus, assertStatusCompatible } from '@/lib/redirect-status'
 import { MAX_DAILY_CLICK_CAP } from '@/lib/daily-click-cap'
+import { parseActiveHours } from '@/lib/active-hours'
 import { hashGatePassword } from '@/lib/password-gate'
 import { validateOgFields } from '@/lib/og-preview'
 import { normalizePixelId, PIXEL_PROVIDERS, PixelValidationError, type PixelProvider } from '@/lib/retargeting-pixels'
@@ -45,6 +46,10 @@ export const bulkEditSchema = z.object({
     notStartedUrl: z.string().trim().url().max(2048).refine((u) => /^https?:\/\//i.test(u), 'notStartedUrl must be http(s)').nullable().optional(),
     /** Country allow/deny list applied to every link; null clears the fence. Validated like the single-link editor. */
     geoFence: z.unknown().optional().refine((v) => v === undefined || parseGeoFence(v).ok, { message: 'Invalid geoFence' }),
+    /** Weekly schedule `{ timezone, windows:[{days,start,end}] }` applied to every link, or null to remove it. */
+    activeHours: z.unknown().optional().refine((v) => { if (v === undefined) return true; try { return parseActiveHours(v) !== null || v === null } catch { return false } }, { message: 'Invalid activeHours' }),
+    /** Where visitors go outside the active hours; null clears it. */
+    offHoursUrl: z.string().trim().url().max(2048).refine((u) => /^https?:\/\//i.test(u), 'offHoursUrl must be http(s)').nullable().optional(),
     archived: z.boolean().optional(),
     /** Move the links to the trash (restorable for the retention window). Cannot be combined with other changes. */
     trash: z.literal(true).optional(),
@@ -122,7 +127,7 @@ export function nextTags(current: string[], c: Pick<BulkEditChanges, 'addTags' |
 
 type LinkRow = {
   id: string; shortCode: string; originalUrl: string; tags: string[]; isActive: boolean
-  expiresAt: Date | null; startsAt: Date | null; maxClicks: number | null; dailyClickCap: number | null; expiredUrl: string | null; notStartedUrl: string | null; cloaked: boolean; queryForwardMode: string; queryForwardAllow: string[]; autoFailoverEnabled: boolean; metaPixelId: string | null; googleTagId: string | null; xPixelId: string | null; linkedinPartnerId: string | null; tiktokPixelId: string | null; pinnedAt: Date | null; redirectStatus: number | null; notes: string | null; title: string | null; description: string | null; ogImage: string | null; passwordHash: string | null; geoFence: unknown; folderId: string | null; workspaceId: string | null; userId: string | null
+  expiresAt: Date | null; startsAt: Date | null; maxClicks: number | null; dailyClickCap: number | null; expiredUrl: string | null; notStartedUrl: string | null; cloaked: boolean; queryForwardMode: string; queryForwardAllow: string[]; autoFailoverEnabled: boolean; metaPixelId: string | null; googleTagId: string | null; xPixelId: string | null; linkedinPartnerId: string | null; tiktokPixelId: string | null; pinnedAt: Date | null; redirectStatus: number | null; notes: string | null; title: string | null; description: string | null; ogImage: string | null; passwordHash: string | null; geoFence: unknown; activeHours: unknown; offHoursUrl: string | null; folderId: string | null; workspaceId: string | null; userId: string | null
 }
 
 const PIXEL_FIELDS = { meta: 'metaPixelId', google: 'googleTagId', x: 'xPixelId', linkedin: 'linkedinPartnerId', tiktok: 'tiktokPixelId' } as const satisfies Record<PixelProvider, 'metaPixelId' | 'googleTagId' | 'xPixelId' | 'linkedinPartnerId' | 'tiktokPixelId'>
@@ -143,7 +148,7 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
   const c = input.changes
   const rows: LinkRow[] = await prisma.url.findMany({
     where: { AND: [{ deletedAt: null, OR: [{ id: { in: keys } }, { shortCode: { in: keys } }] }, visibleUrlWhere(userId)] },
-    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, startsAt: true, maxClicks: true, dailyClickCap: true, expiredUrl: true, notStartedUrl: true, cloaked: true, queryForwardMode: true, queryForwardAllow: true, autoFailoverEnabled: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, pinnedAt: true, redirectStatus: true, notes: true, title: true, description: true, ogImage: true, passwordHash: true, geoFence: true, folderId: true, workspaceId: true, userId: true },
+    select: { id: true, shortCode: true, originalUrl: true, tags: true, isActive: true, expiresAt: true, startsAt: true, maxClicks: true, dailyClickCap: true, expiredUrl: true, notStartedUrl: true, cloaked: true, queryForwardMode: true, queryForwardAllow: true, autoFailoverEnabled: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, pinnedAt: true, redirectStatus: true, notes: true, title: true, description: true, ogImage: true, passwordHash: true, geoFence: true, activeHours: true, offHoursUrl: true, folderId: true, workspaceId: true, userId: true },
   })
   const found = new Set(rows.flatMap((r) => [r.id, r.shortCode]))
   const failures: BulkEditFailure[] = keys.filter((k) => !found.has(k)).map((link) => ({ link, reason: 'Link not found' }))
@@ -288,6 +293,16 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
         data.geoFence = next === null ? Prisma.DbNull : (next as unknown as Prisma.InputJsonValue)
         before.geoFence = r.geoFence ?? null; after.geoFence = next
       }
+    }
+    if (c.activeHours !== undefined) {
+      const next = parseActiveHours(c.activeHours)
+      if (JSON.stringify(next) !== JSON.stringify(r.activeHours ?? null)) {
+        data.activeHours = next === null ? Prisma.DbNull : (next as unknown as Prisma.InputJsonValue)
+        before.activeHours = r.activeHours ?? null; after.activeHours = next
+      }
+    }
+    if (c.offHoursUrl !== undefined && c.offHoursUrl !== r.offHoursUrl) {
+      data.offHoursUrl = c.offHoursUrl; before.offHoursUrl = r.offHoursUrl; after.offHoursUrl = c.offHoursUrl
     }
     if (c.password !== undefined) {
       const protectedNow = Boolean(r.passwordHash)

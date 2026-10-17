@@ -56,6 +56,15 @@ describe('bulkEditSchema', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { password: 'abc' } }).success).toBe(false)
   })
 
+  it('validates activeHours and offHoursUrl changes', () => {
+    const ok = { timezone: 'Asia/Kolkata', windows: [{ days: [1, 2, 3], start: '09:00', end: '17:30' }] }
+    expect(bulkEditSchema.safeParse({ links, changes: { activeHours: ok, offHoursUrl: 'https://example.com/closed' } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { activeHours: null, offHoursUrl: null } }).success).toBe(true)
+    expect(bulkEditSchema.safeParse({ links, changes: { activeHours: { timezone: 'Nope/Zone', windows: ok.windows } } }).success).toBe(false)
+    expect(bulkEditSchema.safeParse({ links, changes: { activeHours: { timezone: 'UTC', windows: [{ days: [7], start: '09:00', end: '10:00' }] } } }).success).toBe(false)
+    expect(bulkEditSchema.safeParse({ links, changes: { offHoursUrl: 'javascript:alert(1)' } }).success).toBe(false)
+  })
+
   it('validates geoFence changes', () => {
     expect(bulkEditSchema.safeParse({ links, changes: { geoFence: { mode: 'deny', countries: ['us', 'DE'] } } }).success).toBe(true)
     expect(bulkEditSchema.safeParse({ links, changes: { geoFence: null } }).success).toBe(true)
