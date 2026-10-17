@@ -32,4 +32,11 @@ describe('privacy ingestion',()=>{
     const result=await sanitizeAnalyticsMetadata('ws',{ip:'203.0.113.4',visitorIdHash:'visitor',userAgent:'ua',referrerHost:'secret.example'})
     expect(result.ip).toHaveLength(64);expect(result.visitorIdHash).toHaveLength(64);expect(result).not.toHaveProperty('userAgent');expect(result).not.toHaveProperty('referrerHost')
   })
+
+  it('drops clicks from excluded IPs and CIDRs before storage',async()=>{
+    findUnique.mockResolvedValue({hashIp:true,hashVisitor:true,storeUserAgent:false,storeReferrer:true,aggregateOnly:false,analyticsExclusions:['203.0.113.0/24']})
+    const base={clickEventId:'c',urlId:'u',visitorIdHash:'v',dateKey:'2026-09-01',shortCode:'x'}
+    expect(await sanitizeClickForIngestion({...base,ip:'203.0.113.77'},'ws')).toBeNull()
+    expect(await sanitizeClickForIngestion({...base,ip:'198.51.100.1'},'ws')).not.toBeNull()
+  })
 })
