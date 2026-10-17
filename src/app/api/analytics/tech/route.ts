@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { maybeCsvResponse } from '@/lib/analytics-csv'
 import { prisma } from '@/lib/prisma'
 import { ANALYTICS_READ_SCOPES, resolveActor } from '@/lib/request-actor'
 import { READ_ROLES } from '@/lib/authorization'
@@ -7,7 +8,7 @@ import { canAdministerFolders } from '@/lib/folders'
 import { getTechPerformance, parseTechDimension, parseTechWindow } from '@/lib/tech-performance'
 
 /**
- * GET /api/analytics/tech?workspaceId=&dimension=browser|os|device&days=7|30|90
+ * GET /api/analytics/tech?workspaceId=&dimension=browser|os|device&days=7|30|90[&format=csv]
  * Human clicks per browser, OS or device vs the previous window. Session auth or API key with analytics:read / links:read.
  */
 export async function GET(request: NextRequest) {
@@ -33,6 +34,8 @@ export async function GET(request: NextRequest) {
     const viewer = canAdministerFolders(membership.role) ? undefined : { userId }
 
     const result = await getTechPerformance(workspaceId, viewer, dimension, days)
+    const csv = maybeCsvResponse(params.get('format'), result.rows as unknown as Record<string, unknown>[], 'tech-' + dimension + '-' + days + 'd')
+    if (csv) return csv
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, max-age=60' } })
   } catch (error) {
     console.error('Tech performance failed:', error)
