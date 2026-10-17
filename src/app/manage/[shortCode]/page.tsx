@@ -15,6 +15,7 @@ import RoutingRulesEditor from '@/app/manage/[shortCode]/components/RoutingRules
 import RoutingSimulator from '@/app/manage/[shortCode]/components/RoutingSimulator'
 import WebhookSection from '@/app/manage/[shortCode]/components/WebhookSection'
 import PixelsCloakingSection from '@/app/manage/[shortCode]/components/PixelsCloakingSection'
+import GeoFenceSection from '@/app/manage/[shortCode]/components/GeoFenceSection'
 import ExpirationSection from '@/app/manage/[shortCode]/components/ExpirationSection'
 import ActiveHoursSection from '@/app/manage/[shortCode]/components/ActiveHoursSection'
 import TagsSection from '@/app/manage/[shortCode]/components/TagsSection'
@@ -156,6 +157,8 @@ export default function ManageLink() {
         />
 
         <ActiveHoursSection shortCode={shortCode} token={controls.token} />
+
+        <GeoFenceSection shortCode={shortCode} token={controls.token} />
 
         <TagsSection
           tags={controls.tags}
