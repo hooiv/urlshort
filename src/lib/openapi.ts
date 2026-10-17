@@ -78,6 +78,7 @@ export const OPERATIONS: OperationDef[] = [
   { path: '/api/webhooks/{id}/deliveries/{deliveryId}/replay', method: 'post', summary: 'Replay a delivery', tag: 'Webhooks', scopes: ['webhooks:write'] },
   { path: '/api/webhooks/{id}/deliveries/replay-failed', method: 'post', summary: 'Replay all failed deliveries', tag: 'Webhooks', scopes: ['webhooks:write'] },
   { path: '/api/webhooks/{id}/test', method: 'post', summary: 'Send a test event', tag: 'Webhooks', scopes: ['webhooks:write'] },
+  { path: '/api/webhooks/{id}/rotate-secret', method: 'post', summary: 'Rotate the signing secret with a dual-signature grace window', tag: 'Webhooks', scopes: ['webhooks:write'] },
   { path: '/api/zapier/hooks', method: 'post', summary: 'Subscribe a Zapier REST hook', tag: 'Zapier', scopes: ['webhooks:write'] },
   { path: '/api/zapier/hooks/{id}', method: 'delete', summary: 'Unsubscribe a Zapier REST hook', tag: 'Zapier', scopes: ['webhooks:write'] },
   { path: '/api/zapier/me', method: 'get', summary: 'Zapier connection test', tag: 'Zapier', scopes: LINK_READ },
