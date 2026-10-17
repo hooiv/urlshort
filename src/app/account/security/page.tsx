@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ArrowLeft, ShieldCheck } from 'lucide-react'
 import { Toaster } from 'react-hot-toast'
 import PasswordSection from '@/app/account/security/components/PasswordSection'
+import TwoFactorSection from '@/app/account/security/components/TwoFactorSection'
 import SessionsSection from '@/app/account/security/components/SessionsSection'
 import { useSessions } from '@/app/account/security/components/useSessions'
 
@@ -36,6 +37,7 @@ export default function SecurityPage() {
           revoking={revoking}
           onRevoke={(sessionId) => void revoke(sessionId)}
         />
+        <TwoFactorSection />
         <PasswordSection />
       </main>
     </div>

@@ -23,6 +23,8 @@ export default function AuthForm({
   const [email, setEmail] = useState(invitedEmail ?? '')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
+  const [code, setCode] = useState('')
+  const [mfaStep, setMfaStep] = useState(false)
   const [busy, setBusy] = useState(false)
   const [resetEmail, setResetEmail] = useState('')
   const [resetBusy, setResetBusy] = useState(false)
@@ -37,7 +39,7 @@ export default function AuthForm({
       const endpoint = mode === 'login' ? '/api/auth/login' : '/api/auth/register'
       const body =
         mode === 'login'
-          ? { email: normalizeEmail(email), password }
+          ? { email: normalizeEmail(email), password, ...(mfaStep ? { code: code.trim() } : {}) }
           : { email: normalizeEmail(email), password, name: name.trim() }
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -45,9 +47,17 @@ export default function AuthForm({
         body: JSON.stringify(body),
       })
       const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Authentication failed')
+      if (!response.ok) {
+        if (data.mfaRequired) {
+          setMfaStep(true)
+          if (code) setCode('')
+        }
+        throw new Error(data.error || 'Authentication failed')
+      }
       toast.success(mode === 'login' ? 'Signed in' : 'Account created')
       setPassword('')
+      setCode('')
+      setMfaStep(false)
       setEmail('')
       setName('')
       await onSignedIn(data.user)
@@ -129,6 +139,21 @@ export default function AuthForm({
                 className="input"
               />
             </Field>
+            {mfaStep && mode === 'login' && (
+              <Field label="Authentication code or recovery code">
+                <input
+                  required
+                  autoFocus
+                  autoComplete="one-time-code"
+                  inputMode="text"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  className="input"
+                  maxLength={24}
+                  placeholder="123456"
+                />
+              </Field>
+            )}
             <button
               disabled={busy}
               className="w-full rounded-xl bg-blue-500 px-4 py-3 font-semibold hover:bg-blue-400 disabled:opacity-60"
