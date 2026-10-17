@@ -8,6 +8,7 @@ import { linkWindowState, notStartedTarget } from '@/lib/link-schedule'
 import { prisma } from '@/lib/prisma'
 import { appendClickId } from '@/lib/click-id-param'
 import { appendAttribution, createAttributionToken, hashVisitorId } from '@/lib/attribution'
+import { isCountryAllowed, type GeoFence } from '@/lib/geo-fence'
 import { chooseSmartRule, getAiAgent, getBrowser, getCountry, getDeviceType, getLanguage, getOperatingSystem, getReferrerHost, getTrafficType, getTrafficConfidence, getVisitorId } from '@/lib/smart-routing'
 import { getBaseUrl } from '@/lib/utils'
 import { getLinkByCode, getLinkByDomainPath, getLatestRevision } from '@/lib/link-cache'
@@ -93,6 +94,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
 
     if (linkWindowState(url) === 'scheduled') {
       return NextResponse.redirect(notStartedTarget(url, baseUrl), 307)
+    }
+
+    if (url.geoFence && !isCountryAllowed(url.geoFence as GeoFence, getCountry(request))) {
+      return NextResponse.redirect(new URL('/region-unavailable', baseUrl), 307)
     }
 
     if (url.activeHours && !isWithinActiveHours(url.activeHours as ActiveHours)) {

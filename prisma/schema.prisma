@@ -68,6 +68,7 @@ model Url {
   publicStatsEnabledAt       DateTime?
   startsAt                   DateTime?
   notStartedUrl              String?
+  geoFence                   Json?
   activeHours                Json?
   clickTarget                Int?
   clickTargetDeadline        DateTime?
