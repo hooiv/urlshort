@@ -3,6 +3,7 @@ import { createSession, normalizeEmail, setSessionCookie, verifyPassword } from 
 import { recordAudit } from '@/lib/audit'
 import { verifySecondFactor } from '@/lib/mfa'
 import { prisma } from '@/lib/prisma'
+import { deviceFingerprint, notifyIfNewDevice } from '@/lib/login-alerts'
 import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
 export async function POST(request: NextRequest) {
@@ -40,11 +41,13 @@ export async function POST(request: NextRequest) {
       }
       method = `password+${factor}`
     }
+    const userAgent = request.headers.get('user-agent')
+    await notifyIfNewDevice(user, userAgent, request.nextUrl.origin)
     const session = await createSession(user.id, request.headers.get('user-agent'))
     const mobile = request.headers.get('x-mobile-client') === '1'
     const response = NextResponse.json({ user: { id: user.id, email: user.email, name: user.name }, ...(mobile ? { token: session.token, expiresAt: session.expiresAt } : {}) })
     setSessionCookie(response, session.token, session.expiresAt)
-    await recordAudit(request, { action: 'auth.login', resourceType: 'user', resourceId: user.id, actorUserId: user.id, sessionId: session.id, metadata: { method } })
+    await recordAudit(request, { action: 'auth.login', resourceType: 'user', resourceId: user.id, actorUserId: user.id, sessionId: session.id, metadata: { method, device: deviceFingerprint(userAgent) } })
     return response
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Could not sign in' }, { status: 400 })
