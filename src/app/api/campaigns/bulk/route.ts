@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth'
 import { getDefaultWorkspace, requireWorkspaceRole } from '@/lib/workspaces'
 import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
-import { rateLimit } from '@/lib/rate-limit'
+import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { recordAudit } from '@/lib/audit'
 import { getIdempotentResponse, releaseIdempotencyClaim, storeIdempotentResponse } from '@/lib/idempotency'
 
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   const access = await requireWorkspaceRole(request, workspaceId, ['owner', 'admin', 'editor'])
   if (!access.membership) return NextResponse.json({ error: access.error }, { status: access.status })
   const limit = await rateLimit(request, { name: 'campaigns-bulk', limit: 10, windowMs: 60_000 })
-  if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+  if (!limit.allowed) return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: rateLimitHeaders(limit) })
 
   let claim: Awaited<ReturnType<typeof getIdempotentResponse>> = null
   const fail = async (body: unknown, status: number) => {
