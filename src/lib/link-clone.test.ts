@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Url } from '@prisma/client'
+import { Prisma, type Url } from '@prisma/client'
 import { cloneUrlData, validateCloneCode } from './link-clone'
 
 describe('validateCloneCode', () => {
@@ -23,6 +23,12 @@ describe('cloneUrlData', () => {
     cloaked: true, isActive: true, userId: 'user', workspaceId: 'ws', folderId: 'f', deepLinkAppId: null,
     autoFailoverEnabled: true, tags: ['a', 'b'], deletedAt: null,
   } as unknown as Url
+
+  it('copies the visitor blocklist, using DB null when absent', () => {
+    const rules = { countries: ['XX'] }
+    expect(cloneUrlData({ ...source, visitorBlock: rules } as unknown as Url, 'c').visitorBlock).toEqual(rules)
+    expect(cloneUrlData({ ...source, visitorBlock: null } as unknown as Url, 'c').visitorBlock).toBe(Prisma.DbNull)
+  })
 
   it('copies settings under the new code', () => {
     const d = cloneUrlData(source, 'copy')

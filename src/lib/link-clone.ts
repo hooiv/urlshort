@@ -46,6 +46,7 @@ export function cloneUrlData(source: Url, shortCode: string): Prisma.UrlUnchecke
     autoFailoverEnabled: source.autoFailoverEnabled,
     tags: source.tags,
     notes: source.notes,
+    visitorBlock: source.visitorBlock === null ? Prisma.DbNull : (source.visitorBlock as Prisma.InputJsonValue),
   }
 }
 
