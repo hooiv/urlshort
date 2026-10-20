@@ -28,6 +28,7 @@ export type ExportedLink = {
   expiresAt: string | null
   maxClicks: number | null
   expiredUrl: string | null
+  notStartedUrl: string | null
 }
 
 type Row = Omit<ExportedLink, 'createdAt' | 'startsAt' | 'expiresAt' | 'passwordProtected'> & {
@@ -37,6 +38,7 @@ type Row = Omit<ExportedLink, 'createdAt' | 'startsAt' | 'expiresAt' | 'password
   expiresAt: Date | null
   maxClicks: number | null
   expiredUrl: string | null
+  notStartedUrl: string | null
 }
 
 export function parseExportFormat(raw: string | null): LinksExportFormat | null {
@@ -49,24 +51,24 @@ export function toExportedLink(r: Row): ExportedLink {
     shortCode: r.shortCode, originalUrl: r.originalUrl, title: r.title, tags: r.tags ?? [], folderId: r.folderId,
     clicks: r.clicks, isActive: r.isActive, passwordProtected: r.passwordHash !== null,
     createdAt: r.createdAt.toISOString(), startsAt: r.startsAt?.toISOString() ?? null, expiresAt: r.expiresAt?.toISOString() ?? null,
-    maxClicks: r.maxClicks ?? null, expiredUrl: r.expiredUrl ?? null,
+    maxClicks: r.maxClicks ?? null, expiredUrl: r.expiredUrl ?? null, notStartedUrl: r.notStartedUrl ?? null,
   }
 }
 
-const CSV_HEADER = ['shortCode', 'originalUrl', 'title', 'tags', 'folderId', 'clicks', 'active', 'passwordProtected', 'createdAt', 'startsAt', 'expiresAt', 'maxClicks', 'expiredUrl']
+const CSV_HEADER = ['shortCode', 'originalUrl', 'title', 'tags', 'folderId', 'clicks', 'active', 'passwordProtected', 'createdAt', 'startsAt', 'expiresAt', 'maxClicks', 'expiredUrl', 'notStartedUrl']
 
 export function linksToCsv(links: ExportedLink[]): string {
   const safe = (v: string | null) => (v == null ? '' : neutralizeFormula(v))
   return serializeCsv([
     CSV_HEADER,
-    ...links.map((l) => [l.shortCode, l.originalUrl, safe(l.title), l.tags.map(neutralizeFormula).join(';'), l.folderId ?? '', l.clicks, l.isActive, l.passwordProtected, l.createdAt, l.startsAt ?? '', l.expiresAt ?? '', l.maxClicks ?? '', l.expiredUrl ?? '']),
+    ...links.map((l) => [l.shortCode, l.originalUrl, safe(l.title), l.tags.map(neutralizeFormula).join(';'), l.folderId ?? '', l.clicks, l.isActive, l.passwordProtected, l.createdAt, l.startsAt ?? '', l.expiresAt ?? '', l.maxClicks ?? '', l.expiredUrl ?? '', l.notStartedUrl ?? '']),
   ])
 }
 
 export async function exportLinks(scope: AnalyticsScope): Promise<{ links: ExportedLink[]; truncated: boolean }> {
   const rows = await prisma.$queryRaw<Row[]>(Prisma.sql`
     SELECT u."shortCode", u."originalUrl", u."title", u."tags", u."folderId", u."clicks", u."isActive",
-           u."passwordHash", u."createdAt", u."startsAt", u."expiresAt", u."maxClicks", u."expiredUrl"
+           u."passwordHash", u."createdAt", u."startsAt", u."expiresAt", u."maxClicks", u."expiredUrl", u."notStartedUrl"
     FROM "urls" u
     WHERE ${scopeFilter(scope)}
     ORDER BY u."createdAt" DESC, u."id"
