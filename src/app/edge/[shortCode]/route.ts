@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse, after } from 'next/server'
 import { forwardQueryParams, isBillableTraffic, resolveDestination } from '@/lib/redirect'
 import { verifyUnlockToken } from '@/lib/password-gate'
+import { evaluateVisitorBlock, type VisitorBlock } from '@/lib/visitor-block'
 import type { TrafficKind } from '@/lib/smart-routing'
 export const runtime='nodejs'
 // Delivery fast-path over signed routing snapshots. This route intentionally
@@ -11,7 +12,7 @@ export const runtime='nodejs'
 type Rule={enabled:boolean;healthStatus?:string|null;countryCodes?:string|null;deviceType?:string|null;trafficType?:string|null;aiAgent?:string|null;os?:string|null;languageCodes?:string|null;referrerDomain?:string|null;startAt?:string|null;endAt?:string|null;priority:number;weight:number;destinationUrl:string}
 type Variant={enabled:boolean;weight:number;destinationUrl:string}
 type Campaign={id:string;version?:number;variants:Variant[]}
-type Link={shortCode:string;originalUrl:string;expiresAt:string|null;expiredUrl?:string|null;startsAt?:string|null;notStartedUrl?:string|null;passwordHash?:string|null;locked?:boolean|null;revision:string|null;rules:Rule[];campaigns:Campaign[]}
+type Link={shortCode:string;originalUrl:string;expiresAt:string|null;expiredUrl?:string|null;startsAt?:string|null;visitorBlock?:VisitorBlock|null;notStartedUrl?:string|null;passwordHash?:string|null;locked?:boolean|null;revision:string|null;rules:Rule[];campaigns:Campaign[]}
 type EdgeConfig={previousHash?:string;contentHash:string;signature:string;version?:number;link:Link}
 let lastGood:EdgeConfig|null=null
 let lastGoodAt=0
@@ -37,6 +38,8 @@ const body=await loadConfig(request,shortCode);if(!body)return new NextResponse(
 // served protected destinations to anyone holding the edge URL. Reuses the
 // shared constant-time checker — never `===` against the cookie value.
 if(link.passwordHash||link.locked){const unlocked=verifyUnlockToken(link.shortCode,request.cookies.get(`ql_unlocked_${link.shortCode}`)?.value,link.passwordHash);if(!unlocked)return NextResponse.redirect(new URL(`/protected/${link.shortCode}`,origin),307)}
+// Visitor blocklist parity with the main route (IP/CIDR + referrer host).
+if(link.visitorBlock){const fwd=(request.headers.get('x-forwarded-for')||'').split(',')[0].trim()||request.headers.get('x-real-ip');if(evaluateVisitorBlock(link.visitorBlock,{ip:fwd,referer:request.headers.get('referer')}))return NextResponse.redirect(new URL('/region-unavailable',origin),307)}
 // Go-live scheduling parity with the main route: before startsAt, send visitors to the teaser URL or /coming-soon.
 if(link.startsAt&&Date.now()<Date.parse(link.startsAt))return NextResponse.redirect(link.notStartedUrl||new URL('/coming-soon',origin),307)
 // Expiry honors the owner's fallback URL, else the shared /expired page —

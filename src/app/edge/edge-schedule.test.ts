@@ -45,3 +45,36 @@ describe('edge route go-live scheduling', () => {
     expect(res.headers.get('location')).toBe('https://dest.example/')
   })
 })
+
+describe('edge route visitor blocklist', () => {
+  beforeEach(() => { process.env.QL_CONFIG_SIGNING_SECRET = SECRET })
+  afterEach(() => { vi.unstubAllGlobals() })
+  const block = { cidrs: ['203.0.113.0/24', '2001:db8::/32'], referrerHosts: ['scraper.example'] }
+
+  async function runWith(headers: Record<string, string>) {
+    vi.resetModules()
+    const body = signed({ visitorBlock: block })
+    vi.stubGlobal('fetch', vi.fn(async (u: string) => String(u).includes('/api/edge/config/')
+      ? new Response(JSON.stringify(body), { status: 200 })
+      : new Response(null, { status: 204 })))
+    const { GET } = await import('./[shortCode]/route')
+    return GET(new NextRequest('https://ql.test/edge/abc', { headers }), { params: Promise.resolve({ shortCode: 'abc' }) })
+  }
+
+  it('blocks a listed IPv4 range', async () => {
+    const res = await runWith({ 'x-forwarded-for': '203.0.113.9, 10.0.0.1' })
+    expect(res.headers.get('location')).toBe('https://ql.test/region-unavailable')
+  })
+  it('blocks a listed IPv6 range', async () => {
+    const res = await runWith({ 'x-forwarded-for': '2001:db8:1::5' })
+    expect(res.headers.get('location')).toBe('https://ql.test/region-unavailable')
+  })
+  it('blocks a listed referrer subdomain', async () => {
+    const res = await runWith({ referer: 'https://www.scraper.example/page' })
+    expect(res.headers.get('location')).toBe('https://ql.test/region-unavailable')
+  })
+  it('lets other visitors through', async () => {
+    const res = await runWith({ 'x-forwarded-for': '198.51.100.7', referer: 'https://good.example/' })
+    expect(res.headers.get('location')).toBe('https://dest.example/')
+  })
+})

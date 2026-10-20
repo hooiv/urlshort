@@ -1,4 +1,28 @@
-import { isIP } from 'node:net'
+// Pure JS (no node:net) so the edge runtime can import this module.
+const IPV4_RE = /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/
+const IPV6_GROUP_RE = /^[0-9a-f]{1,4}$/i
+
+function isIP(v: string): 0 | 4 | 6 {
+  if (IPV4_RE.test(v)) return 4
+  if (!v.includes(':') || /[^0-9a-f:.]/i.test(v)) return 0
+  let body = v
+  let groupsNeeded = 8
+  const dot = v.lastIndexOf('.')
+  if (dot !== -1) {
+    const c = v.lastIndexOf(':')
+    if (!IPV4_RE.test(v.slice(c + 1))) return 0
+    body = v.slice(0, c + 1) + '0:0'
+    groupsNeeded = 8
+  }
+  const halves = body.split('::')
+  if (halves.length > 2) return 0
+  const parse = (h: string) => (h === '' ? [] : h.split(':'))
+  const head = parse(halves[0])
+  const rest = halves.length === 2 ? parse(halves[1]) : []
+  if (![...head, ...rest].every((g) => IPV6_GROUP_RE.test(g))) return 0
+  if (halves.length === 2) return head.length + rest.length <= groupsNeeded - 1 ? 6 : 0
+  return head.length === groupsNeeded ? 6 : 0
+}
 
 /**
  * Per-link visitor blocklist: deny clicks from specific IPs/CIDR ranges or
