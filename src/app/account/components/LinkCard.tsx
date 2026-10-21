@@ -168,6 +168,26 @@ export default function LinkCard({
     }
   }
 
+  async function copyPreviewUrl() {
+    try {
+      if (typeof window === 'undefined' || !navigator.clipboard) throw new Error('unavailable')
+      await navigator.clipboard.writeText(`${window.location.origin}/preview/${link.shortCode}`)
+      toast.success('Click-free preview link copied')
+    } catch {
+      toast.error('Clipboard access failed')
+    }
+  }
+
+  async function copyPreviewUrl() {
+    try {
+      if (typeof window === 'undefined' || !navigator.clipboard) throw new Error('unavailable')
+      await navigator.clipboard.writeText(`${window.location.origin}/preview/${link.shortCode}`)
+      toast.success('Click-free preview link copied')
+    } catch {
+      toast.error('Clipboard access failed')
+    }
+  }
+
   const pinBadge = link.pinnedAt ? (
     <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-[10px] text-indigo-300">pinned</span>
   ) : null
@@ -342,6 +362,8 @@ export default function LinkCard({
             onClick={() => void patch({ pinned: !link.pinnedAt }, link.pinnedAt ? 'Link unpinned' : 'Link pinned to top')}
             label={link.pinnedAt ? 'Unpin' : 'Pin'}
           />
+          <CardAction onClick={() => void copyPreviewUrl()} label="Copy preview link" />
+          <CardAction onClick={() => void copyPreviewUrl()} label="Copy preview link" />
           <CardAction disabled={busy} onClick={() => void clone()} label="Clone" />
           <CardAction disabled={busy} onClick={() => void rename()} label="Rename" />
           <CardAction onClick={() => setShowGoal((v) => !v)} label={showGoal ? 'Hide goal' : 'Click goal'} />
