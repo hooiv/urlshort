@@ -29,6 +29,23 @@ const ALL_ACTIONS = [
   { name: 'Revenue Attribution', path: '/manage/integrations' },
   { name: 'Rewards & Commissions', path: '/manage/rewards' },
   { name: 'Bulk Import CSV', path: '/bulk' },
+  { name: 'Duplicate Links', path: '/manage/duplicates' },
+  { name: 'Stale Links', path: '/manage/stale' },
+  { name: 'Trash', path: '/manage/trash' },
+  { name: 'Broken Links', path: '/manage/broken' },
+  { name: 'UTM Hygiene', path: '/manage/utm-hygiene' },
+  { name: 'UTM Coverage', path: '/manage/utm-coverage' },
+  { name: 'Link Hygiene', path: '/manage/hygiene' },
+  { name: 'Untagged Links', path: '/manage/untagged' },
+  { name: 'Insecure Destinations', path: '/manage/insecure' },
+  { name: 'Redirect Chains', path: '/manage/chains' },
+  { name: 'Tag Performance', path: '/manage/tags' },
+  { name: 'Country Performance', path: '/manage/countries' },
+  { name: 'Referrer Performance', path: '/manage/referrers' },
+  { name: 'Conversions', path: '/manage/conversions' },
+  { name: 'QR Scans', path: '/manage/qr-scans' },
+  { name: 'Traffic Spikes', path: '/manage/spikes' },
+  { name: 'Conversion Funnel', path: '/manage/funnel' },
 ]
 
 function ActionIcon({ name }: { name: string }) {
