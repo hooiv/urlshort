@@ -5,10 +5,13 @@ import { getManageableUrl, EDIT_ROLES } from '@/lib/authorization'
 import { recordAudit } from '@/lib/audit'
 import { invalidateLink } from '@/lib/link-cache'
 import { assertDestinationSafeForStorage } from '@/lib/destination-health'
+import { loadExperimentReport, promotionVerdict } from '@/lib/experiment-report'
 import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 
 export const promoteSchema = z.object({
   ruleId: z.string().trim().min(1, { message: 'ruleId is required' }).max(100),
+  /** When true, refuse unless the experiment analysis names this rule the significant winner. */
+  requireWinner: z.boolean().optional(),
 })
 
 export async function POST(request: NextRequest, context: { params: Promise<{ shortCode: string }> }) {
@@ -32,6 +35,11 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
     })
     if (!rule) {
       return NextResponse.json({ error: 'Routing rule not found for this link' }, { status: 404 })
+    }
+
+    if (parsedBody.data.requireWinner) {
+      const verdict = promotionVerdict(await loadExperimentReport(link.id), rule.id)
+      if (!verdict.allowed) return NextResponse.json({ error: `Not promoted: ${verdict.reason}` }, { status: 409 })
     }
 
     try {
