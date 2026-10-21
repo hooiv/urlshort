@@ -45,3 +45,30 @@ describe('experiment significance', () => {
     expect(analyzeExperiment([{ id: 'a', name: 'A', clicks: 500, conversions: 20 }]).status).toBe('insufficient_data')
   })
 })
+
+import { normalInv, requiredClicksPerVariant, daysToSampleSize } from './experiment-significance'
+
+describe('sample size planner', () => {
+  it('inverts the normal cdf', () => {
+    expect(normalInv(0.975)).toBeCloseTo(1.95996, 4)
+    expect(normalInv(0.8)).toBeCloseTo(0.84162, 4)
+    expect(normalInv(0.01)).toBeCloseTo(-2.32635, 4)
+    expect(() => normalInv(0)).toThrow()
+  })
+  it('matches the textbook figure for 10% -> 12%', () => {
+    const plan = requiredClicksPerVariant(0.1, 0.2)!
+    expect(plan.clicksPerVariant).toBeGreaterThan(3750)
+    expect(plan.clicksPerVariant).toBeLessThan(3900)
+  })
+  it('rejects invalid inputs', () => {
+    expect(requiredClicksPerVariant(0, 0.1)).toBeNull()
+    expect(requiredClicksPerVariant(0.5, 1.5)).toBeNull()
+    expect(requiredClicksPerVariant(0.1, 0)).toBeNull()
+  })
+  it('estimates days remaining from the slowest variant', () => {
+    const plan = requiredClicksPerVariant(0.1, 0.2)!
+    const d = daysToSampleSize(plan, [{ clicks: 1000 }, { clicks: 500 }], 10)!
+    expect(d).toBe(Math.ceil((plan.clicksPerVariant - 500) / 50))
+    expect(daysToSampleSize(plan, [{ clicks: 0 }], 10)).toBeNull()
+  })
+})

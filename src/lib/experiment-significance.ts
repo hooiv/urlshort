@@ -108,3 +108,62 @@ export function analyzeExperiment(input: VariantCounts[], opts: { controlId?: st
   if (controlBeatsAll) return { control: control.id, variants, status: 'winner', winnerId: control.id, note: `The control "${control.name}" outperforms every variant.` }
   return { control: control.id, variants, status: 'no_significant_difference', winnerId: null, note: 'No variant differs from the control at the requested confidence yet; keep the test running.' }
 }
+
+/** Inverse standard normal CDF (Acklam's rational approximation, rel. error < 1.2e-9). */
+export function normalInv(p: number): number {
+  if (!(p > 0 && p < 1)) throw new RangeError('p must be in (0, 1)')
+  const a = [-3.969683028665376e1, 2.209460984245205e2, -2.759285104469687e2, 1.383577518672690e2, -3.066479806614716e1, 2.506628277459239]
+  const b = [-5.447609879822406e1, 1.615858368580409e2, -1.556989798598866e2, 6.680131188771972e1, -1.328068155288572e1]
+  const c = [-7.784894002430293e-3, -3.223964580411365e-1, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783]
+  const d = [7.784695709041462e-3, 3.224671290700398e-1, 2.445134137142996, 3.754408661907416]
+  const lo = 0.02425
+  if (p < lo) {
+    const q = Math.sqrt(-2 * Math.log(p))
+    return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1)
+  }
+  if (p > 1 - lo) return -normalInv(1 - p)
+  const q = p - 0.5
+  const r = q * q
+  return ((((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q) / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1)
+}
+
+export interface SampleSizePlan {
+  baselineRate: number
+  relativeLift: number
+  confidence: number
+  power: number
+  clicksPerVariant: number
+}
+
+/**
+ * Clicks needed per variant to detect a relative lift over a baseline conversion
+ * rate with a two-sided two-proportion z-test. Returns null when the inputs
+ * cannot produce a valid test (rate outside (0,1), lift <= 0, or the lifted rate >= 1).
+ */
+export function requiredClicksPerVariant(baselineRate: number, relativeLift: number, opts: { confidence?: number; power?: number } = {}): SampleSizePlan | null {
+  const confidence = opts.confidence ?? DEFAULT_CONFIDENCE
+  const power = opts.power ?? 0.8
+  if (!(baselineRate > 0 && baselineRate < 1) || !(relativeLift > 0)) return null
+  if (!(confidence > 0.5 && confidence < 1) || !(power > 0.5 && power < 1)) return null
+  const p1 = baselineRate
+  const p2 = baselineRate * (1 + relativeLift)
+  if (p2 >= 1) return null
+  const zA = normalInv(1 - (1 - confidence) / 2)
+  const zB = normalInv(power)
+  const pBar = (p1 + p2) / 2
+  const num = zA * Math.sqrt(2 * pBar * (1 - pBar)) + zB * Math.sqrt(p1 * (1 - p1) + p2 * (1 - p2))
+  const n = Math.ceil((num * num) / ((p2 - p1) ** 2))
+  return { baselineRate, relativeLift, confidence, power, clicksPerVariant: Math.max(n, MIN_CLICKS_PER_VARIANT) }
+}
+
+/** Days until every variant reaches the plan's sample size at current daily click rates; null if any variant has no traffic. */
+export function daysToSampleSize(plan: SampleSizePlan, variants: { clicks: number }[], windowDays: number): number | null {
+  if (!variants.length || windowDays <= 0) return null
+  let worst = 0
+  for (const v of variants) {
+    const perDay = v.clicks / windowDays
+    if (perDay <= 0) return null
+    worst = Math.max(worst, Math.ceil(Math.max(0, plan.clicksPerVariant - v.clicks) / perDay))
+  }
+  return worst
+}

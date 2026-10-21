@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { getManageableUrl } from '@/lib/authorization'
-import { analyzeExperiment, DEFAULT_CONFIDENCE } from '@/lib/experiment-significance'
+import { analyzeExperiment, DEFAULT_CONFIDENCE, requiredClicksPerVariant, daysToSampleSize } from '@/lib/experiment-significance'
 
 /**
  * GET /api/links/:code/experiment?days=30&goalId=...&control=<ruleId>&confidence=0.95
@@ -19,6 +19,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
   if (!Number.isInteger(days) || days < 1 || days > 365) return NextResponse.json({ error: 'days must be an integer between 1 and 365' }, { status: 400 })
   const confidence = params.get('confidence') === null ? DEFAULT_CONFIDENCE : Number(params.get('confidence'))
   if (!(confidence >= 0.8 && confidence <= 0.999)) return NextResponse.json({ error: 'confidence must be between 0.8 and 0.999' }, { status: 400 })
+  const lift = params.get('lift') === null ? 0.1 : Number(params.get('lift'))
+  if (!(lift > 0 && lift <= 5)) return NextResponse.json({ error: 'lift must be a relative fraction in (0, 5]' }, { status: 400 })
   const goalId = params.get('goalId')
   const control = params.get('control') ?? undefined
 
@@ -39,5 +41,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
   const clicks = new Map(clickRows.map((r) => [r.ruleId, Number(r.n)]))
   const convs = new Map(convRows.map((r) => [r.ruleId, Number(r.n)]))
   const report = analyzeExperiment(rules.map((r) => ({ id: r.id, name: r.name, clicks: clicks.get(r.id) ?? 0, conversions: convs.get(r.id) ?? 0 })), { controlId: control, confidence })
-  return NextResponse.json({ shortCode, days, confidence, goalId: goalId ?? null, ...report })
+  const totalClicks = report.variants.reduce((a, v) => a + v.clicks, 0)
+  const totalConv = report.variants.reduce((a, v) => a + v.conversions, 0)
+  const plan = totalClicks > 0 ? requiredClicksPerVariant(totalConv / totalClicks, lift, { confidence }) : null
+  const daysRemaining = plan ? daysToSampleSize(plan, report.variants, days) : null
+  return NextResponse.json({ shortCode, days, confidence, goalId: goalId ?? null, ...report, plan: plan ? { ...plan, daysRemaining } : null })
 }
