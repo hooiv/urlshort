@@ -88,7 +88,7 @@ export default function AnalyticsPage() {
     }
   }
 
-  async function promoteWinner(ruleId: string) {
+  async function promoteWinner(ruleId: string, opts?: { requireWinner?: boolean }) {
     if (!shortCode) return
     try {
       const token = sessionStorage.getItem(`ql-token:${shortCode}`)
@@ -98,7 +98,7 @@ export default function AnalyticsPage() {
           'Content-Type': 'application/json',
           'x-management-token': token || '',
         },
-        body: JSON.stringify({ ruleId }),
+        body: JSON.stringify({ ruleId, requireWinner: opts?.requireWinner === true }),
       })
       const result = await res.json()
       if (!res.ok) throw new Error(result.error || 'Failed to promote winner')

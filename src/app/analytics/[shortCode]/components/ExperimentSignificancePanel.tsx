@@ -13,7 +13,7 @@ export default function ExperimentSignificancePanel({
   onPromoteWinner,
 }: {
   shortCode: string
-  onPromoteWinner: (ruleId: string) => Promise<void>
+  onPromoteWinner: (ruleId: string, opts?: { requireWinner?: boolean }) => Promise<void>
 }) {
   const [days, setDays] = useState(30)
   const [confidence, setConfidence] = useState(0.95)
@@ -79,7 +79,7 @@ export default function ExperimentSignificancePanel({
             </table>
           </div>
           {winner && !winner.isControl && (
-            <button onClick={() => void onPromoteWinner(winner.id).then(() => setNonce((n) => n + 1))} className="mt-4 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-400">
+            <button onClick={() => void onPromoteWinner(winner.id, { requireWinner: true }).then(() => setNonce((n) => n + 1))} className="mt-4 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-400">
               Promote “{winner.name}” to default URL
             </button>
           )}

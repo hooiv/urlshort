@@ -9,6 +9,6 @@ Treats the link's enabled routing rules as variants. Per variant: human clicks, 
 - `winner` requires significance at `confidence` (0.8–0.999) and that no other variant significantly beats it; the control can win.
 - Auth is the same as other link endpoints (session or API key with access to the link). Promote the winner with `POST /api/links/:code/promote`.
 
-In progress: UI panel showing this report next to the promote button.
+`POST /api/links/:code/promote` accepts `requireWinner: true`; it then returns 409 unless this report names the rule the significant winner. The analytics panel always sends it.
 
 UI: the analytics page shows an Experiment significance panel (window and confidence selectors, CI table, promote button for a winner).
