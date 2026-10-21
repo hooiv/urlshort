@@ -1,3 +1,4 @@
+import { isWithinRuleSchedule } from '@/lib/rule-schedule'
 import { NextRequest, NextResponse, after } from 'next/server'
 import { forwardQueryParams, isBillableTraffic, resolveDestination } from '@/lib/redirect'
 import { verifyUnlockToken } from '@/lib/password-gate'
@@ -11,7 +12,7 @@ function getCountry(request:NextRequest){const v=request.headers.get('cf-ipcount
 // can move back to `runtime = 'edge'` unchanged. Shared route policy comes
 // from `@/lib/redirect` (pure helpers) and `@/lib/password-gate`
 // (timing-safe checker) — never duplicated here.
-type Rule={enabled:boolean;healthStatus?:string|null;countryCodes?:string|null;deviceType?:string|null;trafficType?:string|null;aiAgent?:string|null;os?:string|null;languageCodes?:string|null;referrerDomain?:string|null;startAt?:string|null;endAt?:string|null;priority:number;weight:number;destinationUrl:string}
+type Rule={enabled:boolean;healthStatus?:string|null;countryCodes?:string|null;deviceType?:string|null;trafficType?:string|null;aiAgent?:string|null;os?:string|null;languageCodes?:string|null;referrerDomain?:string|null;startAt?:string|null;endAt?:string|null;schedule?:string|null;priority:number;weight:number;destinationUrl:string}
 type Variant={enabled:boolean;weight:number;destinationUrl:string}
 type Campaign={id:string;version?:number;variants:Variant[]}
 type Link={shortCode:string;originalUrl:string;expiresAt:string|null;expiredUrl?:string|null;startsAt?:string|null;visitorBlock?:VisitorBlock|null;geoFence?:GeoFence|null;notStartedUrl?:string|null;passwordHash?:string|null;locked?:boolean|null;revision:string|null;rules:Rule[];campaigns:Campaign[]}
@@ -19,7 +20,7 @@ type EdgeConfig={previousHash?:string;contentHash:string;signature:string;versio
 let lastGood:EdgeConfig|null=null
 let lastGoodAt=0
 function list(v:string|null|undefined){return(v||'').split(/[\s,]+/).filter(Boolean).map(x=>x.toLowerCase())}
-function match(r:Rule,c:{country:string;device:string;trafficType:string;aiAgent:string|null;os:string;language:string;referrer:string}){return r.enabled&&r.healthStatus!=='down'&&(!r.countryCodes||list(r.countryCodes).includes(c.country))&&(!r.deviceType||r.deviceType===c.device)&&(!r.trafficType||r.trafficType===c.trafficType)&&(!r.aiAgent||list(r.aiAgent).includes(c.aiAgent||''))&&(!r.os||list(r.os).includes(c.os))&&(!r.languageCodes||list(r.languageCodes).includes(c.language))&&(!r.referrerDomain||c.referrer===r.referrerDomain.toLowerCase())&&(!r.startAt||Date.now()>=Date.parse(r.startAt))&&(!r.endAt||Date.now()<=Date.parse(r.endAt))}
+function match(r:Rule,c:{country:string;device:string;trafficType:string;aiAgent:string|null;os:string;language:string;referrer:string}){return r.enabled&&r.healthStatus!=='down'&&(!r.countryCodes||list(r.countryCodes).includes(c.country))&&(!r.deviceType||r.deviceType===c.device)&&(!r.trafficType||r.trafficType===c.trafficType)&&(!r.aiAgent||list(r.aiAgent).includes(c.aiAgent||''))&&(!r.os||list(r.os).includes(c.os))&&(!r.languageCodes||list(r.languageCodes).includes(c.language))&&(!r.referrerDomain||c.referrer===r.referrerDomain.toLowerCase())&&(!r.startAt||Date.now()>=Date.parse(r.startAt))&&(!r.endAt||Date.now()<=Date.parse(r.endAt))&&isWithinRuleSchedule(r.schedule,new Date())}
 async function bucket(seed:string,total:number){const d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(seed));const b=new Uint8Array(d);return ((((b[0]<<24)|(b[1]<<16)|(b[2]<<8)|b[3])>>>0)%total)}
 async function choose(items:Array<{enabled:boolean;weight:number;destinationUrl:string}>,seed:string){const active=items.filter(v=>v.enabled&&v.weight>0);if(!active.length)return null;const total=active.reduce((n,v)=>n+v.weight,0),n=await bucket(seed,total);let c=0;for(const v of active){c+=v.weight;if(n<c)return v}return active[active.length-1]}
 async function verifyConfig(body:EdgeConfig){const secret=process.env.QL_CONFIG_SIGNING_SECRET||process.env.QL_ATTRIBUTION_SECRET;if(!secret)return false;const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(secret),{name:'HMAC',hash:'SHA-256'},false,['verify']);const raw=body.signature.replace(/-/g,'+').replace(/_/g,'/').padEnd(Math.ceil(body.signature.length/4)*4,'=');try{return await crypto.subtle.verify('HMAC',key,Uint8Array.from(atob(raw),c=>c.charCodeAt(0)),new TextEncoder().encode((body.previousHash||'')+'.'+body.contentHash))}catch{return false}}

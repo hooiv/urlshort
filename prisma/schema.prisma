@@ -160,6 +160,7 @@ model LinkRule {
   referrerDomain       String?
   startAt              DateTime?
   endAt                DateTime?
+  schedule             String?
   riskStatus           LinkRiskStatus @default(cleared)
   riskReason           String?
   riskCheckedAt        DateTime?

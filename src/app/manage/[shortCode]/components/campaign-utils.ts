@@ -1,3 +1,4 @@
+import { normalizeRuleSchedule } from '@/lib/rule-schedule'
 import type { Form, PreviewInput } from '@/app/manage/[shortCode]/components/campaign-types'
 
 /** True only for absolute http(s) URLs. Guards every URL field before it hits an API. */
@@ -156,6 +157,7 @@ export function buildRulePayload(form: Form) {
     referrerDomain: form.referrerDomain,
     startAt,
     endAt,
+    schedule: normalizeRuleSchedule(form.schedule),
   }
 }
 

@@ -269,6 +269,7 @@ function ruleSelect() {
     languageCodes: true,
     startAt: true,
     endAt: true,
+    schedule: true,
     healthStatus: true,
   } as const
 }

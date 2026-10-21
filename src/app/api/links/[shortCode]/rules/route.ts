@@ -1,3 +1,4 @@
+import { normalizeRuleSchedule } from '@/lib/rule-schedule'
 import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
 import { NextRequest, NextResponse } from 'next/server'
 import type { TrafficType } from '@prisma/client'
@@ -38,6 +39,7 @@ type RuleInput = {
   languageCodes?: unknown
   startAt?: unknown
   endAt?: unknown
+  schedule?: unknown
 }
 
 async function getUrl(request: NextRequest, shortCode: string) {
@@ -77,6 +79,7 @@ function parseRule(input: RuleInput) {
     referrerDomain: normalizeReferrerDomain(input.referrerDomain),
     startAt,
     endAt,
+    schedule: normalizeRuleSchedule(input.schedule),
   }
 }
 

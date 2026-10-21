@@ -37,6 +37,7 @@ export interface Form {
   referrerDomain: string
   startAt: string
   endAt: string
+  schedule: string
 }
 
 export const emptyForm: Form = {
@@ -53,6 +54,7 @@ export const emptyForm: Form = {
   referrerDomain: '',
   startAt: '',
   endAt: '',
+  schedule: '',
 }
 
 export type SocialPlatform = 'twitter' | 'facebook' | 'linkedin' | 'slack'

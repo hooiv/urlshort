@@ -97,6 +97,7 @@ export async function cloneLink(source: Url, requestedCode: string | null, actor
               referrerDomain: r.referrerDomain,
               startAt: r.startAt,
               endAt: r.endAt,
+              schedule: r.schedule,
             })),
           })
         }

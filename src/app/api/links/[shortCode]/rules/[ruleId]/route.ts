@@ -1,3 +1,4 @@
+import { normalizeRuleSchedule } from '@/lib/rule-schedule'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { recordAudit } from '@/lib/audit'
@@ -62,6 +63,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
     if (body.referrerDomain !== undefined) patch.referrerDomain = normalizeReferrerDomain(body.referrerDomain)
     if (body.startAt !== undefined) patch.startAt = parseOptionalDate(body.startAt)
     if (body.endAt !== undefined) patch.endAt = parseOptionalDate(body.endAt)
+    if (body.schedule !== undefined) patch.schedule = normalizeRuleSchedule(body.schedule)
 
     const startAt = (patch.startAt as Date | null | undefined) ?? existing.startAt
     const endAt = (patch.endAt as Date | null | undefined) ?? existing.endAt

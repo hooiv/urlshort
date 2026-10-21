@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
+import { isWithinRuleSchedule } from '@/lib/rule-schedule'
 import type { NextRequest } from 'next/server'
 
 export type DeviceKind = 'mobile' | 'tablet' | 'desktop' | 'bot'
@@ -25,6 +26,7 @@ export type SmartRule = {
   referrerDomain: string | null
   startAt: Date | null
   endAt: Date | null
+  schedule?: string | null
 }
 
 export function normalizeSafeUrl(input: string): string {
@@ -231,6 +233,7 @@ function referrerMatches(rule: SmartRule, host: string | null): boolean {
 function timeMatches(rule: SmartRule, now: Date): boolean {
   if (rule.startAt && now < rule.startAt) return false
   if (rule.endAt && now > rule.endAt) return false
+  if (rule.schedule && !isWithinRuleSchedule(rule.schedule, now)) return false
   return true
 }
 

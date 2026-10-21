@@ -36,7 +36,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
       select: {
         id: true, name: true, destinationUrl: true, priority: true, weight: true, enabled: true,
         healthStatus: true, countryCodes: true, deviceType: true, trafficType: true,
-        aiAgent: true, os: true, languageCodes: true, referrerDomain: true, startAt: true, endAt: true,
+        aiAgent: true, os: true, languageCodes: true, referrerDomain: true, startAt: true, endAt: true, schedule: true,
       },
     })
 

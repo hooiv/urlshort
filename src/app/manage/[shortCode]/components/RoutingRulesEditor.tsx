@@ -194,6 +194,14 @@ export default function RoutingRulesEditor({
               />
             </Field>
           </div>
+          <Field label="Weekly schedule (optional, e.g. Asia/Kolkata|mon-fri 09:00-17:00)">
+            <input
+              value={form.schedule}
+              onChange={(e) => onFormChange({ ...form, schedule: e.target.value })}
+              placeholder="Asia/Kolkata|mon-fri 09:00-17:00;sat 10:00-14:00"
+              className="input"
+            />
+          </Field>
 
           <button
             disabled={busy}
