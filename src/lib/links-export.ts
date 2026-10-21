@@ -8,7 +8,8 @@ import { neutralizeFormula } from './analytics-export'
  * Link inventory export (Bitly/Dub "export links"): every non-trashed link in
  * a scope as CSV or JSON. The CSV header matches what /api/bulk imports, so a
  * round trip between workspaces works. Capped so a request cannot pull an
- * unbounded table into memory.
+ * unbounded table into memory. JSON also carries routing/pixel config so a
+ * workspace can be fully backed up; CSV stays the importable core columns.
  */
 export const LINKS_EXPORT_MAX = 50_000
 export const LINKS_EXPORT_FORMATS = ['csv', 'json'] as const
@@ -32,6 +33,18 @@ export type ExportedLink = {
   redirectStatus: number | null
   dailyClickCap: number | null
   notes: string | null
+  cloaked: boolean
+  queryForwardMode: string | null
+  clickIdParam: string | null
+  metaPixelId: string | null
+  googleTagId: string | null
+  xPixelId: string | null
+  linkedinPartnerId: string | null
+  tiktokPixelId: string | null
+  geoFence: unknown
+  visitorBlock: unknown
+  activeHours: unknown
+  offHoursUrl: string | null
 }
 
 type Row = Omit<ExportedLink, 'createdAt' | 'startsAt' | 'expiresAt' | 'passwordProtected'> & {
@@ -59,6 +72,10 @@ export function toExportedLink(r: Row): ExportedLink {
     createdAt: r.createdAt.toISOString(), startsAt: r.startsAt?.toISOString() ?? null, expiresAt: r.expiresAt?.toISOString() ?? null,
     maxClicks: r.maxClicks ?? null, expiredUrl: r.expiredUrl ?? null, notStartedUrl: r.notStartedUrl ?? null,
     redirectStatus: r.redirectStatus ?? null, dailyClickCap: r.dailyClickCap ?? null, notes: r.notes ?? null,
+    cloaked: r.cloaked ?? false, queryForwardMode: r.queryForwardMode ?? null, clickIdParam: r.clickIdParam ?? null,
+    metaPixelId: r.metaPixelId ?? null, googleTagId: r.googleTagId ?? null, xPixelId: r.xPixelId ?? null,
+    linkedinPartnerId: r.linkedinPartnerId ?? null, tiktokPixelId: r.tiktokPixelId ?? null,
+    geoFence: r.geoFence ?? null, visitorBlock: r.visitorBlock ?? null, activeHours: r.activeHours ?? null, offHoursUrl: r.offHoursUrl ?? null,
   }
 }
 
@@ -75,7 +92,9 @@ export function linksToCsv(links: ExportedLink[]): string {
 export async function exportLinks(scope: AnalyticsScope): Promise<{ links: ExportedLink[]; truncated: boolean }> {
   const rows = await prisma.$queryRaw<Row[]>(Prisma.sql`
     SELECT u."shortCode", u."originalUrl", u."title", u."tags", u."folderId", u."clicks", u."isActive",
-           u."passwordHash", u."createdAt", u."startsAt", u."expiresAt", u."maxClicks", u."expiredUrl", u."notStartedUrl", u."redirectStatus", u."dailyClickCap", u."notes"
+           u."passwordHash", u."createdAt", u."startsAt", u."expiresAt", u."maxClicks", u."expiredUrl", u."notStartedUrl", u."redirectStatus", u."dailyClickCap", u."notes",
+           u."cloaked", u."queryForwardMode", u."clickIdParam", u."metaPixelId", u."googleTagId", u."xPixelId", u."linkedinPartnerId", u."tiktokPixelId",
+           u."geoFence", u."visitorBlock", u."activeHours", u."offHoursUrl"
     FROM "urls" u
     WHERE ${scopeFilter(scope)}
     ORDER BY u."createdAt" DESC, u."id"
