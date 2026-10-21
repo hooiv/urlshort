@@ -8,6 +8,7 @@ type Item = {
   id: string; shortCode: string; originalUrl: string; reason: 'time' | 'clicks'
   expiresAt: string | null; msUntilExpiry: number | null; clicks: number
   maxClicks: number | null; remainingClicks: number | null
+  runway?: { clicksPerDay: number; daysRemaining: number | null } | null
 }
 const COLORS = { critical: 'text-red-500', warning: 'text-amber-500', ok: 'text-emerald-500' }
 
@@ -54,7 +55,7 @@ export default function ExpiringLinksPage() {
                   <p className="truncate text-xs opacity-70">{l.originalUrl}</p>
                 </div>
                 <span className={`whitespace-nowrap text-sm ${COLORS[u]}`}>
-                  {l.reason === 'time' ? formatTimeLeft(l.msUntilExpiry) : `${l.remainingClicks} of ${l.maxClicks} clicks left`}
+                  {l.reason === 'time' ? formatTimeLeft(l.msUntilExpiry) : `${l.remainingClicks} of ${l.maxClicks} clicks left${l.runway?.daysRemaining != null ? ` · runs out in ~${l.runway.daysRemaining}d at ${l.runway.clicksPerDay}/day` : ''}`}
                 </span>
               </li>
             )

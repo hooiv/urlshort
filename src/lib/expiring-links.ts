@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { visibleUrlWhere } from '@/lib/folders'
+import { projectCapRunway, runwayDateKeys, type CapRunway } from '@/lib/cap-runway'
 
 /**
  * Links that will stop working soon: either a time expiry inside the horizon
@@ -22,6 +23,8 @@ export type ExpiringLink = {
   clicks: number
   maxClicks: number | null
   remainingClicks: number | null
+  /** Projected cap exhaustion from the last 7 days' rate; null for links without a cap. */
+  runway: CapRunway | null
 }
 
 export function parseHorizonDays(raw: string | null): number | null {
@@ -34,11 +37,15 @@ export function parseHorizonDays(raw: string | null): number | null {
 type Row = { id: string; shortCode: string; originalUrl: string; expiresAt: Date | null; clicks: number; maxClicks: number | null }
 
 /** Pure classification so the SQL filter and the output stay in lockstep. */
-export function classifyExpiring(row: Row, now: Date, horizonDays: number): ExpiringLink | null {
+export function classifyExpiring(row: Row, now: Date, horizonDays: number, recentClicks = 0): ExpiringLink | null {
   const horizon = now.getTime() + horizonDays * 86_400_000
   const timeSoon = row.expiresAt !== null && row.expiresAt.getTime() > now.getTime() && row.expiresAt.getTime() <= horizon
   const capSoon = row.maxClicks !== null && row.maxClicks > 0 && row.clicks < row.maxClicks && row.clicks / row.maxClicks >= CAP_WARNING_RATIO
-  if (!timeSoon && !capSoon) return null
+  const runway = row.maxClicks !== null && row.maxClicks > 0 && row.clicks < row.maxClicks
+    ? projectCapRunway(row.maxClicks - row.clicks, recentClicks, now)
+    : null
+  const burningFast = runway !== null && runway.daysRemaining !== null && runway.daysRemaining <= horizonDays
+  if (!timeSoon && !capSoon && !burningFast) return null
   return {
     id: row.id,
     shortCode: row.shortCode,
@@ -49,6 +56,7 @@ export function classifyExpiring(row: Row, now: Date, horizonDays: number): Expi
     clicks: row.clicks,
     maxClicks: row.maxClicks,
     remainingClicks: row.maxClicks === null ? null : Math.max(0, row.maxClicks - row.clicks),
+    runway,
   }
 }
 
@@ -66,8 +74,18 @@ export async function listExpiringLinks(userId: string, horizonDays: number, lim
     orderBy: { expiresAt: 'asc' },
     take: 1000,
   })
+  const capped = rows.filter((r) => r.maxClicks !== null && r.clicks < r.maxClicks).map((r) => r.id)
+  const recent = new Map<string, number>()
+  if (capped.length > 0) {
+    const grouped = await prisma.clickDaily.groupBy({
+      by: ['urlId'],
+      where: { urlId: { in: capped }, dateKey: { in: runwayDateKeys(now) } },
+      _sum: { clicks: true },
+    })
+    for (const g of grouped) recent.set(g.urlId, g._sum.clicks ?? 0)
+  }
   return rows
-    .map((r) => classifyExpiring(r, now, horizonDays))
+    .map((r) => classifyExpiring(r, now, horizonDays, recent.get(r.id) ?? 0))
     .filter((r): r is ExpiringLink => r !== null)
     .sort((a, b) => (a.msUntilExpiry ?? Infinity) - (b.msUntilExpiry ?? Infinity) || (a.remainingClicks ?? 0) - (b.remainingClicks ?? 0))
     .slice(0, limit)
