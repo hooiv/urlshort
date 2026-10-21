@@ -36,6 +36,7 @@ import VisitorRetention from './components/VisitorRetention'
 import PeriodCompare from './components/PeriodCompare'
 import BreakdownCard, { TechBar } from './components/BreakdownCard'
 import ExperimentDecisionHub from './components/ExperimentDecisionHub'
+import ExperimentSignificancePanel from './components/ExperimentSignificancePanel'
 import KpiCard from './components/KpiCard'
 import QrStudioPanel from './components/QrStudioPanel'
 import TabButton from './components/TabButton'
@@ -408,6 +409,9 @@ export default function AnalyticsPage() {
             analysis={analytics.experimentAnalysis}
             onPromoteWinner={promoteWinner}
           />
+        )}
+        {analytics.experimentAnalysis && analytics.experimentAnalysis.results.length > 1 && (
+          <ExperimentSignificancePanel shortCode={shortCode} onPromoteWinner={promoteWinner} />
         )}
 
         {/* Multi-Tab Navigation for Deep-Dives */}

@@ -10,3 +10,5 @@ Treats the link's enabled routing rules as variants. Per variant: human clicks, 
 - Auth is the same as other link endpoints (session or API key with access to the link). Promote the winner with `POST /api/links/:code/promote`.
 
 In progress: UI panel showing this report next to the promote button.
+
+UI: the analytics page shows an Experiment significance panel (window and confidence selectors, CI table, promote button for a winner).

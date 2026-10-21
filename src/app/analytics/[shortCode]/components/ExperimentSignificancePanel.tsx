@@ -1,0 +1,90 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { FlaskConical } from 'lucide-react'
+import type { ExperimentReport } from '@/lib/experiment-significance'
+
+type Report = ExperimentReport & { days: number; confidence: number }
+
+const pct = (n: number, d = 2) => `${(n * 100).toFixed(d)}%`
+
+export default function ExperimentSignificancePanel({
+  shortCode,
+  onPromoteWinner,
+}: {
+  shortCode: string
+  onPromoteWinner: (ruleId: string) => Promise<void>
+}) {
+  const [days, setDays] = useState(30)
+  const [confidence, setConfidence] = useState(0.95)
+  const [report, setReport] = useState<Report | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  const [nonce, setNonce] = useState(0)
+
+  useEffect(() => {
+    const ctl = new AbortController()
+    fetch(`/api/links/${encodeURIComponent(shortCode)}/experiment?days=${days}&confidence=${confidence}`, { signal: ctl.signal })
+      .then(async (res) => {
+        const body = await res.json()
+        if (!res.ok) throw new Error(body.error || 'Could not load experiment results')
+        setReport(body as Report)
+        setError(null)
+      })
+      .catch((e: Error) => { if (e.name !== 'AbortError') setError(e.message) })
+      .finally(() => { if (!ctl.signal.aborted) setLoading(false) })
+    return () => ctl.abort()
+  }, [shortCode, days, confidence, nonce])
+
+  const winner = report?.status === 'winner' ? report.variants.find((v) => v.id === report.winnerId) : undefined
+
+  return (
+    <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6" aria-busy={loading}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <FlaskConical className="h-5 w-5 text-violet-400" />
+          <h3 className="font-semibold text-lg text-white">Experiment significance</h3>
+        </div>
+        <div className="flex gap-2 text-xs">
+          <select aria-label="Window" value={days} onChange={(e) => { setLoading(true); setDays(Number(e.target.value)) }} className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-slate-200">
+            {[7, 14, 30, 90].map((d) => <option key={d} value={d}>Last {d} days</option>)}
+          </select>
+          <select aria-label="Confidence" value={confidence} onChange={(e) => { setLoading(true); setConfidence(Number(e.target.value)) }} className="rounded-lg border border-slate-700 bg-slate-950 px-2 py-1 text-slate-200">
+            {[0.9, 0.95, 0.99].map((c) => <option key={c} value={c}>{pct(c, 0)} confidence</option>)}
+          </select>
+        </div>
+      </div>
+      {error && <p role="alert" className="mt-4 text-sm text-red-400">{error}</p>}
+      {report && !error && (
+        <>
+          <p className="mt-3 text-sm text-slate-300">{report.note}</p>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-left text-xs text-slate-300">
+              <thead className="text-slate-500">
+                <tr><th className="py-2 pr-4">Variant</th><th className="pr-4">Clicks</th><th className="pr-4">Conv.</th><th className="pr-4">Rate (95% CI)</th><th className="pr-4">Lift</th><th>Confidence</th></tr>
+              </thead>
+              <tbody>
+                {report.variants.map((v) => (
+                  <tr key={v.id} className="border-t border-slate-800">
+                    <td className="py-2 pr-4 font-medium text-slate-100">{v.name}{v.isControl ? ' (control)' : ''}</td>
+                    <td className="pr-4">{v.clicks.toLocaleString()}</td>
+                    <td className="pr-4">{v.conversions.toLocaleString()}</td>
+                    <td className="pr-4">{pct(v.rate)} <span className="text-slate-500">({pct(v.ci[0], 1)}–{pct(v.ci[1], 1)})</span></td>
+                    <td className={`pr-4 ${v.lift === null ? '' : v.lift >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{v.lift === null ? '—' : `${v.lift >= 0 ? '+' : ''}${(v.lift * 100).toFixed(1)}%`}</td>
+                    <td>{v.confidence === null ? '—' : pct(v.confidence, 1)}{v.significant ? ' ✓' : ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {winner && !winner.isControl && (
+            <button onClick={() => void onPromoteWinner(winner.id).then(() => setNonce((n) => n + 1))} className="mt-4 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-400">
+              Promote “{winner.name}” to default URL
+            </button>
+          )}
+        </>
+      )}
+    </section>
+  )
+}
