@@ -46,8 +46,20 @@ export function cloneUrlData(source: Url, shortCode: string): Prisma.UrlUnchecke
     autoFailoverEnabled: source.autoFailoverEnabled,
     tags: source.tags,
     notes: source.notes,
+    redirectStatus: source.redirectStatus,
+    clickIdParam: source.clickIdParam,
+    queryForwardMode: source.queryForwardMode,
+    queryForwardAllow: source.queryForwardAllow,
+    dailyClickCap: source.dailyClickCap,
+    offHoursUrl: source.offHoursUrl,
+    geoFence: jsonOrDbNull(source.geoFence),
+    activeHours: jsonOrDbNull(source.activeHours),
     visitorBlock: source.visitorBlock === null ? Prisma.DbNull : (source.visitorBlock as Prisma.InputJsonValue),
   }
+}
+
+function jsonOrDbNull(v: Prisma.JsonValue | null) {
+  return v === null ? Prisma.DbNull : (v as Prisma.InputJsonValue)
 }
 
 export class CodeTakenError extends Error {

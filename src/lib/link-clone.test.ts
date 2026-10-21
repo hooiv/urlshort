@@ -30,6 +30,15 @@ describe('cloneUrlData', () => {
     expect(cloneUrlData({ ...source, visitorBlock: null } as unknown as Url, 'c').visitorBlock).toBe(Prisma.DbNull)
   })
 
+  it('copies routing settings: geo fence, active hours, redirect status, query forwarding, daily cap', () => {
+    const geo = { mode: 'deny', countries: ['US'] }
+    const hours = { tz: 'UTC', start: 9, end: 17 }
+    const withRouting = { ...source, geoFence: geo, activeHours: hours, offHoursUrl: 'https://example.com/off', redirectStatus: 301, queryForwardMode: 'allow', queryForwardAllow: ['utm_source'], clickIdParam: 'cid', dailyClickCap: 50 } as unknown as Url
+    expect(cloneUrlData(withRouting, 'c')).toMatchObject({ geoFence: geo, activeHours: hours, offHoursUrl: 'https://example.com/off', redirectStatus: 301, queryForwardMode: 'allow', queryForwardAllow: ['utm_source'], clickIdParam: 'cid', dailyClickCap: 50 })
+    const none = { ...source, geoFence: null, activeHours: null } as unknown as Url
+    expect(cloneUrlData(none, 'c')).toMatchObject({ geoFence: Prisma.DbNull, activeHours: Prisma.DbNull })
+  })
+
   it('copies settings under the new code', () => {
     const d = cloneUrlData(source, 'copy')
     expect(d).toMatchObject({ shortCode: 'copy', originalUrl: source.originalUrl, tags: ['a', 'b'], folderId: 'f', workspaceId: 'ws', maxClicks: 10, cloaked: true, metaPixelId: '1' })
