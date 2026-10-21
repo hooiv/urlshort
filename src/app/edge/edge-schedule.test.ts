@@ -78,3 +78,35 @@ describe('edge route visitor blocklist', () => {
     expect(res.headers.get('location')).toBe('https://dest.example/')
   })
 })
+
+describe('edge route geo-fence', () => {
+  beforeEach(() => { process.env.QL_CONFIG_SIGNING_SECRET = SECRET })
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  async function runFence(geoFence: Record<string, unknown>, headers: Record<string, string>) {
+    vi.resetModules()
+    const body = signed({ geoFence })
+    vi.stubGlobal('fetch', vi.fn(async (u: string) => String(u).includes('/api/edge/config/')
+      ? new Response(JSON.stringify(body), { status: 200 })
+      : new Response(null, { status: 204 })))
+    const { GET } = await import('./[shortCode]/route')
+    return GET(new NextRequest('https://ql.test/edge/abc', { headers }), { params: Promise.resolve({ shortCode: 'abc' }) })
+  }
+
+  it('blocks countries outside an allow-list', async () => {
+    const res = await runFence({ mode: 'allow', countries: ['US'] }, { 'x-vercel-ip-country': 'DE' })
+    expect(res.headers.get('location')).toBe('https://ql.test/region-unavailable')
+  })
+
+  it('lets allow-listed countries through', async () => {
+    const res = await runFence({ mode: 'allow', countries: ['US'] }, { 'cf-ipcountry': 'us' })
+    expect(res.headers.get('location')).toBe('https://dest.example/')
+  })
+
+  it('blocks denied countries and honours allowUnknown for missing headers', async () => {
+    const denied = await runFence({ mode: 'deny', countries: ['RU'] }, { 'cf-ipcountry': 'RU' })
+    expect(denied.headers.get('location')).toBe('https://ql.test/region-unavailable')
+    const unknown = await runFence({ mode: 'allow', countries: ['US'], allowUnknown: false }, {})
+    expect(unknown.headers.get('location')).toBe('https://ql.test/region-unavailable')
+  })
+})
