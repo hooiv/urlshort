@@ -12,3 +12,7 @@ Treats the link's enabled routing rules as variants. Per variant: human clicks, 
 `POST /api/links/:code/promote` accepts `requireWinner: true`; it then returns 409 unless this report names the rule the significant winner. The analytics panel always sends it.
 
 UI: the analytics page shows an Experiment significance panel (window and confidence selectors, CI table, promote button for a winner).
+
+## Sample-size planner
+
+`GET /api/experiments/sample-size?baselineRate=0.05&minRelativeLift=0.2[&confidence&power&variants&dailyClicks]` returns clicks needed per variant (two-sided two-proportion test, Bonferroni-corrected for >2 variants, never below the report's 100-click floor) and an optional duration estimate. The analytics page shows it as the Experiment planner form under the significance panel.
