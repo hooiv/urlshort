@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { getManageableUrl } from '@/lib/authorization'
 import { bayesianReport } from '@/lib/experiment-bayesian'
+import { decideExperiment } from '@/lib/experiment-decision'
 import { analyzeExperiment, DEFAULT_CONFIDENCE, requiredClicksPerVariant, daysToSampleSize } from '@/lib/experiment-significance'
 
 /**
@@ -48,5 +49,6 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
   const daysRemaining = plan ? daysToSampleSize(plan, report.variants, days) : null
   const controlId = report.control
   const bayesian = controlId && report.variants.length > 1 ? bayesianReport(report.variants.map((v) => ({ id: v.id, name: v.name, clicks: v.clicks, conversions: v.conversions })), controlId) : []
-  return NextResponse.json({ shortCode, days, confidence, goalId: goalId ?? null, ...report, bayesian, plan: plan ? { ...plan, daysRemaining } : null })
+  const decision = decideExperiment(report, bayesian, plan)
+  return NextResponse.json({ shortCode, days, confidence, goalId: goalId ?? null, ...report, bayesian, plan: plan ? { ...plan, daysRemaining } : null, decision })
 }
