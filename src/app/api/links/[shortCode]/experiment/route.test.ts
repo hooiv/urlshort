@@ -33,6 +33,9 @@ describe('GET experiment', () => {
     const body = await res.json()
     expect(res.status).toBe(200)
     expect(body.status).toBe('winner'); expect(body.winnerId).toBe('b'); expect(body.days).toBe(7)
+    const b = body.bayesian.find((x: { id: string }) => x.id === 'b')
+    expect(b.probBeatControl).toBeGreaterThan(0.99); expect(b.expectedLoss).toBeLessThan(0.001)
+    expect(body.bayesian.find((x: { id: string }) => x.id === 'a').probBeatControl).toBeNull()
   })
   it('handles a link with no rules', async () => {
     m.rules.mockResolvedValue([])

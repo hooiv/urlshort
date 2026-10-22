@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { FlaskConical } from 'lucide-react'
 import type { ExperimentReport } from '@/lib/experiment-significance'
 
-type Report = ExperimentReport & { days: number; confidence: number }
+type Report = ExperimentReport & { days: number; confidence: number; bayesian?: { id: string; probBeatControl: number | null; expectedLoss: number }[] }
 
 const pct = (n: number, d = 2) => `${(n * 100).toFixed(d)}%`
 
@@ -62,7 +62,7 @@ export default function ExperimentSignificancePanel({
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-300">
               <thead className="text-slate-500">
-                <tr><th className="py-2 pr-4">Variant</th><th className="pr-4">Clicks</th><th className="pr-4">Conv.</th><th className="pr-4">Rate (95% CI)</th><th className="pr-4">Lift</th><th>Confidence</th></tr>
+                <tr><th className="py-2 pr-4">Variant</th><th className="pr-4">Clicks</th><th className="pr-4">Conv.</th><th className="pr-4">Rate (95% CI)</th><th className="pr-4">Lift</th><th className="pr-4">Confidence</th><th className="pr-4" title="Bayesian probability this variant beats the control">P(beat control)</th><th title="Expected conversion-rate points lost if you ship this variant">Exp. loss</th></tr>
               </thead>
               <tbody>
                 {report.variants.map((v) => (
@@ -72,7 +72,16 @@ export default function ExperimentSignificancePanel({
                     <td className="pr-4">{v.conversions.toLocaleString()}</td>
                     <td className="pr-4">{pct(v.rate)} <span className="text-slate-500">({pct(v.ci[0], 1)}–{pct(v.ci[1], 1)})</span></td>
                     <td className={`pr-4 ${v.lift === null ? '' : v.lift >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{v.lift === null ? '—' : `${v.lift >= 0 ? '+' : ''}${(v.lift * 100).toFixed(1)}%`}</td>
-                    <td>{v.confidence === null ? '—' : pct(v.confidence, 1)}{v.significant ? ' ✓' : ''}</td>
+                    <td className="pr-4">{v.confidence === null ? '—' : pct(v.confidence, 1)}{v.significant ? ' ✓' : ''}</td>
+                    {(() => {
+                      const b = report.bayesian?.find((x) => x.id === v.id)
+                      return (
+                        <>
+                          <td className="pr-4">{b?.probBeatControl == null ? '—' : pct(b.probBeatControl, 1)}</td>
+                          <td>{b && !v.isControl ? pct(b.expectedLoss, 3) : '—'}</td>
+                        </>
+                      )
+                    })()}
                   </tr>
                 ))}
               </tbody>
