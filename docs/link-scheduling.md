@@ -10,7 +10,7 @@ API: `POST /api/shorten` and `PATCH /api/links/:code` accept `startsAt` (ISO 860
 
 UI: Manage → Access Protection & Expiration → Go-live Date & Time / Pre-launch Destination.
 
-Not covered: the edge-runtime redirect (`/edge/:code`) does not yet read `startsAt`.
+The edge-runtime redirect (`/edge/:code`) also honours `startsAt` and `notStartedUrl`.
 
 ## Owner email digest
 
