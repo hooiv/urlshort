@@ -11,7 +11,7 @@ import { appendAttribution, createAttributionToken, hashVisitorId } from '@/lib/
 import { getClientIp } from '@/lib/rate-limit'
 import { evaluateVisitorBlock, type VisitorBlock } from '@/lib/visitor-block'
 import { isCountryAllowed, type GeoFence } from '@/lib/geo-fence'
-import { chooseSmartRule, getAiAgent, getBrowser, getCountry, getDeviceType, getLanguage, getOperatingSystem, getReferrerHost, getTrafficType, getTrafficConfidence, getVisitorId } from '@/lib/smart-routing'
+import { chooseSmartRule, getAiAgent, getBrowser, getCountry, getDeviceType, getLanguage, getOperatingSystem, getReferrerHost, getRegion, getTrafficType, getTrafficConfidence, getVisitorId } from '@/lib/smart-routing'
 import { getBaseUrl } from '@/lib/utils'
 import { getLinkByCode, getLinkByDomainPath, getLatestRevision } from '@/lib/link-cache'
 import { clickQueue } from '@/lib/queue'
@@ -128,7 +128,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     const aiAgent = getAiAgent(userAgent)
     const country = getCountry(request)
     const referrerHost = getReferrerHost(request)
-    const rule = chooseSmartRule(url.rules, { country, deviceType, referrerHost, now, os, language, trafficType, aiAgent }, url.shortCode, visitor.id)
+    const rule = chooseSmartRule(url.rules, { country, region: getRegion(request), deviceType, referrerHost, now, os, language, trafficType, aiAgent }, url.shortCode, visitor.id)
 
     // Campaign lookup is cached (5s TTL, single-flight) and skipped entirely
     // when a smart-routing rule already decided the destination.

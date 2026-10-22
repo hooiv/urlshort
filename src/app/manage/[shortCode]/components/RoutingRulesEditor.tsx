@@ -145,12 +145,12 @@ export default function RoutingRulesEditor({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Country Codes (ISO, comma-separated)">
+            <Field label="Countries or regions (US, US-CA)">
               <input
                 value={form.countryCodes}
                 onChange={(e) => onFormChange({ ...form, countryCodes: e.target.value })}
                 className="input"
-                placeholder="US, GB, DE, CA"
+                placeholder="US, GB, US-CA, IN-MH"
               />
             </Field>
             <Field label="Device Type Filter">

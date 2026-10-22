@@ -42,6 +42,12 @@ export function getCountry(request: NextRequest): string {
   return /^[A-Za-z]{2}$/.test(value) ? value.toUpperCase() : 'XX'
 }
 
+/** ISO 3166-2 subdivision code (without the country prefix), e.g. "CA" for California. */
+export function getRegion(request: NextRequest): string | undefined {
+  const value = request.headers.get('x-vercel-ip-country-region') || request.headers.get('cf-region-code') || ''
+  return /^[A-Za-z0-9]{1,3}$/.test(value) ? value.toUpperCase() : undefined
+}
+
 export function getLanguage(request: NextRequest): string {
   const acceptLang = request.headers.get('accept-language') || ''
   const primary = acceptLang.split(',')[0]?.split(';')[0]?.trim().toLowerCase()
@@ -199,9 +205,15 @@ export function getVisitorId(request: NextRequest): { id: string; isNew: boolean
   return { id: randomUUID(), isNew: true }
 }
 
-function countryMatches(rule: SmartRule, country: string): boolean {
+/**
+ * Entries are either a country ("US") or a country subdivision ("US-CA").
+ * A subdivision entry only matches when the CDN supplied that region.
+ */
+export function countryMatches(rule: SmartRule, country: string, region?: string): boolean {
   if (!rule.countryCodes) return true
-  return rule.countryCodes.split(/[\s,]+/).map((v) => v.trim().toUpperCase()).filter(Boolean).includes(country)
+  const visitor = region ? `${country}-${region.toUpperCase()}` : null
+  return rule.countryCodes.split(/[\s,]+/).map((v) => v.trim().toUpperCase()).filter(Boolean)
+    .some((v) => v === country || (visitor !== null && v === visitor))
 }
 
 function osMatches(rule: SmartRule, os?: string): boolean {
@@ -243,6 +255,7 @@ function stableBucket(seed: string, totalWeight: number): number {
 
 export interface RoutingContext {
   country: string
+  region?: string
   deviceType: DeviceKind
   referrerHost: string | null
   now: Date
@@ -256,7 +269,7 @@ function matches(rule: SmartRule, context: RoutingContext): boolean {
   return (
     rule.enabled &&
     rule.healthStatus !== 'down' &&
-    countryMatches(rule, context.country) &&
+    countryMatches(rule, context.country, context.region) &&
     (!rule.deviceType || rule.deviceType === context.deviceType) &&
     (!rule.trafficType || rule.trafficType === context.trafficType) &&
     listMatches(rule.aiAgent, context.aiAgent ?? undefined) &&
@@ -292,7 +305,7 @@ export function chooseSmartRule(
 export function normalizeCountryCodes(input: unknown): string | null {
   if (input === undefined || input === null || input === '') return null
   const values = String(input).split(/[\s,]+/).map((v) => v.trim().toUpperCase()).filter(Boolean)
-  if (values.some((v) => !/^[A-Z]{2}$/.test(v))) throw new Error('Countries must be ISO 2-letter codes')
+  if (values.some((v) => !/^[A-Z]{2}(-[A-Z0-9]{1,3})?$/.test(v))) throw new Error('Use ISO 2-letter country codes, or country-region such as US-CA')
   return [...new Set(values)].join(',')
 }
 

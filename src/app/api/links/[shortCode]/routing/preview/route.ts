@@ -16,6 +16,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
   try {
     const body = (await request.json()) as Record<string, unknown>
     const country = String(body.country ?? 'XX').trim().toUpperCase()
+    const regionRaw = String(body.region ?? '').trim().toUpperCase()
+    if (regionRaw && !/^[A-Z0-9]{1,3}$/.test(regionRaw)) throw new Error('Region must be a 1-3 character subdivision code')
     const deviceType = String(body.deviceType ?? 'desktop') as DeviceKind
     const os = String(body.os ?? 'other') as OperatingSystem
     const language = String(body.language ?? 'en').trim().toLowerCase()
@@ -41,7 +43,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ sh
     })
 
     const matched = chooseSmartRule(rules, {
-      country, deviceType, os, language, trafficType, aiAgent, referrerHost, now: new Date(),
+      country, region: regionRaw || undefined, deviceType, os, language, trafficType, aiAgent, referrerHost, now: new Date(),
     }, shortCode, 'preview-visitor')
     const revision = matched ? null : await getLatestRevision(access.url.id)
 

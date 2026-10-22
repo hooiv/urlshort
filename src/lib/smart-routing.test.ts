@@ -92,6 +92,23 @@ describe('chooseSmartRule', () => {
     }
   })
 
+  it('matches country-region entries only when the visitor region matches', () => {
+    const ca = rule({ countryCodes: 'US-CA' })
+    expect(chooseSmartRule([ca], { ...context, country: 'US', region: 'ca' }, 'abc', 'v1')?.id).toBe('r1')
+    expect(chooseSmartRule([ca], { ...context, country: 'US', region: 'NY' }, 'abc', 'v1')).toBeNull()
+    expect(chooseSmartRule([ca], { ...context, country: 'US' }, 'abc', 'v1')).toBeNull()
+    const mixed = rule({ countryCodes: 'GB,IN-MH' })
+    expect(chooseSmartRule([mixed], { ...context, country: 'GB' }, 'abc', 'v1')?.id).toBe('r1')
+    expect(chooseSmartRule([mixed], { ...context, country: 'IN', region: 'MH' }, 'abc', 'v1')?.id).toBe('r1')
+    expect(chooseSmartRule([mixed], { ...context, country: 'IN', region: 'KA' }, 'abc', 'v1')).toBeNull()
+  })
+
+  it('validates country-region codes', () => {
+    expect(normalizeCountryCodes('us-ca, IN-MH us-ca')).toBe('US-CA,IN-MH')
+    expect(() => normalizeCountryCodes('US-')).toThrow()
+    expect(() => normalizeCountryCodes('USA')).toThrow()
+  })
+
   it('filters by country when specified', () => {
     const usOnly = rule({ countryCodes: 'US' })
     expect(chooseSmartRule([usOnly], { ...context, country: 'GB' }, 'abc', 'v1')).toBeNull()

@@ -51,7 +51,6 @@ export const shortenExtrasSchema = z.object({
   snapPixelId: z.string().max(50).optional().nullable(),
   redditPixelId: z.string().max(50).optional().nullable(),
   uetTagId: z.string().max(50).optional().nullable(),
-  uetTagId: z.string().max(50).optional().nullable(),
 })
 
 export function parseShortenMaxClicks(input: unknown): number | null {
