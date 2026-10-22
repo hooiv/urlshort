@@ -19,4 +19,14 @@ describe('vercel cron schedule', () => {
       expect(() => readFileSync(join(root, 'src/app', path, 'route.ts'))).not.toThrow()
     }
   })
+
+  it('every scheduled route answers GET (Vercel Cron only issues GET) and checks a secret in constant time, failing closed', () => {
+    for (const path of scheduled) {
+      const src = readFileSync(join(root, 'src/app', path, 'route.ts'), 'utf8')
+      expect(src, `${path} must export GET`).toMatch(/export\s+(async\s+function\s+GET|const\s+GET)/)
+      expect(src, `${path} must return 401 when unauthorized`).toMatch(/401/)
+      expect(src, `${path} must read a secret env var`).toMatch(/process\.env\.[A-Z_]*SECRET/)
+      expect(src, `${path} must compare secrets in constant time`).toMatch(/timingSafeEqual/)
+    }
+  })
 })
