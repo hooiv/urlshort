@@ -37,6 +37,25 @@ export default function ErasurePanel({ workspaceId, canEdit }: { workspaceId: st
     }
   }
 
+  async function download() {
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/workspaces/${workspaceId}/privacy/access`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(subject) })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Request failed')
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
+      a.download = 'visitor-data.json'
+      a.click()
+      URL.revokeObjectURL(a.href)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Request failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   function edit(setter: (v: string) => void, v: string) { setter(v); setPreview(null) }
 
   return (
@@ -49,6 +68,7 @@ export default function ErasurePanel({ workspaceId, canEdit }: { workspaceId: st
       <input aria-label="Visitor ID" value={visitorId} onChange={(e) => edit(setVisitorId, e.target.value)} disabled={!canEdit} placeholder="Visitor ID (optional)" className="w-full font-mono text-sm bg-slate-900 border border-slate-700 rounded px-3 py-2" />
       <div className="flex gap-3 items-center flex-wrap">
         <button type="button" onClick={() => run(true)} disabled={!canEdit || busy || !hasSubject} className="px-3 py-2 rounded border border-slate-600 text-sm disabled:opacity-50">Preview matches</button>
+        <button type="button" onClick={download} disabled={!canEdit || busy || !hasSubject} className="px-3 py-2 rounded border border-slate-600 text-sm disabled:opacity-50">Download their data (JSON)</button>
         {preview && preview.matched > 0 && (
           <button type="button" onClick={() => run(false)} disabled={busy} className="px-3 py-2 rounded bg-red-600 text-sm disabled:opacity-50">
             Permanently delete {preview.matched} event{preview.matched === 1 ? '' : 's'}

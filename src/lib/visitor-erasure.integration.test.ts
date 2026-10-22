@@ -8,7 +8,7 @@ describe('real database: visitor erasure', () => {
     process.env.DATABASE_URL = databaseUrl
     process.env.DIRECT_DATABASE_URL = databaseUrl
     const db = new PrismaClient({ datasources: { db: { url: databaseUrl } } })
-    const { eraseVisitor } = await import('./visitor-erasure')
+    const { eraseVisitor, exportVisitorData } = await import('./visitor-erasure')
     const { hashWithWorkspace } = await import('./privacy-ingestion')
     const tag = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const user = await db.user.create({ data: { email: `er-${tag}@example.com`, password: 'x' } })
@@ -23,6 +23,9 @@ describe('real database: visitor erasure', () => {
         { urlId: u1.id, ip: '198.51.100.1' },
         { urlId: u2.id, ip },
       ] })
+      const exp = await exportVisitorData(w1.id, { ip })
+      expect(exp).toMatchObject({ total: 2, returned: 2, truncated: false })
+      if ('events' in exp) expect((exp.events ?? []).every((e) => e.shortCode === u1.shortCode && !('ip' in e))).toBe(true)
       expect(await eraseVisitor(w1.id, { ip }, { dryRun: true })).toMatchObject({ matched: 2, deleted: 0 })
       expect(await eraseVisitor(w1.id, { ip })).toMatchObject({ matched: 2, deleted: 2 })
       expect(await db.clickEvent.count({ where: { urlId: u1.id } })).toBe(1)
