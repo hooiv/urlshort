@@ -27,6 +27,7 @@ import {
 import toast, { Toaster } from 'react-hot-toast'
 import { formatCurrency, formatNumber } from '@/lib/format'
 import ClickHeatmap from './components/ClickHeatmap'
+import LinkInsights from './components/LinkInsights'
 import ClickForecast from './components/ClickForecast'
 import RawClickExport from './components/RawClickExport'
 import PublicStatsShare from './components/PublicStatsShare'
@@ -754,6 +755,7 @@ export default function AnalyticsPage() {
           )}
         </section>
 
+        <LinkInsights shortCode={shortCode} />
         <ClickHeatmap shortCode={shortCode} />
         <ClickForecast shortCode={shortCode} />
         <RawClickExport shortCode={shortCode} />
