@@ -380,6 +380,8 @@ model ApiKey {
   expiresAt  DateTime?
   /// Optional IP/CIDR allowlist; empty means any address may use the key.
   allowedIps String[]  @default([])
+  /// Set when the pre-expiry warning email was sent, so each key warns once.
+  expiryWarnedAt DateTime?
   createdAt  DateTime  @default(now())
 
   @@index([userId])

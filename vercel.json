@@ -41,6 +41,10 @@
       "schedule": "10 9 * * *"
     },
     {
+      "path": "/api/cron/api-key-expiry",
+      "schedule": "20 9 * * *"
+    },
+    {
       "path": "/api/cron/click-milestones",
       "schedule": "17 * * * *"
     },
