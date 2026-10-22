@@ -110,3 +110,32 @@ describe('edge route geo-fence', () => {
     expect(unknown.headers.get('location')).toBe('https://ql.test/region-unavailable')
   })
 })
+
+describe('edge route active hours', () => {
+  beforeEach(() => { process.env.QL_CONFIG_SIGNING_SECRET = SECRET })
+  afterEach(() => { vi.unstubAllGlobals() })
+  const allDays = [0, 1, 2, 3, 4, 5, 6]
+  const never = { timezone: 'UTC', windows: [{ days: allDays, start: '00:00', end: '00:01' }] }
+  const always = { timezone: 'UTC', windows: [{ days: allDays, start: '00:00', end: '00:00' }] }
+
+  it('redirects to the off-hours URL outside the windows', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-10-22T12:00:00Z'))
+    try {
+      const res = await run({ activeHours: never, offHoursUrl: 'https://closed.example/' })
+      expect(res.headers.get('location')).toBe('https://closed.example/')
+    } finally { vi.useRealTimers() }
+  })
+
+  it('falls back to /coming-soon without an off-hours URL', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-10-22T12:00:00Z'))
+    try {
+      const res = await run({ activeHours: never })
+      expect(res.headers.get('location')).toBe('https://ql.test/coming-soon')
+    } finally { vi.useRealTimers() }
+  })
+
+  it('routes normally inside the windows', async () => {
+    const res = await run({ activeHours: always })
+    expect(res.headers.get('location')).toBe('https://dest.example/')
+  })
+})

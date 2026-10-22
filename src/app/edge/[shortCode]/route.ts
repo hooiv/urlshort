@@ -3,6 +3,7 @@ import { NextRequest, NextResponse, after } from 'next/server'
 import { forwardQueryParams, isBillableTraffic, resolveDestination } from '@/lib/redirect'
 import { verifyUnlockToken } from '@/lib/password-gate'
 import { isCountryAllowed, type GeoFence } from '@/lib/geo-fence'
+import { isWithinActiveHours, type ActiveHours } from '@/lib/active-hours'
 import { evaluateVisitorBlock, type VisitorBlock } from '@/lib/visitor-block'
 import type { TrafficKind } from '@/lib/smart-routing'
 export const runtime='nodejs'
@@ -15,7 +16,7 @@ function getCountry(request:NextRequest){const v=request.headers.get('cf-ipcount
 type Rule={enabled:boolean;healthStatus?:string|null;countryCodes?:string|null;deviceType?:string|null;trafficType?:string|null;aiAgent?:string|null;os?:string|null;languageCodes?:string|null;referrerDomain?:string|null;startAt?:string|null;endAt?:string|null;schedule?:string|null;priority:number;weight:number;destinationUrl:string}
 type Variant={enabled:boolean;weight:number;destinationUrl:string}
 type Campaign={id:string;version?:number;variants:Variant[]}
-type Link={shortCode:string;originalUrl:string;expiresAt:string|null;expiredUrl?:string|null;startsAt?:string|null;visitorBlock?:VisitorBlock|null;geoFence?:GeoFence|null;notStartedUrl?:string|null;passwordHash?:string|null;locked?:boolean|null;revision:string|null;rules:Rule[];campaigns:Campaign[]}
+type Link={shortCode:string;originalUrl:string;expiresAt:string|null;expiredUrl?:string|null;startsAt?:string|null;visitorBlock?:VisitorBlock|null;geoFence?:GeoFence|null;activeHours?:ActiveHours|null;offHoursUrl?:string|null;notStartedUrl?:string|null;passwordHash?:string|null;locked?:boolean|null;revision:string|null;rules:Rule[];campaigns:Campaign[]}
 type EdgeConfig={previousHash?:string;contentHash:string;signature:string;version?:number;link:Link}
 let lastGood:EdgeConfig|null=null
 let lastGoodAt=0
@@ -45,6 +46,8 @@ if(link.passwordHash||link.locked){const unlocked=verifyUnlockToken(link.shortCo
 if(link.geoFence&&!isCountryAllowed(link.geoFence,getCountry(request)))return NextResponse.redirect(new URL('/region-unavailable',origin),307)
 // Visitor blocklist parity with the main route (IP/CIDR + referrer host).
 if(link.visitorBlock){const fwd=(request.headers.get('x-forwarded-for')||'').split(',')[0].trim()||request.headers.get('x-real-ip');if(evaluateVisitorBlock(link.visitorBlock,{ip:fwd,referer:request.headers.get('referer')}))return NextResponse.redirect(new URL('/region-unavailable',origin),307)}
+// Active-hours parity with the main route: outside the weekly windows, send to the off-hours URL or /coming-soon.
+if(link.activeHours&&!isWithinActiveHours(link.activeHours))return NextResponse.redirect(link.offHoursUrl||new URL('/coming-soon',origin),307)
 // Go-live scheduling parity with the main route: before startsAt, send visitors to the teaser URL or /coming-soon.
 if(link.startsAt&&Date.now()<Date.parse(link.startsAt))return NextResponse.redirect(link.notStartedUrl||new URL('/coming-soon',origin),307)
 // Expiry honors the owner's fallback URL, else the shared /expired page —
