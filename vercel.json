@@ -17,10 +17,6 @@
       "schedule": "* * * * *"
     },
     {
-      "path": "/api/cron/releases",
-      "schedule": "* * * * *"
-    },
-    {
       "path": "/api/cron/campaigns",
       "schedule": "*/5 * * * *"
     },
