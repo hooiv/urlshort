@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from 'vitest'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 import { OPERATIONS, buildOpenApiDocument, routeFileFor } from './openapi'
 
@@ -45,5 +45,19 @@ describe('openapi document', () => {
       const ok = used.some((n) => JSON.stringify(consts[n]) === JSON.stringify(op.scopes))
       expect(ok, `${op.method} ${op.path} declares ${op.scopes} but route uses ${used}`).toBe(true)
     }
+  })
+
+  it('documents every API-key-capable route (any route calling resolveActor)', () => {
+    const missing: string[] = []
+    const walk = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : e.name === 'route.ts' ? [path.join(dir, e.name)] : []))
+    const documented = new Set(OPERATIONS.map((o) => o.path))
+    for (const file of walk(path.join(appDir, 'api'))) {
+      if (!readFileSync(file, 'utf8').includes('resolveActor(')) continue
+      const rel = '/' + path.relative(appDir, path.dirname(file)).split(path.sep).join('/')
+      const apiPath = rel.replace(/\[([A-Za-z]+)\]/g, '{$1}')
+      if (!documented.has(apiPath)) missing.push(apiPath)
+    }
+    expect(missing).toEqual([])
   })
 })

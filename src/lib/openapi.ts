@@ -104,6 +104,25 @@ export const OPERATIONS: OperationDef[] = [
     path: '/api/bulk/edit', method: 'patch', summary: 'Edit many links in one transaction', tag: 'Links', scopes: ['links:write'],
     body: { shortCodes: { type: 'array', description: 'Links to edit.', required: true }, changes: { type: 'object', description: 'Fields to change.', required: true } },
   },
+  {
+    path: '/api/bulk/edit/undo', method: 'post', summary: 'Undo a bulk edit from its audit event', tag: 'Links', scopes: ['links:write'],
+    body: { auditEventId: { type: 'string', description: 'Audit event id returned by the bulk edit.', required: true }, dryRun: { type: 'boolean', description: 'Preview the revert without applying it.' } },
+  },
+  {
+    path: '/api/experiments/sample-size', method: 'get', summary: 'Clicks an experiment needs for a trustworthy verdict', tag: 'Analytics', scopes: ANALYTICS,
+    query: [
+      { name: 'baselineRate', description: 'Current conversion rate, 0 to 1.', required: true },
+      { name: 'minRelativeLift', description: 'Smallest relative lift worth detecting.' },
+      { name: 'perVariantClicks', description: 'Instead of a lift: return the minimum detectable lift for this many clicks per variant.' },
+      { name: 'confidence', description: 'Confidence level.' }, { name: 'power', description: 'Statistical power.' },
+      { name: 'variants', description: 'Number of variants.' }, { name: 'dailyClicks', description: 'Traffic per day, to estimate duration.' },
+    ],
+  },
+  { path: '/api/views', method: 'get', summary: 'List saved link views', tag: 'Views', scopes: LINK_READ },
+  { path: '/api/views', method: 'post', summary: 'Create or update a saved view', tag: 'Views', scopes: ['links:write'] },
+  {
+    path: '/api/zapier/triggers/{trigger}', method: 'get', summary: 'Zapier polling trigger sample and feed', tag: 'Zapier', scopes: ANALYTICS,
+  },
   { path: '/api/tags', method: 'get', summary: 'List tags with usage counts', tag: 'Tags', scopes: LINK_READ },
   { path: '/api/tags', method: 'delete', summary: 'Delete a tag from all links', tag: 'Tags', scopes: ['links:write'] },
   {
