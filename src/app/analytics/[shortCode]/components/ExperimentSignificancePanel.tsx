@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { FlaskConical } from 'lucide-react'
 import type { ExperimentReport } from '@/lib/experiment-significance'
 
-type Report = ExperimentReport & { days: number; confidence: number; bayesian?: { id: string; probBeatControl: number | null; expectedLoss: number }[] }
+type Report = ExperimentReport & { days: number; confidence: number; decision?: { action: 'keep_running' | 'ship_variant' | 'keep_control' | 'stop_no_effect'; variantId: string | null; reason: string }; bayesian?: { id: string; probBeatControl: number | null; expectedLoss: number }[] }
 
 const pct = (n: number, d = 2) => `${(n * 100).toFixed(d)}%`
 
@@ -37,7 +37,8 @@ export default function ExperimentSignificancePanel({
     return () => ctl.abort()
   }, [shortCode, days, confidence, nonce])
 
-  const winner = report?.status === 'winner' ? report.variants.find((v) => v.id === report.winnerId) : undefined
+  const shipId = report?.decision?.action === 'ship_variant' ? report.decision.variantId : report?.status === 'winner' ? report.winnerId : null
+  const winner = report && shipId ? report.variants.find((v) => v.id === shipId) : undefined
 
   return (
     <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6" aria-busy={loading}>
@@ -59,6 +60,12 @@ export default function ExperimentSignificancePanel({
       {report && !error && (
         <>
           <p className="mt-3 text-sm text-slate-300">{report.note}</p>
+          {report.decision && (
+            <div role="status" data-decision={report.decision.action} className={`mt-3 rounded-xl border px-4 py-3 text-sm ${report.decision.action === 'ship_variant' ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200' : report.decision.action === 'keep_running' ? 'border-slate-700 bg-slate-950/60 text-slate-300' : 'border-amber-500/40 bg-amber-500/10 text-amber-200'}`}>
+              <span className="font-semibold">{{ keep_running: 'Keep running', ship_variant: 'Ship the winner', keep_control: 'Keep the control', stop_no_effect: 'Stop: no effect' }[report.decision.action]}.</span>{' '}
+              {report.decision.reason}
+            </div>
+          )}
           <div className="mt-4 overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-300">
               <thead className="text-slate-500">
@@ -88,7 +95,7 @@ export default function ExperimentSignificancePanel({
             </table>
           </div>
           {winner && !winner.isControl && (
-            <button onClick={() => void onPromoteWinner(winner.id, { requireWinner: true }).then(() => setNonce((n) => n + 1))} className="mt-4 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-400">
+            <button onClick={() => void onPromoteWinner(winner.id, { requireWinner: report?.status === 'winner' }).then(() => setNonce((n) => n + 1))} className="mt-4 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-400">
               Promote “{winner.name}” to default URL
             </button>
           )}
