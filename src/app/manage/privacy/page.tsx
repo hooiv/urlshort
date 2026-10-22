@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { ShieldOff } from 'lucide-react'
+import ErasurePanel from './ErasurePanel'
 
 type Workspace = { id: string; name: string; role: string }
 type Policy = {
@@ -128,6 +129,7 @@ export default function PrivacyExclusionsPage() {
       {!canEdit && policy && <p className="text-sm text-slate-400">Only owners and admins can change this list.</p>}
       {message && <p role="status" className="text-green-400 text-sm">{message}</p>}
       {error && <p role="alert" className="text-red-400 text-sm">{error}</p>}
+      {workspaceId && <ErasurePanel key={workspaceId} workspaceId={workspaceId} canEdit={canEdit} />}
     </div>
   )
 }
