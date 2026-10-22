@@ -77,7 +77,30 @@ export default function BulkEditBar({
         toast.success(`Preview: ${data.wouldUpdate} would change, ${data.unchanged} already match. Nothing was saved.`)
         return
       }
-      toast.success(`${data.updated} updated${data.unchanged ? `, ${data.unchanged} already matched` : ''}`)
+      const summary = `${data.updated} updated${data.unchanged ? `, ${data.unchanged} already matched` : ''}`
+      if (data.auditEventId) {
+        const auditEventId: string = data.auditEventId
+        toast((t) => (
+          <span className="flex items-center gap-3 text-sm">
+            {summary}
+            <button
+              className="rounded border border-slate-400 px-2 py-0.5 font-medium"
+              onClick={async () => {
+                toast.dismiss(t.id)
+                const r = await fetch('/api/bulk/edit/undo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auditEventId }) })
+                const u = await r.json().catch(() => null)
+                if (!r.ok) return toast.error(u?.error || 'Undo failed')
+                toast.success(`Undone: ${u.restored} restored${u.skipped?.length ? `, ${u.skipped.length} skipped (changed since)` : ''}`)
+                onDone()
+              }}
+            >
+              Undo
+            </button>
+          </span>
+        ), { duration: 10_000 })
+      } else {
+        toast.success(summary)
+      }
       setForm(emptyBulkEditForm)
       setOpen(false)
       onClear()

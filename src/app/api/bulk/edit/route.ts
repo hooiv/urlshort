@@ -55,7 +55,7 @@ async function handlePatch(request: NextRequest) {
       console.error('Bulk edit webhook dispatch failed:', error)
     }
   }
-  const payload = { updated: result.updated.length, unchanged: result.unchanged, links: result.updated }
+  const payload = { auditEventId: result.auditEventId, updated: result.updated.length, unchanged: result.unchanged, links: result.updated }
   if (idem && idemWorkspaceId) {
     await storeIdempotentResponse({ workspaceId: idemWorkspaceId, keyHash: idem.keyHash, requestHash: idem.requestHash, method: request.method, path: request.nextUrl.pathname, status: 200, body: payload }).catch((e) => console.error('Idempotency store failed:', e))
   }

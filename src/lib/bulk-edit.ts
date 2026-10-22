@@ -1,5 +1,6 @@
 import { parseQueryForwarding } from '@/lib/query-forwarding'
 import { z } from 'zod'
+import { randomUUID } from 'node:crypto'
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { EDIT_ROLES } from '@/lib/workspaces'
@@ -146,7 +147,7 @@ const PIXEL_FIELDS = { meta: 'metaPixelId', google: 'googleTagId', x: 'xPixelId'
 
 export type BulkEditFailure = { link: string; reason: string }
 export type BulkEditResult =
-  | { ok: true; dryRun: boolean; updated: Array<{ id: string; shortCode: string }>; unchanged: number; audit: Array<{ id: string; before: Record<string, unknown>; after: Record<string, unknown> }> }
+  | { ok: true; dryRun: boolean; auditEventId?: string; updated: Array<{ id: string; shortCode: string }>; unchanged: number; audit: Array<{ id: string; before: Record<string, unknown>; after: Record<string, unknown> }> }
   | { ok: false; status: 400 | 403 | 404; error: string; failures: BulkEditFailure[] }
 
 /**
@@ -376,8 +377,10 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
   }
 
   const now = new Date()
+  const auditIds = new Map<string, string>()
   await prisma.$transaction(async (tx) => {
     for (const p of plans) {
+      auditIds.set(p.row.id, randomUUID())
       await tx.url.update({ where: { id: p.row.id }, data: p.data, select: { id: true } })
     }
     const revisions = plans.filter((p) => p.newUrl)
@@ -388,6 +391,7 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
     }
     await tx.auditEvent.createMany({
       data: plans.map((p) => ({
+        id: auditIds.get(p.row.id)!,
         action: 'link.bulk_edit', actorType: 'user', actorUserId: userId, urlId: p.row.id, resourceType: 'url', resourceId: p.row.id,
         beforeJson: JSON.stringify(p.before), afterJson: JSON.stringify(p.after),
         metadataJson: JSON.stringify({ batchSize: rows.length }),
@@ -400,6 +404,7 @@ export async function applyBulkEdit(userId: string, input: BulkEditInput): Promi
     dryRun: false,
     updated: plans.map((p) => ({ id: p.row.id, shortCode: p.row.shortCode })),
     unchanged: rows.length - plans.length,
+    auditEventId: plans.length ? auditIds.get(plans[0].row.id) : undefined,
     audit: plans.map((p) => ({ id: p.row.id, before: p.before, after: p.after })),
   }
 }

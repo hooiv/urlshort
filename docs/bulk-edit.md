@@ -83,3 +83,10 @@ Every result must be http(s), at most 2048 chars and must not introduce a new li
 ```
 
 Providers: `meta`, `google`, `x`, `linkedin`, `tiktok`. `null` or an empty string clears that provider; providers you omit are untouched. Ids use the same format checks as the single-link editor, so a bad id rejects the whole request (400) before anything is written. Each changed link gets an audit event with before/after ids, and `dryRun` previews the diff.
+
+## Undo
+
+`PATCH /api/bulk/edit` returns `auditEventId` (omitted when nothing changed). Pass it to
+`POST /api/bulk/edit/undo` (`{ "auditEventId", "dryRun"? }`) to restore the previous values.
+Fields changed again since the edit are left alone and the link is reported in `skipped`.
+The links table shows an Undo button in the success toast for 10 seconds.
