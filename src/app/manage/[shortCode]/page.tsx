@@ -124,6 +124,8 @@ export default function ManageLink() {
             onPinterestTagIdChange={controls.setPinterestTagId}
             snapPixelId={controls.snapPixelId}
             onSnapPixelIdChange={controls.setSnapPixelId}
+            redditPixelId={controls.redditPixelId}
+            onRedditPixelIdChange={controls.setRedditPixelId}
             onMetaPixelIdChange={controls.setMetaPixelId}
             onGoogleTagIdChange={controls.setGoogleTagId}
             onXPixelIdChange={controls.setXPixelId}
