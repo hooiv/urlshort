@@ -4,6 +4,7 @@ import { forwardQueryParams, isBillableTraffic, resolveDestination } from '@/lib
 import { verifyUnlockToken } from '@/lib/password-gate'
 import { isCountryAllowed, type GeoFence } from '@/lib/geo-fence'
 import { isWithinActiveHours, type ActiveHours } from '@/lib/active-hours'
+import { clientIpFromForwarded } from '@/lib/rate-limit'
 import { evaluateVisitorBlock, type VisitorBlock } from '@/lib/visitor-block'
 import type { TrafficKind } from '@/lib/smart-routing'
 export const runtime='nodejs'
@@ -45,7 +46,7 @@ if(link.passwordHash||link.locked){const unlocked=verifyUnlockToken(link.shortCo
 // Geo-fence parity with the main route (country from CDN header; unknown country follows fence.allowUnknown).
 if(link.geoFence&&!isCountryAllowed(link.geoFence,getCountry(request)))return NextResponse.redirect(new URL('/region-unavailable',origin),307)
 // Visitor blocklist parity with the main route (IP/CIDR + referrer host).
-if(link.visitorBlock){const fwd=(request.headers.get('x-forwarded-for')||'').split(',')[0].trim()||request.headers.get('x-real-ip');if(evaluateVisitorBlock(link.visitorBlock,{ip:fwd,referer:request.headers.get('referer')}))return NextResponse.redirect(new URL('/region-unavailable',origin),307)}
+if(link.visitorBlock){const fwd=clientIpFromForwarded(request.headers.get('x-forwarded-for'),request.headers.get('x-real-ip'));if(evaluateVisitorBlock(link.visitorBlock,{ip:fwd,referer:request.headers.get('referer')}))return NextResponse.redirect(new URL('/region-unavailable',origin),307)}
 // Active-hours parity with the main route: outside the weekly windows, send to the off-hours URL or /coming-soon.
 if(link.activeHours&&!isWithinActiveHours(link.activeHours))return NextResponse.redirect(link.offHoursUrl||new URL('/coming-soon',origin),307)
 // Go-live scheduling parity with the main route: before startsAt, send visitors to the teaser URL or /coming-soon.

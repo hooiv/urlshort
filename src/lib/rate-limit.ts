@@ -159,14 +159,31 @@ function createBackend(): RateLimiterBackend {
 const backend: RateLimiterBackend = globalForLimiter.__qlRateLimiter ?? createBackend()
 globalForLimiter.__qlRateLimiter = backend
 
-export function getClientIp(request: Request): string {
-  const forwarded = request.headers.get('x-forwarded-for')
+/**
+ * Client IP from proxy headers. With QL_TRUSTED_PROXY_HOPS=N (N trusted
+ * proxies append to X-Forwarded-For) the entry N from the right is used, so a
+ * client-supplied leading entry cannot spoof the IP used for rate limits and
+ * visitor IP blocks. Unset/0 keeps the legacy "first entry" behaviour for
+ * platforms (Vercel, Cloudflare) that overwrite the header.
+ */
+export function clientIpFromForwarded(forwarded: string | null | undefined, realIp: string | null | undefined, hops = trustedProxyHops()): string {
   if (forwarded) {
-    // First entry is the originating client when set by a trusted proxy.
-    const first = forwarded.split(',')[0].trim()
-    if (first) return first
+    const parts = forwarded.split(',').map((p) => p.trim()).filter(Boolean)
+    if (parts.length) {
+      const idx = hops > 0 ? Math.max(0, parts.length - hops) : 0
+      return parts[idx]
+    }
   }
-  return request.headers.get('x-real-ip') || 'unknown'
+  return realIp || 'unknown'
+}
+
+function trustedProxyHops(): number {
+  const n = Number.parseInt(process.env.QL_TRUSTED_PROXY_HOPS ?? '', 10)
+  return Number.isInteger(n) && n > 0 && n <= 10 ? n : 0
+}
+
+export function getClientIp(request: Request): string {
+  return clientIpFromForwarded(request.headers.get('x-forwarded-for'), request.headers.get('x-real-ip'))
 }
 
 export async function rateLimit(
