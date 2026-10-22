@@ -21,3 +21,12 @@ describe('click milestones', () => {
     expect(many.text.indexOf('/b ')).toBeLessThan(many.text.indexOf('/a '))
   })
 })
+
+describe('10M milestone', () => {
+  it('is crossed once and formatted', async () => {
+    const m = await import('./click-milestones')
+    expect(m.crossedMilestone(12_000_000, 1_000_000)).toBe(10_000_000)
+    expect(m.crossedMilestone(12_000_000, 10_000_000)).toBeNull()
+    expect(m.formatMilestone(10_000_000)).toBe('10M')
+  })
+})

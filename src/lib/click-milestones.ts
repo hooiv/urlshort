@@ -7,7 +7,7 @@ import { sendEmail } from '@/lib/email'
  * on Url.milestoneReached, so overlapping cron runs never double-send, and a
  * failed send rolls the marker back so the next run retries.
  */
-export const CLICK_MILESTONES = [100, 1_000, 10_000, 100_000, 1_000_000] as const
+export const CLICK_MILESTONES = [100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000] as const
 
 /** Highest milestone <= clicks that is above `reached`, or null. */
 export function crossedMilestone(clicks: number, reached: number): number | null {
