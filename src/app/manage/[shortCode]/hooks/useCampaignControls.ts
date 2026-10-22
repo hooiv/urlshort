@@ -79,6 +79,7 @@ export function useCampaignControls(shortCode: string) {
   const [pinterestTagId, setPinterestTagId] = useState('')
   const [snapPixelId, setSnapPixelId] = useState('')
   const [redditPixelId, setRedditPixelId] = useState('')
+  const [uetTagId, setUetTagId] = useState('')
   const [cloaked, setCloaked] = useState(false)
 
   // Webhooks
@@ -148,6 +149,7 @@ export function useCampaignControls(shortCode: string) {
       setPinterestTagId(linkPayload.pinterestTagId || '')
       setSnapPixelId(linkPayload.snapPixelId || '')
       setRedditPixelId(linkPayload.redditPixelId || '')
+      setUetTagId(linkPayload.uetTagId || '')
       setCloaked(Boolean(linkPayload.cloaked))
       setWebhookUrl(linkPayload.webhookUrl || '')
 
@@ -368,6 +370,7 @@ export function useCampaignControls(shortCode: string) {
           pinterestTagId: pinterestTagId || null,
           snapPixelId: snapPixelId || null,
           redditPixelId: redditPixelId || null,
+          uetTagId: uetTagId || null,
         }),
       })
       toast.success('Tracking pixels updated')
@@ -505,6 +508,7 @@ export function useCampaignControls(shortCode: string) {
     pinterestTagId, setPinterestTagId,
     snapPixelId, setSnapPixelId,
     redditPixelId, setRedditPixelId,
+    uetTagId, setUetTagId,
     cloaked,
     webhookUrl, setWebhookUrl,
     webhookTestBusy,

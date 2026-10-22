@@ -11,6 +11,8 @@ interface PixelsCloakingSectionProps {
   pinterestTagId: string
   snapPixelId: string
   redditPixelId: string
+  uetTagId: string
+  onUetTagIdChange: (value: string) => void
   onRedditPixelIdChange: (value: string) => void
   onSnapPixelIdChange: (value: string) => void
   onLinkedinPartnerIdChange: (value: string) => void
@@ -33,6 +35,8 @@ export default function PixelsCloakingSection({
   pinterestTagId,
   snapPixelId,
   redditPixelId,
+  uetTagId,
+  onUetTagIdChange,
   onRedditPixelIdChange,
   onSnapPixelIdChange,
   onLinkedinPartnerIdChange,
@@ -117,6 +121,14 @@ export default function PixelsCloakingSection({
               value={redditPixelId}
               onChange={(e) => onRedditPixelIdChange(e.target.value)}
               placeholder="a2_abc123def456"
+              className="input"
+            />
+          </Field>
+          <Field label="Microsoft Ads UET Tag ID">
+            <input
+              value={uetTagId}
+              onChange={(e) => onUetTagIdChange(e.target.value)}
+              placeholder="12345678"
               className="input"
             />
           </Field>

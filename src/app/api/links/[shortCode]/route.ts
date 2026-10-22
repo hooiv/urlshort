@@ -26,7 +26,7 @@ type UrlRow = NonNullable<Awaited<ReturnType<typeof getManageableUrl>>['url']>
 
 const MAX_TAGS = 10
 
-const PIXEL_FIELDS: Array<[PixelProvider, 'metaPixelId' | 'googleTagId' | 'xPixelId' | 'linkedinPartnerId' | 'tiktokPixelId' | 'pinterestTagId' | 'snapPixelId' | 'redditPixelId']> = [['meta', 'metaPixelId'], ['google', 'googleTagId'], ['x', 'xPixelId'], ['linkedin', 'linkedinPartnerId'], ['tiktok', 'tiktokPixelId'], ['pinterest', 'pinterestTagId'], ['snapchat', 'snapPixelId'], ['reddit', 'redditPixelId']];
+const PIXEL_FIELDS: Array<[PixelProvider, 'metaPixelId' | 'googleTagId' | 'xPixelId' | 'linkedinPartnerId' | 'tiktokPixelId' | 'pinterestTagId' | 'snapPixelId' | 'redditPixelId' | 'uetTagId']> = [['meta', 'metaPixelId'], ['google', 'googleTagId'], ['x', 'xPixelId'], ['linkedin', 'linkedinPartnerId'], ['tiktok', 'tiktokPixelId'], ['pinterest', 'pinterestTagId'], ['snapchat', 'snapPixelId'], ['reddit', 'redditPixelId'], ['bing', 'uetTagId']];
 
 export function parseMaxClicks(input: unknown): number | null {
   if (input === null || input === '' || input === undefined) return null
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     where: { id: link.id },
     select: {
       id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, notes: true, tags: true, clicks: true,
-      createdAt: true, updatedAt: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, geoFence: true, visitorBlock: true, activeHours: true, offHoursUrl: true, clickIdParam: true, queryForwardMode: true, queryForwardAllow: true, redirectStatus: true, passwordHash: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, pinterestTagId: true, snapPixelId: true, redditPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, dailyClickCap: true, dailyClicksReserved: true, dailyClicksDate: true, isActive: true,
+      createdAt: true, updatedAt: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, geoFence: true, visitorBlock: true, activeHours: true, offHoursUrl: true, clickIdParam: true, queryForwardMode: true, queryForwardAllow: true, redirectStatus: true, passwordHash: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, pinterestTagId: true, snapPixelId: true, redditPixelId: true, uetTagId: true, cloaked: true, webhookUrl: true, maxClicks: true, dailyClickCap: true, dailyClicksReserved: true, dailyClicksDate: true, isActive: true,
       riskStatus: true, healthStatus: true,
       deepLinkApp: { select: { id: true, name: true, environment: true, appVersion: true, minimumAppVersion: true, enabled: true, resolverEnabled: true } },
       _count: { select: { clickEvents: true, rules: true, goals: true, revisions: true } },
@@ -246,7 +246,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
         })
         data.originalUrl = newDestination
       }
-      return tx.url.update({ where: { id: link.id }, data, select: { id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, notes: true, pinnedAt: true, tags: true, isActive: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, geoFence: true, visitorBlock: true, activeHours: true, offHoursUrl: true, clickIdParam: true, queryForwardMode: true, queryForwardAllow: true, redirectStatus: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, pinterestTagId: true, snapPixelId: true, redditPixelId: true, cloaked: true, webhookUrl: true, maxClicks: true, dailyClickCap: true, updatedAt: true } })
+      return tx.url.update({ where: { id: link.id }, data, select: { id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, notes: true, pinnedAt: true, tags: true, isActive: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, geoFence: true, visitorBlock: true, activeHours: true, offHoursUrl: true, clickIdParam: true, queryForwardMode: true, queryForwardAllow: true, redirectStatus: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, pinterestTagId: true, snapPixelId: true, redditPixelId: true, uetTagId: true, cloaked: true, webhookUrl: true, maxClicks: true, dailyClickCap: true, updatedAt: true } })
     })
 
     await invalidateLink(updated.shortCode, updated.id)

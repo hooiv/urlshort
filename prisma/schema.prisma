@@ -83,6 +83,7 @@ model Url {
   pinterestTagId             String?
   snapPixelId                String?
   redditPixelId              String?
+  uetTagId                   String?
   cloaked                    Boolean        @default(false)
   webhookUrl                 String?
   maxClicks                  Int?

@@ -50,6 +50,8 @@ export const shortenExtrasSchema = z.object({
   pinterestTagId: z.string().max(50).optional().nullable(),
   snapPixelId: z.string().max(50).optional().nullable(),
   redditPixelId: z.string().max(50).optional().nullable(),
+  uetTagId: z.string().max(50).optional().nullable(),
+  uetTagId: z.string().max(50).optional().nullable(),
 })
 
 export function parseShortenMaxClicks(input: unknown): number | null {
@@ -248,7 +250,7 @@ async function handlePost(request: NextRequest) {
     }
     const pixelData: Record<string, string | null> = {}
     try {
-      for (const [provider, field] of [['meta', 'metaPixelId'], ['google', 'googleTagId'], ['x', 'xPixelId'], ['linkedin', 'linkedinPartnerId'], ['tiktok', 'tiktokPixelId'], ['pinterest', 'pinterestTagId'], ['snapchat', 'snapPixelId'], ['reddit', 'redditPixelId']] as const) {
+      for (const [provider, field] of [['meta', 'metaPixelId'], ['google', 'googleTagId'], ['x', 'xPixelId'], ['linkedin', 'linkedinPartnerId'], ['tiktok', 'tiktokPixelId'], ['pinterest', 'pinterestTagId'], ['snapchat', 'snapPixelId'], ['reddit', 'redditPixelId'], ['bing', 'uetTagId']] as const) {
         pixelData[field] = normalizePixelId(provider, extras.data[field])
       }
     } catch (err) {

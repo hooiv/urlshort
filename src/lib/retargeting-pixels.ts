@@ -11,7 +11,7 @@
  *    vendor script can never hold the visitor back.
  */
 
-export type PixelProvider = 'meta' | 'google' | 'x' | 'linkedin' | 'tiktok' | 'pinterest' | 'snapchat' | 'reddit'
+export type PixelProvider = 'meta' | 'google' | 'x' | 'linkedin' | 'tiktok' | 'pinterest' | 'snapchat' | 'reddit' | 'bing'
 
 export interface PixelConfig {
   metaPixelId?: string | null
@@ -22,6 +22,7 @@ export interface PixelConfig {
   pinterestTagId?: string | null
   snapPixelId?: string | null
   redditPixelId?: string | null
+  uetTagId?: string | null
 }
 
 const PATTERNS: Record<PixelProvider, RegExp> = {
@@ -33,6 +34,7 @@ const PATTERNS: Record<PixelProvider, RegExp> = {
   tiktok: /^[A-Z0-9]{10,30}$/i,
   pinterest: /^\d{10,16}$/,
   reddit: /^[a-z0-9_]{3,40}$/i,
+  bing: /^\d{6,12}$/,
   snapchat: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
 }
 
@@ -43,7 +45,7 @@ const FIELD: Record<PixelProvider, keyof PixelConfig> = {
   linkedin: 'linkedinPartnerId',
   tiktok: 'tiktokPixelId',
   pinterest: 'pinterestTagId',
-  snapchat: 'snapPixelId', reddit: 'redditPixelId',
+  snapchat: 'snapPixelId', reddit: 'redditPixelId', bing: 'uetTagId',
 }
 
 export const PIXEL_PROVIDERS = Object.keys(PATTERNS) as PixelProvider[]
@@ -122,6 +124,8 @@ function snippet(provider: PixelProvider, id: string): string {
       return `!function(w,d,t){w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=['page','track','identify','instances','debug','on','off','once','ready','alias','group','enableCookie','disableCookie'];ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.load=function(e){var n='https://analytics.tiktok.com/i18n/pixel/events.js';ttq._i=ttq._i||{};ttq._i[e]=[];ttq._t=ttq._t||{};ttq._t[e]=+new Date;var o=d.createElement('script');o.async=!0;o.src=n+'?sdkid='+e+'&lib='+t;var a=d.getElementsByTagName('script')[0];a.parentNode.insertBefore(o,a)};ttq.load(${lit});ttq.page()}(window,document,'ttq');`
     case 'pinterest':
       return `!function(e){if(!window.pintrk){window.pintrk=function(){window.pintrk.queue.push(Array.prototype.slice.call(arguments))};var n=window.pintrk;n.queue=[],n.version='3.0';var t=document.createElement('script');t.async=!0,t.src=e;var r=document.getElementsByTagName('script')[0];r.parentNode.insertBefore(t,r)}}('https://s.pinimg.com/ct/core.js');pintrk('load',${lit});pintrk('page');`
+    case 'bing':
+      return `(function(w,d,t,r,u){var f,n,i;w[u]=w[u]||[],f=function(){var o={ti:${lit},enableAutoSpaTracking:true};o.q=w[u],w[u]=new UET(o),w[u].push("pageLoad")},n=d.createElement(t),n.src=r,n.async=1,n.onload=n.onreadystatechange=function(){var s=this.readyState;s&&s!=="loaded"&&s!=="complete"||(f(),n.onload=n.onreadystatechange=null)},i=d.getElementsByTagName(t)[0],i.parentNode.insertBefore(n,i)})(window,document,"script","https://bat.bing.com/bat.js","uetq");`
     case 'reddit':
       return `!function(w,d){if(!w.rdt){var p=w.rdt=function(){p.sendEvent?p.sendEvent.apply(p,arguments):p.callQueue.push(arguments)};p.callQueue=[];var t=d.createElement('script');t.src='https://www.redditstatic.com/ads/pixel.js';t.async=!0;var s=d.getElementsByTagName('script')[0];s.parentNode.insertBefore(t,s)}}(window,document);rdt('init',${lit});rdt('track','PageVisit');`
     case 'snapchat':
@@ -148,6 +152,7 @@ export const PIXEL_SCRIPT_HOSTS = [
   'https://s.pinimg.com',
   'https://sc-static.net',
   'https://www.redditstatic.com',
+  'https://bat.bing.com',
 ]
 
 export function pixelContentSecurityPolicy(): string {

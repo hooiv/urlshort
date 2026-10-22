@@ -18,6 +18,8 @@ describe('pixel id validation', () => {
     expect(isValidPixelId('reddit', 'a2_abc123def456')).toBe(true)
     expect(isValidPixelId('reddit', "a');alert(1)//")).toBe(false)
     expect(isValidPixelId('reddit', 'ab')).toBe(false)
+    expect(isValidPixelId('bing', '56001234')).toBe(true)
+    expect(isValidPixelId('bing', "1');x('")).toBe(false)
     expect(isValidPixelId('snapchat', '12345678-abcd-4ef0-9876-1234567890ab')).toBe(true)
     expect(isValidPixelId('snapchat', "1');alert(1)//")).toBe(false)
     expect(isValidPixelId('snapchat', '12345678')).toBe(false)
