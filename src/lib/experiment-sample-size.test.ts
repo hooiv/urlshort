@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalQuantile, parseSampleSizeInput, planSampleSize } from './experiment-sample-size'
+import { minimumDetectableLift, normalQuantile, parseSampleSizeInput, planSampleSize } from './experiment-sample-size'
 
 describe('sample size planner', () => {
   it('quantile matches known z values', () => {
@@ -34,5 +34,21 @@ describe('sample size planner', () => {
     expect(q('baselineRate=0.1&minRelativeLift=0.1&power=0.1')).toHaveProperty('error')
     expect(q('baselineRate=0.1&minRelativeLift=0.1&dailyClicks=-3')).toHaveProperty('error')
     expect(q('baselineRate=0.1&minRelativeLift=0.1')).toMatchObject({ confidence: 0.95, power: 0.8, variants: 2 })
+  })
+})
+
+describe('minimum detectable lift', () => {
+  it('round-trips with planSampleSize', () => {
+    const plan = planSampleSize({ baselineRate: 0.05, minRelativeLift: 0.2 })
+    const lift = minimumDetectableLift({ baselineRate: 0.05, perVariantClicks: plan.perVariantClicks })!
+    expect(lift).toBeGreaterThan(0.19)
+    expect(lift).toBeLessThanOrEqual(0.2001)
+  })
+  it('shrinks with more traffic and is null when hopeless', () => {
+    const a = minimumDetectableLift({ baselineRate: 0.1, perVariantClicks: 1000 })!
+    const b = minimumDetectableLift({ baselineRate: 0.1, perVariantClicks: 10000 })!
+    expect(b).toBeLessThan(a)
+    expect(minimumDetectableLift({ baselineRate: 0.9, perVariantClicks: 100 })).toBeNull()
+    expect(minimumDetectableLift({ baselineRate: 2, perVariantClicks: 100 })).toBeNull()
   })
 })

@@ -80,3 +80,33 @@ export function planSampleSize(input: SampleSizeInput): SampleSizePlan {
     estimatedDays: input.dailyClicks ? Math.ceil(totalClicks / input.dailyClicks) : null,
   }
 }
+
+export interface MdeInput {
+  baselineRate: number
+  /** Clicks available per variant. */
+  perVariantClicks: number
+  confidence?: number
+  power?: number
+  variants?: number
+}
+
+/**
+ * Smallest relative lift detectable with the clicks on hand (inverse of planSampleSize).
+ * Returns null when even a lift that pushes the rate to ~100% would not be detectable.
+ */
+export function minimumDetectableLift(input: MdeInput): number | null {
+  const { baselineRate: p, perVariantClicks: n } = input
+  if (!(p > 0 && p < 1) || !(n > 0)) return null
+  const needed = (lift: number) =>
+    planSampleSize({ ...input, baselineRate: p, minRelativeLift: lift }).perVariantClicks
+  const maxLift = (1 - 1e-6) / p - 1
+  if (maxLift <= 0 || needed(maxLift) > n) return null
+  let lo = 1e-6
+  let hi = maxLift
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2
+    if (needed(mid) <= n) hi = mid
+    else lo = mid
+  }
+  return hi
+}
