@@ -1,5 +1,5 @@
 /**
- * Retargeting pixels fired on redirect (Meta, Google, X, LinkedIn, TikTok).
+ * Retargeting pixels fired on redirect (Meta, Google, X, LinkedIn, TikTok, Pinterest).
  *
  * Design:
  *  - IDs are validated per provider with strict patterns, so they can only
@@ -11,7 +11,7 @@
  *    vendor script can never hold the visitor back.
  */
 
-export type PixelProvider = 'meta' | 'google' | 'x' | 'linkedin' | 'tiktok'
+export type PixelProvider = 'meta' | 'google' | 'x' | 'linkedin' | 'tiktok' | 'pinterest'
 
 export interface PixelConfig {
   metaPixelId?: string | null
@@ -19,6 +19,7 @@ export interface PixelConfig {
   xPixelId?: string | null
   linkedinPartnerId?: string | null
   tiktokPixelId?: string | null
+  pinterestTagId?: string | null
 }
 
 const PATTERNS: Record<PixelProvider, RegExp> = {
@@ -28,6 +29,7 @@ const PATTERNS: Record<PixelProvider, RegExp> = {
   x: /^[a-z0-9]{4,12}$/i,
   linkedin: /^\d{4,12}$/,
   tiktok: /^[A-Z0-9]{10,30}$/i,
+  pinterest: /^\d{10,16}$/,
 }
 
 const FIELD: Record<PixelProvider, keyof PixelConfig> = {
@@ -36,6 +38,7 @@ const FIELD: Record<PixelProvider, keyof PixelConfig> = {
   x: 'xPixelId',
   linkedin: 'linkedinPartnerId',
   tiktok: 'tiktokPixelId',
+  pinterest: 'pinterestTagId',
 }
 
 export const PIXEL_PROVIDERS = Object.keys(PATTERNS) as PixelProvider[]
@@ -112,6 +115,8 @@ function snippet(provider: PixelProvider, id: string): string {
       return `window._linkedin_data_partner_ids=window._linkedin_data_partner_ids||[];window._linkedin_data_partner_ids.push(${lit});(function(){var s=document.createElement('script');s.async=!0;s.src='https://snap.licdn.com/li.lms-analytics/insight.min.js';document.head.appendChild(s)})();`
     case 'tiktok':
       return `!function(w,d,t){w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=['page','track','identify','instances','debug','on','off','once','ready','alias','group','enableCookie','disableCookie'];ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.load=function(e){var n='https://analytics.tiktok.com/i18n/pixel/events.js';ttq._i=ttq._i||{};ttq._i[e]=[];ttq._t=ttq._t||{};ttq._t[e]=+new Date;var o=d.createElement('script');o.async=!0;o.src=n+'?sdkid='+e+'&lib='+t;var a=d.getElementsByTagName('script')[0];a.parentNode.insertBefore(o,a)};ttq.load(${lit});ttq.page()}(window,document,'ttq');`
+    case 'pinterest':
+      return `!function(e){if(!window.pintrk){window.pintrk=function(){window.pintrk.queue.push(Array.prototype.slice.call(arguments))};var n=window.pintrk;n.queue=[],n.version='3.0';var t=document.createElement('script');t.async=!0,t.src=e;var r=document.getElementsByTagName('script')[0];r.parentNode.insertBefore(t,r)}}('https://s.pinimg.com/ct/core.js');pintrk('load',${lit});pintrk('page');`
   }
 }
 
@@ -131,6 +136,7 @@ export const PIXEL_SCRIPT_HOSTS = [
   'https://static.ads-twitter.com',
   'https://snap.licdn.com',
   'https://analytics.tiktok.com',
+  'https://s.pinimg.com',
 ]
 
 export function pixelContentSecurityPolicy(): string {

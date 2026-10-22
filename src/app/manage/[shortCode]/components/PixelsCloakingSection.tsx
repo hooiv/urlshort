@@ -8,8 +8,10 @@ interface PixelsCloakingSectionProps {
   xPixelId: string
   linkedinPartnerId: string
   tiktokPixelId: string
+  pinterestTagId: string
   onLinkedinPartnerIdChange: (value: string) => void
   onTiktokPixelIdChange: (value: string) => void
+  onPinterestTagIdChange: (value: string) => void
   onMetaPixelIdChange: (value: string) => void
   onGoogleTagIdChange: (value: string) => void
   onXPixelIdChange: (value: string) => void
@@ -24,8 +26,10 @@ export default function PixelsCloakingSection({
   xPixelId,
   linkedinPartnerId,
   tiktokPixelId,
+  pinterestTagId,
   onLinkedinPartnerIdChange,
   onTiktokPixelIdChange,
+  onPinterestTagIdChange,
   onMetaPixelIdChange,
   onGoogleTagIdChange,
   onXPixelIdChange,
@@ -80,6 +84,15 @@ export default function PixelsCloakingSection({
               value={tiktokPixelId}
               onChange={(e) => onTiktokPixelIdChange(e.target.value)}
               placeholder="C4ABCDEFGHIJ"
+              className="input"
+            />
+          </Field>
+          <Field label="Pinterest Tag ID">
+            <input
+              value={pinterestTagId}
+              onChange={(e) => onPinterestTagIdChange(e.target.value)}
+              placeholder="2612345678901"
+              inputMode="numeric"
               className="input"
             />
           </Field>

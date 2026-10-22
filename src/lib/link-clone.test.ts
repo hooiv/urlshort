@@ -19,7 +19,7 @@ describe('cloneUrlData', () => {
     clicks: 99, clicksReserved: 3, milestoneReached: 100, publicStatsHash: 'h', publicStatsEnabledAt: new Date(),
     passwordHash: 'secret', managementTokenHash: 'tok', webhookUrl: 'https://hook.example', healthStatus: 'down',
     expiresAt: null, expiredUrl: null, startsAt: null, notStartedUrl: null, maxClicks: 10,
-    metaPixelId: '1', googleTagId: null, xPixelId: null, linkedinPartnerId: null, tiktokPixelId: null,
+    metaPixelId: '1', googleTagId: null, xPixelId: null, linkedinPartnerId: null, tiktokPixelId: null, pinterestTagId: null,
     cloaked: true, isActive: true, userId: 'user', workspaceId: 'ws', folderId: 'f', deepLinkAppId: null,
     autoFailoverEnabled: true, tags: ['a', 'b'], deletedAt: null,
   } as unknown as Url

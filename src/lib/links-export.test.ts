@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { linksToCsv, parseExportFormat, toExportedLink } from './links-export'
 
-const row = { shortCode: 'abc', originalUrl: 'https://e.com/?a=1,2', title: '=HYPERLINK("x")', tags: ['q1', '-sum'], folderId: null, clicks: 3, isActive: true, passwordHash: 'h', createdAt: new Date('2026-01-01T00:00:00Z'), maxClicks: 100, expiredUrl: 'https://e.com/gone', notStartedUrl: 'https://e.com/soon', redirectStatus: 301, dailyClickCap: 50, notes: '=cmd', cloaked: true, queryForwardMode: 'all', clickIdParam: 'gclid', metaPixelId: '123', googleTagId: null, xPixelId: null, linkedinPartnerId: null, tiktokPixelId: 'T1', geoFence: { mode: 'allow', countries: ['US'] }, visitorBlock: { cidrs: ['1.2.3.0/24'], referrerHosts: [] }, activeHours: null, offHoursUrl: null, startsAt: null, expiresAt: new Date('2026-02-01T00:00:00Z') }
+const row = { shortCode: 'abc', originalUrl: 'https://e.com/?a=1,2', title: '=HYPERLINK("x")', tags: ['q1', '-sum'], folderId: null, clicks: 3, isActive: true, passwordHash: 'h', createdAt: new Date('2026-01-01T00:00:00Z'), maxClicks: 100, expiredUrl: 'https://e.com/gone', notStartedUrl: 'https://e.com/soon', redirectStatus: 301, dailyClickCap: 50, notes: '=cmd', cloaked: true, queryForwardMode: 'all', clickIdParam: 'gclid', metaPixelId: '123', googleTagId: null, xPixelId: null, linkedinPartnerId: null, tiktokPixelId: 'T1', pinterestTagId: null, geoFence: { mode: 'allow', countries: ['US'] }, visitorBlock: { cidrs: ['1.2.3.0/24'], referrerHosts: [] }, activeHours: null, offHoursUrl: null, startsAt: null, expiresAt: new Date('2026-02-01T00:00:00Z') }
 
 describe('links export', () => {
   it('parses formats', () => {

@@ -76,6 +76,7 @@ export function useCampaignControls(shortCode: string) {
   const [xPixelId, setXPixelId] = useState('')
   const [linkedinPartnerId, setLinkedinPartnerId] = useState('')
   const [tiktokPixelId, setTiktokPixelId] = useState('')
+  const [pinterestTagId, setPinterestTagId] = useState('')
   const [cloaked, setCloaked] = useState(false)
 
   // Webhooks
@@ -142,6 +143,7 @@ export function useCampaignControls(shortCode: string) {
       setXPixelId(linkPayload.xPixelId || '')
       setLinkedinPartnerId(linkPayload.linkedinPartnerId || '')
       setTiktokPixelId(linkPayload.tiktokPixelId || '')
+      setPinterestTagId(linkPayload.pinterestTagId || '')
       setCloaked(Boolean(linkPayload.cloaked))
       setWebhookUrl(linkPayload.webhookUrl || '')
 
@@ -359,6 +361,7 @@ export function useCampaignControls(shortCode: string) {
           xPixelId: xPixelId || null,
           linkedinPartnerId: linkedinPartnerId || null,
           tiktokPixelId: tiktokPixelId || null,
+          pinterestTagId: pinterestTagId || null,
         }),
       })
       toast.success('Tracking pixels updated')
@@ -493,6 +496,7 @@ export function useCampaignControls(shortCode: string) {
     xPixelId, setXPixelId,
     linkedinPartnerId, setLinkedinPartnerId,
     tiktokPixelId, setTiktokPixelId,
+    pinterestTagId, setPinterestTagId,
     cloaked,
     webhookUrl, setWebhookUrl,
     webhookTestBusy,
