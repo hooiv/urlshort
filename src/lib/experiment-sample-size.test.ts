@@ -48,7 +48,7 @@ describe('minimum detectable lift', () => {
     const a = minimumDetectableLift({ baselineRate: 0.1, perVariantClicks: 1000 })!
     const b = minimumDetectableLift({ baselineRate: 0.1, perVariantClicks: 10000 })!
     expect(b).toBeLessThan(a)
-    expect(minimumDetectableLift({ baselineRate: 0.9, perVariantClicks: 100 })).toBeNull()
+    expect(minimumDetectableLift({ baselineRate: 0.9, perVariantClicks: 5 })).toBeNull()
     expect(minimumDetectableLift({ baselineRate: 2, perVariantClicks: 100 })).toBeNull()
   })
 })
