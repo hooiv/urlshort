@@ -15,6 +15,9 @@ describe('pixel id validation', () => {
     expect(isValidPixelId('pinterest', '2612345678901')).toBe(true)
     expect(isValidPixelId('pinterest', "1');alert(1)//")).toBe(false)
     expect(isValidPixelId('pinterest', '12')).toBe(false)
+    expect(isValidPixelId('snapchat', '12345678-abcd-4ef0-9876-1234567890ab')).toBe(true)
+    expect(isValidPixelId('snapchat', "1');alert(1)//")).toBe(false)
+    expect(isValidPixelId('snapchat', '12345678')).toBe(false)
   })
   it('rejects injection attempts', () => {
     expect(isValidPixelId('meta', "1');alert(1)//")).toBe(false)
@@ -49,10 +52,10 @@ describe('consent', () => {
 })
 
 describe('render', () => {
-  const pixels = activePixels({ metaPixelId: '123456789012', googleTagId: 'G-ABCD1234', xPixelId: 'o1abc', linkedinPartnerId: '123456', tiktokPixelId: 'C4ABCDEF1234567890', pinterestTagId: '2612345678901' })
+  const pixels = activePixels({ metaPixelId: '123456789012', googleTagId: 'G-ABCD1234', xPixelId: 'o1abc', linkedinPartnerId: '123456', tiktokPixelId: 'C4ABCDEF1234567890', pinterestTagId: '2612345678901', snapPixelId: '12345678-abcd-4ef0-9876-1234567890ab' })
   it('includes every provider and redirects within the cap', () => {
     const html = renderPixelRedirectPage({ destination: 'https://example.com/a?b=1&c=2', pixels })
-    for (const needle of ['fbq(', 'gtag(', 'twq(', '_linkedin_data_partner_ids', 'ttq.load(', "pintrk('load',\"2612345678901\")"]) expect(html).toContain(needle)
+    for (const needle of ['fbq(', 'gtag(', 'twq(', '_linkedin_data_partner_ids', 'ttq.load(', "pintrk('load',\"2612345678901\")", "snaptr('init',\"12345678-abcd-4ef0-9876-1234567890ab\")"]) expect(html).toContain(needle)
     expect(html).toContain('setTimeout(go,250)')
     expect(html).not.toContain('Redirecting')
     expect(html).toContain('<noscript><meta http-equiv="refresh" content="0; url=https://example.com/a?b=1&amp;c=2">')

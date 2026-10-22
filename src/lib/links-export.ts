@@ -42,6 +42,7 @@ export type ExportedLink = {
   linkedinPartnerId: string | null
   tiktokPixelId: string | null
   pinterestTagId: string | null
+  snapPixelId: string | null
   geoFence: unknown
   visitorBlock: unknown
   activeHours: unknown
@@ -75,7 +76,7 @@ export function toExportedLink(r: Row): ExportedLink {
     redirectStatus: r.redirectStatus ?? null, dailyClickCap: r.dailyClickCap ?? null, notes: r.notes ?? null,
     cloaked: r.cloaked ?? false, queryForwardMode: r.queryForwardMode ?? null, clickIdParam: r.clickIdParam ?? null,
     metaPixelId: r.metaPixelId ?? null, googleTagId: r.googleTagId ?? null, xPixelId: r.xPixelId ?? null,
-    linkedinPartnerId: r.linkedinPartnerId ?? null, tiktokPixelId: r.tiktokPixelId ?? null, pinterestTagId: r.pinterestTagId ?? null,
+    linkedinPartnerId: r.linkedinPartnerId ?? null, tiktokPixelId: r.tiktokPixelId ?? null, pinterestTagId: r.pinterestTagId ?? null, snapPixelId: r.snapPixelId ?? null,
     geoFence: r.geoFence ?? null, visitorBlock: r.visitorBlock ?? null, activeHours: r.activeHours ?? null, offHoursUrl: r.offHoursUrl ?? null,
   }
 }
@@ -94,7 +95,7 @@ export async function exportLinks(scope: AnalyticsScope): Promise<{ links: Expor
   const rows = await prisma.$queryRaw<Row[]>(Prisma.sql`
     SELECT u."shortCode", u."originalUrl", u."title", u."tags", u."folderId", u."clicks", u."isActive",
            u."passwordHash", u."createdAt", u."startsAt", u."expiresAt", u."maxClicks", u."expiredUrl", u."notStartedUrl", u."redirectStatus", u."dailyClickCap", u."notes",
-           u."cloaked", u."queryForwardMode", u."clickIdParam", u."metaPixelId", u."googleTagId", u."xPixelId", u."linkedinPartnerId", u."tiktokPixelId", u."pinterestTagId",
+           u."cloaked", u."queryForwardMode", u."clickIdParam", u."metaPixelId", u."googleTagId", u."xPixelId", u."linkedinPartnerId", u."tiktokPixelId", u."pinterestTagId", u."snapPixelId",
            u."geoFence", u."visitorBlock", u."activeHours", u."offHoursUrl"
     FROM "urls" u
     WHERE ${scopeFilter(scope)}

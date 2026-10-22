@@ -49,6 +49,11 @@ function handlerBody(source: string, method: string): string {
 
 /** Reviewed list of routes an API key can reach. Adding one means reviewing its scope checks. */
 const KEY_REACHABLE = [
+  'analytics/[shortCode]/insights/route.ts',
+  'bulk/edit/undo/route.ts',
+  'experiments/sample-size/route.ts',
+  'links/[shortCode]/experiment/route.ts',
+  'links/utm-hygiene/route.ts',
   'analytics/[shortCode]/forecast/route.ts',
   'analytics/compare/route.ts',
   'analytics/insecure/route.ts',

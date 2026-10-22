@@ -38,6 +38,7 @@ export function cloneUrlData(source: Url, shortCode: string): Prisma.UrlUnchecke
     linkedinPartnerId: source.linkedinPartnerId,
     tiktokPixelId: source.tiktokPixelId,
     pinterestTagId: source.pinterestTagId,
+    snapPixelId: source.snapPixelId,
     cloaked: source.cloaked,
     isActive: source.isActive,
     userId: source.userId,

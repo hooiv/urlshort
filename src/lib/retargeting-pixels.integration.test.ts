@@ -12,9 +12,9 @@ describe('real database: retargeting pixels', () => {
     const { activePixels } = await import('./retargeting-pixels')
     const code = `px${Date.now().toString(36)}`
     try {
-      await db.url.create({ data: { shortCode: code, originalUrl: 'https://example.com', metaPixelId: '1234567890', linkedinPartnerId: '123456', tiktokPixelId: 'C4ABCDEFGHIJ', pinterestTagId: '2612345678901' } })
+      await db.url.create({ data: { shortCode: code, originalUrl: 'https://example.com', metaPixelId: '1234567890', linkedinPartnerId: '123456', tiktokPixelId: 'C4ABCDEFGHIJ', pinterestTagId: '2612345678901', snapPixelId: '12345678-abcd-4ef0-9876-1234567890ab' } })
       const row = await db.url.findUniqueOrThrow({ where: { shortCode: code } })
-      expect(activePixels(row).map((p) => p.provider)).toEqual(['meta', 'linkedin', 'tiktok', 'pinterest'])
+      expect(activePixels(row).map((p) => p.provider)).toEqual(['meta', 'linkedin', 'tiktok', 'pinterest', 'snapchat'])
     } finally {
       await db.url.deleteMany({ where: { shortCode: code } })
       await db.$disconnect()

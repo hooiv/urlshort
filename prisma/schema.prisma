@@ -81,6 +81,7 @@ model Url {
   linkedinPartnerId          String?
   tiktokPixelId              String?
   pinterestTagId             String?
+  snapPixelId                String?
   cloaked                    Boolean        @default(false)
   webhookUrl                 String?
   maxClicks                  Int?

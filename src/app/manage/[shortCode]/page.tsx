@@ -122,6 +122,8 @@ export default function ManageLink() {
             onLinkedinPartnerIdChange={controls.setLinkedinPartnerId}
             onTiktokPixelIdChange={controls.setTiktokPixelId}
             onPinterestTagIdChange={controls.setPinterestTagId}
+            snapPixelId={controls.snapPixelId}
+            onSnapPixelIdChange={controls.setSnapPixelId}
             onMetaPixelIdChange={controls.setMetaPixelId}
             onGoogleTagIdChange={controls.setGoogleTagId}
             onXPixelIdChange={controls.setXPixelId}
