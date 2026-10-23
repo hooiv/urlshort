@@ -151,6 +151,9 @@ export const OPERATIONS: OperationDef[] = [
     query: [{ name: 'days', description: '30, 60, 90, 180 or 365.' }, { name: 'limit', description: '1 to 200.' }],
   },
   { path: '/api/links/{shortCode}/clone', method: 'post', summary: 'Clone a link with a fresh short code', tag: 'Links', scopes: ['links:write'] },
+  { path: '/api/links/{shortCode}/move', method: 'post', summary: 'Move a link to another workspace', tag: 'Links', scopes: ['links:write'] },
+  { path: '/api/links/internal-urls', method: 'get', summary: 'Links pointing at internal hosts', tag: 'Links', scopes: ANALYTICS },
+  { path: '/api/links/long-urls', method: 'get', summary: 'Links with very long destinations', tag: 'Links', scopes: ANALYTICS },
   {
     path: '/api/links/{shortCode}/rename', method: 'post', summary: 'Change a link short code', tag: 'Links', scopes: ['links:write'],
     body: { newShortCode: { type: 'string', description: 'New short code.', required: true }, confirm: { type: 'boolean', description: 'Must be true; the old URL stops working.', required: true } },
@@ -173,6 +176,7 @@ export const OPERATIONS: OperationDef[] = [
   { path: '/api/webhooks', method: 'post', summary: 'Create a webhook endpoint', tag: 'Webhooks', scopes: ['webhooks:write'] },
   { path: '/api/analytics/countries', method: 'get', summary: 'Clicks and conversions by country', tag: 'Analytics', scopes: ANALYTICS },
   { path: '/api/analytics/referrers', method: 'get', summary: 'Clicks and conversions by referrer', tag: 'Analytics', scopes: ANALYTICS },
+  { path: '/api/analytics/referrer-spam', method: 'get', summary: 'Suspected referrer spam hosts with signals', tag: 'Analytics', scopes: ANALYTICS },
   { path: '/api/analytics/broken', method: 'get', summary: 'Links whose destination is failing', tag: 'Analytics', scopes: ANALYTICS },
   { path: '/api/analytics/concentration', method: 'get', summary: 'How concentrated clicks are across links', tag: 'Analytics', scopes: ANALYTICS },
   { path: '/api/analytics/drops', method: 'get', summary: 'Links with a sharp drop in clicks', tag: 'Analytics', scopes: ANALYTICS },
