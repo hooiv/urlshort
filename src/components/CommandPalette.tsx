@@ -42,6 +42,7 @@ const ALL_ACTIONS = [
   { name: 'Tag Performance', path: '/manage/tags' },
   { name: 'Country Performance', path: '/manage/countries' },
   { name: 'Referrer Performance', path: '/manage/referrers' },
+  { name: 'Referrer Spam', path: '/manage/referrer-spam' },
   { name: 'Conversions', path: '/manage/conversions' },
   { name: 'QR Scans', path: '/manage/qr-scans' },
   { name: 'Traffic Spikes', path: '/manage/spikes' },
