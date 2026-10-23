@@ -38,3 +38,19 @@ describe('suggestAlternatives', () => {
     for (const s of suggestAlternatives('api', new Set())) expect(s).not.toMatch(/^api$/i)
   })
 })
+
+describe('suggestAlternatives edge cases', () => {
+  it('skips taken candidates case-insensitively and honors the limit', async () => {
+    const { suggestAlternatives } = await import('./slug-availability')
+    const out = suggestAlternatives('Promo', new Set(['promo2', 'promo3']), 3)
+    expect(out).toEqual(['Promo4', 'Promo5', 'Promo6'])
+  })
+  it('returns nothing when the input has no valid characters', async () => {
+    const { suggestAlternatives } = await import('./slug-availability')
+    expect(suggestAlternatives('!!!', new Set())).toEqual([])
+  })
+  it('is deterministic', async () => {
+    const { suggestAlternatives } = await import('./slug-availability')
+    expect(suggestAlternatives('sale', new Set())).toEqual(suggestAlternatives('sale', new Set()))
+  })
+})
