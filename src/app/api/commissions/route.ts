@@ -5,6 +5,7 @@ import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { LINK_READ_SCOPES, LINK_WRITE_SCOPES, resolveActor } from '@/lib/request-actor'
 import { beginRouteIdempotency, releaseRouteIdempotency, storeRouteIdempotency } from '@/lib/idempotency-route'
 import { COMMISSION_STATUSES, transitionCommissions } from '@/lib/commissions'
+import { assessCommissionRisk } from '@/lib/commission-risk'
 
 const PAGE_SIZE = 50
 
@@ -44,6 +45,8 @@ const actionSchema = z.object({
   ids: z.array(z.string().min(1).max(40)).min(1).max(500).optional(),
   /** approve only: every pending commission whose refund window has passed. */
   allDue: z.boolean().optional(),
+  /** allDue only: approve high-risk commissions too (default false: they are held for review). */
+  includeHighRisk: z.boolean().optional(),
   payoutRef: z.string().trim().max(120).optional(),
 })
 
@@ -55,7 +58,7 @@ export async function POST(request: NextRequest) {
   if (!resolved.actor) return NextResponse.json({ error: resolved.error === 'Authentication required' ? 'Unauthorized' : resolved.error }, { status: resolved.status })
   const parsed = actionSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message ?? 'Invalid request' }, { status: 400 })
-  const { action, ids, allDue, payoutRef } = parsed.data
+  const { action, ids, allDue, payoutRef, includeHighRisk } = parsed.data
   if (allDue && action !== 'approve') return NextResponse.json({ error: 'allDue only applies to approve' }, { status: 400 })
   if (!allDue && !ids) return NextResponse.json({ error: 'Provide ids or allDue' }, { status: 400 })
   const userId = resolved.actor.userId
@@ -64,17 +67,26 @@ export async function POST(request: NextRequest) {
   if (idem.replay) return idem.replay as NextResponse
   const now = new Date()
   let changed
+  let heldForReview = 0
   try {
     changed = await prisma.$transaction(async (tx) => {
-      const targets = allDue
-        ? (await tx.commission.findMany({ where: { userId, status: 'pending', holdUntil: { lte: now } }, select: { id: true }, take: 5000 })).map((r) => r.id)
-        : ids!
+      let targets = ids!
+      if (allDue) {
+        const due = (await tx.commission.findMany({ where: { userId, status: 'pending', holdUntil: { lte: now } }, select: { id: true }, take: 1000 })).map((r) => r.id)
+        if (includeHighRisk) targets = due
+        else {
+          // Bulk approval never waves through high-risk commissions: they stay pending for a human to review.
+          const risky = new Set((await assessCommissionRisk(tx, userId, { statuses: ['pending'], limit: 1000 })).filter((r) => r.level === 'high').map((r) => r.commissionId))
+          targets = due.filter((id) => !risky.has(id))
+          heldForReview = due.length - targets.length
+        }
+      }
       return transitionCommissions(tx, userId, action, targets, { payoutRef, now })
     })
   } catch (error) {
     await releaseRouteIdempotency(idem)
     throw error
   }
-  await storeRouteIdempotency(request, idem, 200, { changed })
-  return NextResponse.json({ changed }, { headers: rateLimitHeaders(limit) })
+  await storeRouteIdempotency(request, idem, 200, { changed, heldForReview })
+  return NextResponse.json({ changed, heldForReview }, { headers: rateLimitHeaders(limit) })
 }

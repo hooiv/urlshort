@@ -120,8 +120,8 @@ export default function RewardsPage() {
   async function act(action: 'approve' | 'pay' | 'reverse', body: Record<string, unknown>) {
     setBusy(true); setError(null); setNotice(null)
     try {
-      const { changed } = await api<{ changed: number }>('/api/commissions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, ...body }) })
-      setNotice(`${changed} commission${changed === 1 ? '' : 's'} updated`)
+      const { changed, heldForReview = 0 } = await api<{ changed: number; heldForReview?: number }>('/api/commissions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, ...body }) })
+      setNotice(`${changed} commission${changed === 1 ? '' : 's'} updated${heldForReview ? `, ${heldForReview} high-risk held for review` : ''}`)
       reload()
     } catch (e) { setError((e as Error).message) } finally { setBusy(false) }
   }

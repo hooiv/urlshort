@@ -37,19 +37,33 @@ describe('/api/commissions', () => {
     expect((await GET(new NextRequest('http://x/api/commissions?status=lol'))).status).toBe(400)
   })
 
+  it('allDue approve holds high-risk commissions for review', async () => {
+    db.commission.updateMany.mockResolvedValue({ count: 1 })
+    const now = new Date()
+    type Row = { id: string; conversionId: string; urlId: string; conversion: { createdAt: Date; visitorIdHash: string | null; clickEvent: { createdAt: Date; ip: string | null } | null } }
+    const rows: Row[] = [{ id: 'ok', conversionId: 'v1', urlId: 'u', conversion: { createdAt: new Date(now.getTime() - 3_600_000), visitorIdHash: null, clickEvent: { createdAt: new Date(now.getTime() - 3_700_000), ip: null } } }]
+    // five no-click conversions from one visitor inside a minute: repeat + no_click + burst = high
+    for (let i = 0; i < 5; i++) rows.push({ id: `bad${i}`, conversionId: `b${i}`, urlId: 'u', conversion: { createdAt: now, visitorIdHash: 'h', clickEvent: null } })
+    db.commission.findMany.mockResolvedValueOnce(rows.map((r) => ({ id: r.id }))).mockResolvedValueOnce(rows)
+    const json = await (await POST(post({ action: 'approve', allDue: true }))).json()
+    expect(json).toEqual({ changed: 1, heldForReview: 5 })
+    expect(db.commission.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: { in: ['ok'] } }) }))
+  })
+
   it('needs write scope and a valid action to mutate', async () => {
     db.commission.updateMany.mockResolvedValue({ count: 2 })
     const res = await POST(post({ action: 'pay', ids: ['a', 'b'], payoutRef: 'wire-1' }))
     expect(res.status).toBe(200)
     expect(resolveActor).toHaveBeenLastCalledWith(expect.anything(), ['links:write'])
-    expect(await res.json()).toEqual({ changed: 2 })
+    expect(await res.json()).toEqual({ changed: 2, heldForReview: 0 })
     expect((await POST(post({ action: 'burn', ids: ['a'] }))).status).toBe(400)
     expect((await POST(post({ action: 'pay' }))).status).toBe(400)
     expect((await POST(post({ action: 'pay', allDue: true }))).status).toBe(400)
   })
 
   it('approves every due pending commission for the caller only', async () => {
-    db.commission.findMany.mockResolvedValue([{ id: 'a' }, { id: 'b' }])
+    const clean = (id: string) => ({ id, conversionId: id, urlId: id, conversion: { createdAt: new Date(10_000), visitorIdHash: null, clickEvent: { createdAt: new Date(0), ip: null } } })
+    db.commission.findMany.mockResolvedValueOnce([{ id: 'a' }, { id: 'b' }]).mockResolvedValueOnce([clean('a'), clean('b')])
     db.commission.updateMany.mockResolvedValue({ count: 2 })
     await POST(post({ action: 'approve', allDue: true }))
     expect(db.commission.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ userId: 'u1', status: 'pending' }) }))
