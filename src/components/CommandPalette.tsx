@@ -41,6 +41,7 @@ const ALL_ACTIONS = [
   { name: 'Expired Links', path: '/manage/expired' },
   { name: 'Links Near Click Limit', path: '/manage/near-cap' },
   { name: 'Links Not In A Folder', path: '/manage/unfiled' },
+  { name: 'Scheduled Links', path: '/manage/scheduled' },
   { name: 'Paused Links', path: '/manage/paused' },
   { name: 'Insecure Destinations', path: '/manage/insecure' },
   { name: 'Redirect Chains', path: '/manage/chains' },

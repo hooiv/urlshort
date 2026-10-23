@@ -73,6 +73,7 @@ const KEY_REACHABLE = [
   'links/expired/route.ts',
   'links/near-cap/route.ts',
   'links/unfiled/route.ts',
+  'links/scheduled/route.ts',
   'links/paused/route.ts',
   'views/[id]/route.ts',
   'views/route.ts',
