@@ -9,6 +9,8 @@ type Config = { scope: 'account' | 'link'; urlId: string | null; shortCode: stri
 type Commission = { id: string; shortCode: string; saleValueCents: number; amountCents: number; clawbackCents: number; currency: string | null; status: string; ruleId: string | null; createdAt: string; payoutRef: string | null }
 type Totals = Record<string, { count: number; amountCents: number; clawbackCents: number }>
 type Risk = { commissionId: string; score: number; level: 'low' | 'medium' | 'high'; signals: string[] }
+type Forecast = { currency: string; buckets: { label: string; cents: number; count: number }[]; clawbackCents: number; netOwedCents: number }
+const BUCKET_LABELS: Record<string, string> = { payable_now: 'Payable now', approved_unpaid: 'Approved, unpaid', releases_7d: 'Releases in 7 days', releases_30d: 'Releases in 30 days', releases_later: 'Releases later' }
 type Preview = { cents: number; ruleId: string | null; scopeIndex: number | null }
 
 const SIGNAL_LABELS: Record<string, string> = { instant_conversion: 'Converted <3s after click', no_click: 'No matching click', repeat_visitor: 'Same visitor repeatedly', burst: 'Burst of conversions', single_ip_cluster: 'Many from one IP' }
@@ -35,6 +37,7 @@ export default function RewardsPage() {
   const [preview, setPreview] = useState<Preview | null>(null)
   const [commissions, setCommissions] = useState<Commission[]>([])
   const [risks, setRisks] = useState<Record<string, Risk>>({})
+  const [forecasts, setForecasts] = useState<Forecast[]>([])
   const [totals, setTotals] = useState<Totals>({})
   const [status, setStatus] = useState<string>('pending')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -49,6 +52,13 @@ export default function RewardsPage() {
     let live = true
     api<{ configs: Config[] }>('/api/rewards/config')
       .then((d) => { if (live) setConfigs(d.configs) })
+      .catch((e) => live && setError(e.message))
+    return () => { live = false }
+  }, [reloadKey])
+  useEffect(() => {
+    let live = true
+    api<{ forecasts: Forecast[] }>('/api/commissions/forecast')
+      .then((d) => { if (live) setForecasts(d.forecasts) })
       .catch((e) => live && setError(e.message))
     return () => { live = false }
   }, [reloadKey])
@@ -199,6 +209,22 @@ export default function RewardsPage() {
           </div>
         ))}
       </section>
+
+      {forecasts.length > 0 && (
+        <section className="space-y-3" aria-label="Payout forecast">
+          <h2 className="text-lg font-semibold">Payout forecast</h2>
+          {forecasts.map((f) => (
+            <div key={f.currency} className="bg-slate-900/60 border border-slate-800 rounded-xl p-4">
+              <p className="text-sm text-slate-400 mb-2">{f.currency.toUpperCase()} · net owed <span className="text-slate-100 font-semibold">{money(f.netOwedCents, f.currency.toUpperCase())}</span>{f.clawbackCents > 0 && <> (after {money(f.clawbackCents, f.currency.toUpperCase())} clawbacks)</>}</p>
+              <dl className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+                {f.buckets.map((b) => (
+                  <div key={b.label}><dt className="text-slate-500">{BUCKET_LABELS[b.label] ?? b.label}</dt><dd>{money(b.cents, f.currency.toUpperCase())} <span className="text-slate-500">· {b.count}</span></dd></div>
+                ))}
+              </dl>
+            </div>
+          ))}
+        </section>
+      )}
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
