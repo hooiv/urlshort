@@ -18,3 +18,14 @@ describe('assessSlugQuality', () => {
     expect(assessSlugQuality('--Aaa0Oo1lI111111111111111--').score).toBeGreaterThanOrEqual(0)
   })
 })
+
+describe('offensive substring check', () => {
+  it('flags folded look-alike spellings', () => {
+    const r = assessSlugQuality('sh1t-deal')
+    expect(r.issues.some((i) => i.includes('offensive'))).toBe(true)
+    expect(r.score).toBeLessThanOrEqual(50)
+  })
+  it('leaves clean codes alone', () => {
+    expect(assessSlugQuality('spring-sale').issues).toEqual([])
+  })
+})

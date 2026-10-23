@@ -7,6 +7,21 @@ export interface SlugQuality {
   issues: string[]
 }
 
+// Substrings that read badly on printed material. Matched against the code
+// with separators and digit look-alikes (0->o, 1->i, 3->e, 4->a, 5->s) folded.
+const OFFENSIVE = ['fuck', 'shit', 'cunt', 'bitch', 'whore', 'nazi', 'rape', 'dick', 'slut', 'nigg', 'fag']
+
+function fold(code: string): string {
+  return code
+    .toLowerCase()
+    .replace(/[-_]/g, '')
+    .replace(/0/g, 'o')
+    .replace(/1/g, 'i')
+    .replace(/3/g, 'e')
+    .replace(/4/g, 'a')
+    .replace(/5/g, 's')
+}
+
 const AMBIGUOUS = /[0oO1lI]/g
 
 export function assessSlugQuality(code: string): SlugQuality {
@@ -32,6 +47,11 @@ export function assessSlugQuality(code: string): SlugQuality {
   if (/[-_]{2,}|^[-_]|[-_]$/.test(code)) {
     issues.push('Awkward separators')
     score -= 10
+  }
+  const folded = fold(code)
+  if (OFFENSIVE.some((w) => folded.includes(w))) {
+    issues.push('Contains a word that may read as offensive on printed or shared material')
+    score -= 50
   }
   return { score: Math.max(0, score), issues }
 }
