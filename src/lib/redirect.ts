@@ -36,10 +36,11 @@ export function forwardQueryParams(destination: string, incoming: URLSearchParam
 export function resolveDestination(parts: {
   ruleUrl?: string | null
   campaignUrl?: string | null
+  scheduledUrl?: string | null
   revisionUrl?: string | null
   fallbackUrl: string
 }): string {
-  return parts.ruleUrl || parts.campaignUrl || parts.revisionUrl || parts.fallbackUrl
+  return parts.ruleUrl || parts.campaignUrl || parts.scheduledUrl || parts.revisionUrl || parts.fallbackUrl
 }
 
 /**

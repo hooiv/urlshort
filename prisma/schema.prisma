@@ -70,6 +70,7 @@ model Url {
   notStartedUrl              String?
   geoFence                   Json?
   visitorBlock               Json?
+  destinationSchedule         Json?
   activeHours                Json?
   clickTarget                Int?
   clickTargetDeadline        DateTime?

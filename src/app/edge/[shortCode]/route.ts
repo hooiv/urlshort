@@ -1,3 +1,4 @@
+import { activeScheduledDestination } from '@/lib/destination-schedule'
 import { isWithinRuleSchedule } from '@/lib/rule-schedule'
 import { NextRequest, NextResponse, after } from 'next/server'
 import { forwardQueryParams, isBillableTraffic, resolveDestination } from '@/lib/redirect'
@@ -17,7 +18,7 @@ function getCountry(request:NextRequest){const v=request.headers.get('cf-ipcount
 type Rule={enabled:boolean;healthStatus?:string|null;countryCodes?:string|null;deviceType?:string|null;trafficType?:string|null;aiAgent?:string|null;os?:string|null;languageCodes?:string|null;referrerDomain?:string|null;startAt?:string|null;endAt?:string|null;schedule?:string|null;priority:number;weight:number;destinationUrl:string}
 type Variant={enabled:boolean;weight:number;destinationUrl:string}
 type Campaign={id:string;version?:number;variants:Variant[]}
-type Link={shortCode:string;originalUrl:string;expiresAt:string|null;expiredUrl?:string|null;startsAt?:string|null;visitorBlock?:VisitorBlock|null;geoFence?:GeoFence|null;activeHours?:ActiveHours|null;offHoursUrl?:string|null;notStartedUrl?:string|null;passwordHash?:string|null;locked?:boolean|null;revision:string|null;rules:Rule[];campaigns:Campaign[]}
+type Link={shortCode:string;originalUrl:string;expiresAt:string|null;expiredUrl?:string|null;startsAt?:string|null;visitorBlock?:VisitorBlock|null;destinationSchedule?:unknown;geoFence?:GeoFence|null;activeHours?:ActiveHours|null;offHoursUrl?:string|null;notStartedUrl?:string|null;passwordHash?:string|null;locked?:boolean|null;revision:string|null;rules:Rule[];campaigns:Campaign[]}
 type EdgeConfig={previousHash?:string;contentHash:string;signature:string;version?:number;link:Link}
 let lastGood:EdgeConfig|null=null
 let lastGoodAt=0
@@ -67,7 +68,7 @@ const rules=link.rules.filter(r=>match(r,{country,region:(request.headers.get('x
 // loop let hostile query strings grow the Location header without bound, and
 // a corrupt destination threw an unhandled 500. A corrupt destination is a
 // broken link (404), never an outage (503).
-let destination:string;try{destination=forwardQueryParams(resolveDestination({ruleUrl,campaignUrl,revisionUrl:link.revision,fallbackUrl:link.originalUrl}),request.nextUrl.searchParams)}catch{return NextResponse.redirect(new URL('/404',origin),307)}
+let destination:string;try{destination=forwardQueryParams(resolveDestination({ruleUrl,campaignUrl,scheduledUrl:activeScheduledDestination(link.destinationSchedule,new Date()),revisionUrl:link.revision,fallbackUrl:link.originalUrl}),request.nextUrl.searchParams)}catch{return NextResponse.redirect(new URL('/404',origin),307)}
 // Bot quota exclusion. The edge tier never reserves quota itself (stateless);
 // it tags the event so the durable queue excludes crawler traffic from tenant
 // quota and max-clicks accounting — mirroring ClickData.nonBillable.
