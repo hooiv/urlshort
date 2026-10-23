@@ -5,7 +5,7 @@ import { READ_ROLES } from '@/lib/authorization'
 import { rateLimit, rateLimitHeaders } from '@/lib/rate-limit'
 import { canAdministerFolders } from '@/lib/folders'
 import type { AnalyticsScope } from '@/lib/aggregate-analytics'
-import { getLinkHygiene } from '@/lib/link-hygiene'
+import { getLinkHygiene, scoreHygiene } from '@/lib/link-hygiene'
 
 /**
  * GET /api/links/hygiene?workspaceId=
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     }
 
     const result = await getLinkHygiene(scope)
-    return NextResponse.json(result, { headers: { 'Cache-Control': 'private, max-age=60' } })
+    return NextResponse.json({ ...result, health: scoreHygiene(result) }, { headers: { 'Cache-Control': 'private, max-age=60' } })
   } catch (error) {
     console.error('Link hygiene failed:', error)
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })

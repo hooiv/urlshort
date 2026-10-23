@@ -59,3 +59,29 @@ export async function getLinkHygiene(scope: AnalyticsScope, now = new Date()): P
     WHERE ${scopeFilter(scope)}`)
   return shapeHygiene(rows[0])
 }
+
+export type HygieneScore = { score: number; grade: 'A' | 'B' | 'C' | 'D' | 'F'; penalties: { issue: keyof LinkHygiene; count: number; points: number }[] }
+
+/** Points deducted when 100% of active links have the issue; scaled by the affected share. */
+const WEIGHTS: Partial<Record<keyof LinkHygiene, number>> = {
+  destinationDown: 40, flaggedRisky: 30, expired: 15, destinationDegraded: 10,
+  clickLimitReached: 10, expiringSoon: 5, untagged: 5,
+}
+
+/** Pure: 0-100 health score from hygiene counts. Empty workspaces score 100. */
+export function scoreHygiene(h: LinkHygiene): HygieneScore {
+  const denom = Math.max(1, h.active)
+  const penalties: HygieneScore['penalties'] = []
+  let lost = 0
+  for (const [issue, weight] of Object.entries(WEIGHTS) as [keyof LinkHygiene, number][]) {
+    const count = h[issue]
+    if (!count) continue
+    const points = Math.round(Math.min(1, count / denom) * weight * 10) / 10
+    lost += points
+    penalties.push({ issue, count, points })
+  }
+  penalties.sort((a, b) => b.points - a.points)
+  const score = Math.max(0, Math.round(100 - lost))
+  const grade = score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : score >= 60 ? 'D' : 'F'
+  return { score, grade, penalties }
+}
