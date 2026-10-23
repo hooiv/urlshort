@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { getWorkspaceMembership, EDIT_ROLES } from '@/lib/workspaces'
 import { recordAudit } from '@/lib/audit'
+import { normalizeDefaultTags } from '@/lib/folder-defaults'
 import { FOLDER_GRANT_ROLES, canAdministerFolders, effectiveFolderRole, normalizeFolderName } from '@/lib/folders'
 
 type Ctx = { params: Promise<{ workspaceId: string; folderId: string }> }
@@ -12,6 +13,9 @@ const UpdateFolder = z.object({
   name: z.string().max(120).optional(),
   description: z.string().max(280).nullable().optional(),
   restricted: z.boolean().optional(),
+  defaultTags: z.array(z.string().max(40)).max(20).optional(),
+  /** Workspace UTM template applied to links created in this folder; null clears. */
+  defaultUtmTemplateId: z.string().min(1).max(64).nullable().optional(),
   /** Replaces the whole grant list. Owner/admin only. */
   access: z.array(z.object({ userId: z.string().min(1).max(64), role: z.enum(FOLDER_GRANT_ROLES) })).max(500).optional(),
 })
@@ -34,7 +38,7 @@ export async function PATCH(request: NextRequest, context: Ctx) {
   if (!ctx) return NextResponse.json({ error: 'Folder not found' }, { status: 404 })
   const parsed = UpdateFolder.safeParse(await request.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Invalid update' }, { status: 400 })
-  const { name, description, restricted, access } = parsed.data
+  const { name, description, restricted, access, defaultTags, defaultUtmTemplateId } = parsed.data
   const admin = canAdministerFolders(ctx.membership.role)
   if ((restricted !== undefined || access !== undefined) && !admin) return NextResponse.json({ error: 'Only workspace owners and admins can change folder access' }, { status: 403 })
   if (!EDIT_ROLES.includes(ctx.role)) return NextResponse.json({ error: 'Editor permission is required' }, { status: 403 })
@@ -54,6 +58,17 @@ export async function PATCH(request: NextRequest, context: Ctx) {
   }
   if (description !== undefined) data = { ...data, description: description?.trim() || null }
   if (restricted !== undefined) data = { ...data, restricted }
+  try {
+    if (defaultTags !== undefined) data = { ...data, defaultTags: normalizeDefaultTags(defaultTags) }
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 400 })
+  }
+  if (defaultUtmTemplateId !== undefined) {
+    if (defaultUtmTemplateId && !(await prisma.utmTemplate.findFirst({ where: { id: defaultUtmTemplateId, workspaceId }, select: { id: true } }))) {
+      return NextResponse.json({ error: 'UTM template not found in this workspace' }, { status: 404 })
+    }
+    data = { ...data, defaultUtmTemplateId }
+  }
 
   try {
     const updated = await prisma.$transaction(async (tx) => {
@@ -69,8 +84,8 @@ export async function PATCH(request: NextRequest, context: Ctx) {
       urlId: null,
       resourceType: 'folder',
       resourceId: folderId,
-      before: { name: ctx.folder.name, restricted: ctx.folder.restricted, access: ctx.folder.access.map((a) => ({ userId: a.userId, role: a.role })) },
-      after: { name: updated.name, restricted: updated.restricted, access: access ?? undefined },
+      before: { name: ctx.folder.name, restricted: ctx.folder.restricted, defaultTags: ctx.folder.defaultTags, defaultUtmTemplateId: ctx.folder.defaultUtmTemplateId, access: ctx.folder.access.map((a) => ({ userId: a.userId, role: a.role })) },
+      after: { name: updated.name, restricted: updated.restricted, defaultTags: updated.defaultTags, defaultUtmTemplateId: updated.defaultUtmTemplateId, access: access ?? undefined },
     })
     return NextResponse.json(updated)
   } catch (error) {

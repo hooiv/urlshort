@@ -26,6 +26,7 @@ import { publishWorkspaceRoutingConfig } from '@/lib/routing-config'
 import { dispatchWebhooksForUrl } from '@/lib/webhooks'
 import { invalidateLink } from '@/lib/link-cache'
 import { applyUtmTemplate } from '@/lib/utm-templates'
+import { mergeFolderTags, pickUtmTemplateId } from '@/lib/folder-defaults'
 import { loadWorkspacePolicy, policyErrorMessage } from '@/lib/link-policy-store'
 
 const CUSTOM_CODE = /^[A-Za-z0-9_-]{3,64}$/
@@ -231,12 +232,20 @@ async function handlePost(request: NextRequest) {
       const folderError = await folderWriteError(user.id, membership.workspaceId, membership.role, requestedFolderId)
       if (folderError) return NextResponse.json({ error: folderError }, { status: folderError === 'Folder not found' ? 404 : 403 })
     }
+    // Folder defaults: extra tags and a fallback UTM template for links filed in the folder.
+    const folderDefaults = requestedFolderId && membership
+      ? await prisma.folder.findFirst({ where: { id: requestedFolderId, workspaceId: membership.workspaceId }, select: { defaultTags: true, defaultUtmTemplateId: true } })
+      : null
+    if (folderDefaults) tags = mergeFolderTags(tags, folderDefaults.defaultTags)
     // Optional workspace UTM template: fills only the utm_* params the URL doesn't already carry.
     let destinationUrl = normalizedUrl
-    if (body.utmTemplateId !== undefined && body.utmTemplateId !== null && body.utmTemplateId !== '') {
-      if (typeof body.utmTemplateId !== 'string') return NextResponse.json({ error: 'utmTemplateId must be a string' }, { status: 400 })
+    const explicitTemplate = body.utmTemplateId
+    if (explicitTemplate !== undefined && explicitTemplate !== null && typeof explicitTemplate !== 'string') return NextResponse.json({ error: 'utmTemplateId must be a string' }, { status: 400 })
+    // An explicit null opts out of the folder's default template.
+    const utmTemplateId = explicitTemplate === null ? null : pickUtmTemplateId(explicitTemplate, folderDefaults?.defaultUtmTemplateId)
+    if (utmTemplateId) {
       if (!membership) return NextResponse.json({ error: 'Sign in and pick a workspace to use a UTM template' }, { status: 401 })
-      const template = await prisma.utmTemplate.findFirst({ where: { id: body.utmTemplateId.slice(0, 64), workspaceId: membership.workspaceId } })
+      const template = await prisma.utmTemplate.findFirst({ where: { id: String(utmTemplateId).slice(0, 64), workspaceId: membership.workspaceId } })
       if (!template) return NextResponse.json({ error: 'UTM template not found in this workspace' }, { status: 404 })
       destinationUrl = applyUtmTemplate(normalizedUrl, template)
       if (destinationUrl.length > 2048) return NextResponse.json({ error: 'Destination URL is too long after applying the UTM template' }, { status: 400 })

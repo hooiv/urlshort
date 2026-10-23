@@ -486,6 +486,9 @@ model Folder {
   name        String
   description String?
   restricted  Boolean  @default(false)
+  /// Tags and UTM template applied to links created in this folder.
+  defaultTags          String[] @default([])
+  defaultUtmTemplateId String?
   createdById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
