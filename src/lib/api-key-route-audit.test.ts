@@ -78,6 +78,7 @@ const KEY_REACHABLE = [
   'links/[shortCode]/extend/route.ts',
   'links/slug-collisions/route.ts',
   'links/protected/route.ts',
+  'links/single-use/route.ts',
   'links/scheduled/route.ts',
   'links/paused/route.ts',
   'views/[id]/route.ts',
