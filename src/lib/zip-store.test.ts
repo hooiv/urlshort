@@ -29,6 +29,14 @@ describe('zip-store', () => {
     try { execFileSync('python3', ['-c', `import zipfile,sys;z=zipfile.ZipFile(sys.argv[1]);assert z.testzip() is None;open(sys.argv[2],'wb').write(z.read('x.bin'));assert z.read('ünï.txt').decode()=='héllo'`, file, join(dir, 'o.bin')]) } catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') ok = false; else throw e }
     if (ok) expect(readFileSync(join(dir, 'o.bin')).equals(payload)).toBe(true)
   })
+  it('dedupes names that differ only by case', () => {
+    const text = buildZip([
+      { name: 'A.png', data: Buffer.from('1') },
+      { name: 'a.PNG', data: Buffer.from('2') },
+    ]).toString('latin1')
+    expect(text).toContain('A.png')
+    expect(text).toContain('a-2.PNG')
+  })
   it('handles an empty archive', () => {
     expect(buildZip([]).length).toBe(22)
   })

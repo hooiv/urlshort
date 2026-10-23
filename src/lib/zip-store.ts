@@ -46,15 +46,16 @@ export function buildZip(entries: ZipEntry[]): Buffer {
   let offset = 0
   for (const entry of entries) {
     let name = safeZipName(entry.name)
-    if (seen.has(name)) {
+    // Case-insensitive: Windows/macOS extractors would silently overwrite A.png with a.png.
+    if (seen.has(name.toLowerCase())) {
       const dot = name.lastIndexOf('.')
       const base = dot > 0 ? name.slice(0, dot) : name
       const ext = dot > 0 ? name.slice(dot) : ''
       let i = 2
-      while (seen.has(`${base}-${i}${ext}`)) i++
+      while (seen.has(`${base}-${i}${ext}`.toLowerCase())) i++
       name = `${base}-${i}${ext}`
     }
-    seen.add(name)
+    seen.add(name.toLowerCase())
     const nameBuf = Buffer.from(name, 'utf8')
     const data = Buffer.from(entry.data)
     if (offset + data.length > 0xfffffff0) throw new Error('zip too large')
