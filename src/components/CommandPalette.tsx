@@ -30,6 +30,7 @@ const ALL_ACTIONS = [
   { name: 'Rewards & Commissions', path: '/manage/rewards' },
   { name: 'Bulk Import CSV', path: '/bulk' },
   { name: 'Duplicate Links', path: '/manage/duplicates' },
+  { name: 'Look-alike Short Codes', path: '/manage/slug-collisions' },
   { name: 'Stale Links', path: '/manage/stale' },
   { name: 'Trash', path: '/manage/trash' },
   { name: 'Broken Links', path: '/manage/broken' },
