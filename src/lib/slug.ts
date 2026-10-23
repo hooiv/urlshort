@@ -13,6 +13,12 @@ function cleanToken(token: string): string {
     .trim()
 }
 
+/** Normalise (cap 32, no trailing separators) BEFORE validating, so truncation can't yield a reserved or too-short code. */
+function addIfValid(out: Set<string>, candidate: string): void {
+  const slug = candidate.slice(0, 32).replace(/[-_]+$/, '')
+  if (slug.length >= 3 && !isReservedCode(slug)) out.add(slug)
+}
+
 /**
  * Generate semantic, memorable slug suggestions from a link's title or destination URL.
  */
@@ -31,16 +37,12 @@ export function generateSlugSuggestions(
     if (tokensToUse.length > 0) {
       // Variant A: first 2-3 words
       const fullKebab = tokensToUse.slice(0, 3).join('-')
-      if (fullKebab.length >= 3 && !isReservedCode(fullKebab)) {
-        suggestions.add(fullKebab.slice(0, 32).replace(/[-_]+$/, ''))
-      }
+      addIfValid(suggestions, fullKebab)
 
       // Variant B: first 2 words + current year
       const year = new Date().getFullYear()
       const yearKebab = `${tokensToUse.slice(0, 2).join('-')}-${year}`
-      if (yearKebab.length >= 3 && !isReservedCode(yearKebab)) {
-        suggestions.add(yearKebab.slice(0, 32).replace(/[-_]+$/, ''))
-      }
+      addIfValid(suggestions, yearKebab)
 
       // Variant C: "get-" or "go-" prefix if single keyword
       if (tokensToUse.length === 1) {

@@ -54,3 +54,13 @@ describe('generateSlugSuggestions truncation', () => {
     for (const s of out) expect(s).toMatch(/[a-z0-9]$/)
   })
 })
+
+describe('generateSlugSuggestions normalisation', () => {
+  it('never returns slugs over 32 chars or ending in a separator', () => {
+    const out = generateSlugSuggestions('Supercalifragilistic expialidocious wonderfully-long-title words', null)
+    for (const s of out) {
+      expect(s.length).toBeLessThanOrEqual(32)
+      expect(s).not.toMatch(/[-_]$/)
+    }
+  })
+})
