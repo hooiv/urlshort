@@ -1,0 +1,3 @@
+# Expired links
+
+`GET /api/links/expired?workspaceId=&limit=50` lists links still marked active that are past `expiresAt` or at `maxClicks`, most recently expired first, with a `reason` of `expired` or `click_limit` (date wins when both apply) and the total match count. `limit` is 1–200. Session auth or an API key with `analytics:read` / `links:read`; workspace viewers only see links they may read. UI: `/manage/expired`, which extends selected links by 30 days or archives them through `PATCH /api/bulk/edit` (audited). Extending only moves links that have an expiry date; click-limit links need a higher `maxClicks`.

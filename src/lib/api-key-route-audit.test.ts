@@ -70,6 +70,8 @@ const KEY_REACHABLE = [
   'links/qr-zip/route.ts',
   'links/untagged/route.ts',
   'links/never-clicked/route.ts',
+  'links/expired/route.ts',
+  'links/paused/route.ts',
   'views/[id]/route.ts',
   'views/route.ts',
   'analytics/[shortCode]/route.ts',

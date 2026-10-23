@@ -38,6 +38,7 @@ const ALL_ACTIONS = [
   { name: 'Link Hygiene', path: '/manage/hygiene' },
   { name: 'Untagged Links', path: '/manage/untagged' },
   { name: 'Never-clicked Links', path: '/manage/never-clicked' },
+  { name: 'Expired Links', path: '/manage/expired' },
   { name: 'Paused Links', path: '/manage/paused' },
   { name: 'Insecure Destinations', path: '/manage/insecure' },
   { name: 'Redirect Chains', path: '/manage/chains' },
