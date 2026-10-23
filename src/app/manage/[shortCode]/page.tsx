@@ -70,6 +70,7 @@ export default function ManageLink() {
           socialTab={controls.socialTab}
           onSocialTabChange={controls.setSocialTab}
           onSave={() => void controls.saveMetadata()}
+          destinationUrl={controls.liveRevision?.destinationUrl ?? controls.releaseUrl}
         />
 
         <NotesSection notes={controls.notes} onChange={controls.setNotes} onSave={() => void controls.saveNotes()} />

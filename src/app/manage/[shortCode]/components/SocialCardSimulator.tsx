@@ -1,6 +1,8 @@
 'use client'
 
-import { Share2 } from 'lucide-react'
+import { useState } from 'react'
+import { Share2, Download } from 'lucide-react'
+import { mergeUnfurledOg } from '@/app/manage/[shortCode]/components/og-import'
 import Field from '@/app/manage/[shortCode]/components/Field'
 import { isHttpUrl } from '@/app/manage/[shortCode]/components/campaign-utils'
 import type { SocialPlatform } from '@/app/manage/[shortCode]/components/campaign-types'
@@ -15,6 +17,7 @@ interface SocialCardSimulatorProps {
   socialTab: SocialPlatform
   onSocialTabChange: (tab: SocialPlatform) => void
   onSave: () => void
+  destinationUrl?: string
 }
 
 const tabs: Array<{ id: SocialPlatform; label: string }> = [
@@ -34,7 +37,32 @@ export default function SocialCardSimulator({
   socialTab,
   onSocialTabChange,
   onSave,
+  destinationUrl,
 }: SocialCardSimulatorProps) {
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
+  async function importFromDestination() {
+    if (!destinationUrl) return
+    setImporting(true)
+    setImportError(null)
+    try {
+      const res = await fetch('/api/unfurl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: destinationUrl }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not fetch metadata')
+      const merged = mergeUnfurledOg({ title: ogTitle, description: ogDesc, image: ogImage }, data)
+      onOgTitleChange(merged.title)
+      onOgDescChange(merged.description)
+      onOgImageChange(merged.image)
+    } catch (e) {
+      setImportError(e instanceof Error ? e.message : 'Could not fetch metadata')
+    } finally {
+      setImporting(false)
+    }
+  }
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'quicklink.to'
   // Never render an arbitrary-scheme string as an image source; fall back to the placeholder.
   const previewImage = isHttpUrl(ogImage) ? ogImage : null
@@ -97,6 +125,16 @@ export default function SocialCardSimulator({
               placeholder="https://example.com/banner.png"
             />
           </Field>
+          <button
+            type="button"
+            onClick={() => void importFromDestination()}
+            disabled={!destinationUrl || importing}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-700 px-5 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" />
+            {importing ? 'Fetching…' : 'Fill empty fields from destination page'}
+          </button>
+          {importError && <p role="alert" className="text-xs text-red-400">{importError}</p>}
           <button
             onClick={onSave}
             className="w-full rounded-xl bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-400"
