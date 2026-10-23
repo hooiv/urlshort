@@ -8,8 +8,11 @@ type Fallback = { type: 'percent' | 'flat'; amount: number; capCents?: number } 
 type Config = { scope: 'account' | 'link'; urlId: string | null; shortCode: string | null; rules: Rule[]; fallback: Fallback }
 type Commission = { id: string; shortCode: string; saleValueCents: number; amountCents: number; clawbackCents: number; currency: string | null; status: string; ruleId: string | null; createdAt: string; payoutRef: string | null }
 type Totals = Record<string, { count: number; amountCents: number; clawbackCents: number }>
+type Risk = { commissionId: string; score: number; level: 'low' | 'medium' | 'high'; signals: string[] }
 type Preview = { cents: number; ruleId: string | null; scopeIndex: number | null }
 
+const SIGNAL_LABELS: Record<string, string> = { instant_conversion: 'Converted <3s after click', no_click: 'No matching click', repeat_visitor: 'Same visitor repeatedly', burst: 'Burst of conversions', single_ip_cluster: 'Many from one IP' }
+const RISK_STYLE = { low: 'text-slate-400', medium: 'text-amber-300', high: 'text-red-400' } as const
 const STATUSES = ['pending', 'approved', 'paid', 'reversed'] as const
 const money = (cents: number, currency?: string | null) => `${currency && currency !== 'USD' ? `${currency} ` : '$'}${(cents / 100).toFixed(2)}`
 const uid = () => `r${Math.random().toString(36).slice(2, 8)}`
@@ -31,6 +34,7 @@ export default function RewardsPage() {
   const [sampleMeta, setSampleMeta] = useState('plan=pro')
   const [preview, setPreview] = useState<Preview | null>(null)
   const [commissions, setCommissions] = useState<Commission[]>([])
+  const [risks, setRisks] = useState<Record<string, Risk>>({})
   const [totals, setTotals] = useState<Totals>({})
   const [status, setStatus] = useState<string>('pending')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -55,6 +59,14 @@ export default function RewardsPage() {
       .catch((e) => live && setError(e.message))
     return () => { live = false }
   }, [status, reloadKey])
+
+  useEffect(() => {
+    let live = true
+    api<{ risks: Risk[] }>('/api/commissions/risk?minLevel=low')
+      .then((d) => { if (live) setRisks(Object.fromEntries(d.risks.map((r) => [r.commissionId, r]))) })
+      .catch(() => live && setRisks({}))
+    return () => { live = false }
+  }, [reloadKey])
 
   /** Load a scope into the editor. */
   function edit(config: Config | null) {
@@ -206,9 +218,9 @@ export default function RewardsPage() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="text-left text-slate-400"><tr><th className="py-2 w-8" /><th>Link</th><th>Sale</th><th>Commission</th><th>Rule</th><th>Date</th></tr></thead>
+            <thead className="text-left text-slate-400"><tr><th className="py-2 w-8" /><th>Link</th><th>Sale</th><th>Commission</th><th>Rule</th><th>Risk</th><th>Date</th></tr></thead>
             <tbody>
-              {commissions.length === 0 && <tr><td colSpan={6} className="py-4 text-slate-500">No {status} commissions.</td></tr>}
+              {commissions.length === 0 && <tr><td colSpan={7} className="py-4 text-slate-500">No {status} commissions.</td></tr>}
               {commissions.map((c) => (
                 <tr key={c.id} className="border-t border-slate-800">
                   <td className="py-2"><input type="checkbox" aria-label={`Select ${c.shortCode}`} checked={selected.has(c.id)} onChange={() => toggle(c.id)} /></td>
@@ -216,6 +228,9 @@ export default function RewardsPage() {
                   <td>{money(c.saleValueCents, c.currency)}</td>
                   <td>{money(c.amountCents, c.currency)}{c.clawbackCents > 0 && <span className="text-red-400"> (−{money(c.clawbackCents, c.currency)} clawback)</span>}</td>
                   <td className="text-slate-400">{c.ruleId ?? 'default'}</td>
+                  <td>{(status === 'pending' || status === 'approved') && risks[c.id] && risks[c.id].signals.length > 0 ? (
+                    <span className={RISK_STYLE[risks[c.id].level]} title={risks[c.id].signals.map((k) => SIGNAL_LABELS[k] ?? k).join(', ')}>{risks[c.id].level} ({risks[c.id].score})</span>
+                  ) : <span className="text-slate-600">—</span>}</td>
                   <td className="text-slate-400">{new Date(c.createdAt).toLocaleDateString()}</td>
                 </tr>
               ))}
