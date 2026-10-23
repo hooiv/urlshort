@@ -57,3 +57,7 @@ and download the payout CSV.
 - Rewards are owner-scoped: the Stripe integration's owner earns the ledger entries.
   Partner/affiliate identities are not modelled yet.
 - Rules are stored per scope as validated JSON (max 25 rules per scope).
+
+## Payout forecast
+
+`GET /api/commissions/forecast` (scope `links:read`) returns, per currency, unpaid commissions bucketed by when the refund hold releases (payable now, 7d, 30d, later), approved-unpaid, clawbacks owed, and net owed.
