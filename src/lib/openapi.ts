@@ -22,6 +22,19 @@ const LINK_READ = ['links:read', 'links:write']
 const ANALYTICS = ['analytics:read', 'links:read', 'links:write']
 
 export const OPERATIONS: OperationDef[] = [
+  { path: '/api/links/{shortCode}/experiment', method: 'get', summary: 'A/B experiment results: per-variant clicks, conversions, lift and significance', tag: 'Analytics', scopes: ANALYTICS, query: [{ name: 'days', description: 'Window in days, 1-365 (default 30)' }, { name: 'confidence', description: 'Confidence level 0.8-0.999 (default 0.95)' }, { name: 'goalId', description: 'Conversion goal to measure' }, { name: 'control', description: 'Rule id used as the control variant' }] },
+  { path: '/api/links/{shortCode}/promote', method: 'post', summary: 'Promote the winning variant to the link destination', tag: 'Links', scopes: ['links:write'] },
+  { path: '/api/links/{shortCode}/import-clicks', method: 'post', summary: 'Import historical click data from a provider', tag: 'Links', scopes: ['links:write'] },
+  { path: '/api/links/{shortCode}/webhook-test', method: 'post', summary: 'Send a test event to the link webhooks', tag: 'Links', scopes: ['links:write'] },
+  { path: '/api/links/{shortCode}/qr/render', method: 'post', summary: 'Render a branded QR code (logo upload supported)', tag: 'Links', scopes: LINK_READ },
+  { path: '/api/links/{shortCode}/domain-settings', method: 'get', summary: 'Get per-link domain settings', tag: 'Links', scopes: LINK_READ },
+  { path: '/api/links/{shortCode}/domain-settings', method: 'patch', summary: 'Update per-link domain settings', tag: 'Links', scopes: ['links:write'] },
+  { path: '/api/analytics/{shortCode}/funnel', method: 'get', summary: 'Click-to-conversion funnel for a link', tag: 'Analytics', scopes: ANALYTICS },
+  { path: '/api/analytics/{shortCode}/insights', method: 'get', summary: 'Automated insights for a link', tag: 'Analytics', scopes: ANALYTICS },
+  { path: '/api/workspaces/{workspaceId}/folders/{folderId}', method: 'patch', summary: 'Update a folder', tag: 'Workspaces', scopes: ['links:write'] },
+  { path: '/api/workspaces/{workspaceId}/folders/{folderId}', method: 'delete', summary: 'Delete a folder', tag: 'Workspaces', scopes: ['links:write'] },
+  { path: '/api/workspaces/{workspaceId}/utm-templates/{templateId}', method: 'patch', summary: 'Update a UTM template', tag: 'Workspaces', scopes: ['links:write'] },
+  { path: '/api/workspaces/{workspaceId}/utm-templates/{templateId}', method: 'delete', summary: 'Delete a UTM template', tag: 'Workspaces', scopes: ['links:write'] },
   { path: '/api/links/{shortCode}/activity', method: 'get', summary: 'Link activity timeline', tag: 'Links', scopes: LINK_READ },
   { path: '/api/links/{shortCode}/click-target', method: 'get', summary: 'Get the click-target override', tag: 'Links', scopes: LINK_READ },
   { path: '/api/links/{shortCode}/click-target', method: 'put', summary: 'Set the click-target override', tag: 'Links', scopes: ['links:write'] },
