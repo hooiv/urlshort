@@ -17,6 +17,25 @@ export default function ExpiringLinksPage() {
   const [links, setLinks] = useState<Item[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [reload, setReload] = useState(0)
+
+  async function extend(l: Item) {
+    setBusy(l.shortCode)
+    setError(null)
+    const body = l.reason === 'time' ? { days: 30 } : { addClicks: Math.max(100, l.maxClicks ?? 100) }
+    try {
+      const r = await fetch(`/api/links/${encodeURIComponent(l.shortCode)}/extend`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+      })
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Extend failed')
+      setReload((n) => n + 1)
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBusy(null)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -29,7 +48,7 @@ export default function ExpiringLinksPage() {
       .catch((e: Error) => { if (!cancelled) setError(e.message) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [days])
+  }, [days, reload])
 
   return (
     <main className="mx-auto max-w-4xl p-6">
@@ -57,6 +76,9 @@ export default function ExpiringLinksPage() {
                 <span className={`whitespace-nowrap text-sm ${COLORS[u]}`}>
                   {l.reason === 'time' ? formatTimeLeft(l.msUntilExpiry) : `${l.remainingClicks} of ${l.maxClicks} clicks left${l.runway?.daysRemaining != null ? ` · runs out in ~${l.runway.daysRemaining}d at ${l.runway.clicksPerDay}/day` : ''}`}
                 </span>
+                <button type="button" disabled={busy === l.shortCode} onClick={() => extend(l)} className="whitespace-nowrap rounded border px-2 py-1 text-xs disabled:opacity-50">
+                  {busy === l.shortCode ? 'Extending…' : l.reason === 'time' ? 'Extend 30 days' : 'Add clicks'}
+                </button>
               </li>
             )
           })}
