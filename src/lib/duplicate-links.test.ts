@@ -38,3 +38,9 @@ d2('archiveTargets', () => {
   i2('excludes the kept link', () => e2(_archiveTargets(g, 'b')).toEqual(['aa', 'cc']))
   i2('returns nothing for an unknown keeper', () => e2(_archiveTargets(g, 'zzz')).toEqual([]))
 })
+
+describe('normalizeDestination shared tracking list', () => {
+  it('drops gbraid/yclid/_hsenc like the dirty-link finder', () => {
+    expect(normalizeDestination('https://a.com/p?x=1&gbraid=1&yclid=2&_hsenc=3')).toBe('a.com/p?x=1')
+  })
+})

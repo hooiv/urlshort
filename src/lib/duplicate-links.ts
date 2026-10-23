@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from './prisma'
+import { TRACKING_PARAMS } from './tracking-params'
 import { scopeFilter, type AnalyticsScope } from './aggregate-analytics'
 
 /**
@@ -12,7 +13,8 @@ import { scopeFilter, type AnalyticsScope } from './aggregate-analytics'
 export const DUPLICATES_MAX_GROUPS = 100
 export const DUPLICATES_DEFAULT_GROUPS = 25
 export const DUPLICATES_MAX_SCAN = 20_000
-const TRACKING = /^(utm_[a-z]+|fbclid|gclid|msclkid|ttclid|li_fat_id|mc_cid|mc_eid|igshid|ref_src)$/i
+const TRACKING_SET = new Set<string>(TRACKING_PARAMS)
+const TRACKING = { test: (k: string) => /^utm_/i.test(k) || TRACKING_SET.has(k.toLowerCase()) || /^(mc_cid|ref_src)$/i.test(k) }
 
 export function normalizeDestination(raw: string): string | null {
   let u: URL
