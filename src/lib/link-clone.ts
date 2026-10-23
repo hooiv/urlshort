@@ -58,6 +58,9 @@ export function cloneUrlData(source: Url, shortCode: string): Prisma.UrlUnchecke
     offHoursUrl: source.offHoursUrl,
     geoFence: jsonOrDbNull(source.geoFence),
     activeHours: jsonOrDbNull(source.activeHours),
+    destinationSchedule: jsonOrDbNull(source.destinationSchedule),
+    clickTarget: source.clickTarget,
+    clickTargetDeadline: source.clickTargetDeadline,
     visitorBlock: source.visitorBlock === null ? Prisma.DbNull : (source.visitorBlock as Prisma.InputJsonValue),
   }
 }

@@ -24,6 +24,14 @@ describe('cloneUrlData', () => {
     autoFailoverEnabled: true, tags: ['a', 'b'], deletedAt: null,
   } as unknown as Url
 
+  it('copies destination schedule and click target, using DB null when absent', () => {
+    const sched = [{ url: 'https://example.com/x', from: '2026-01-01' }]
+    const d = new Date('2027-01-01T00:00:00Z')
+    const out = cloneUrlData({ ...source, destinationSchedule: sched, clickTarget: 500, clickTargetDeadline: d } as unknown as Url, 'c')
+    expect(out).toMatchObject({ destinationSchedule: sched, clickTarget: 500, clickTargetDeadline: d })
+    expect(cloneUrlData({ ...source, destinationSchedule: null } as unknown as Url, 'c').destinationSchedule).toBe(Prisma.DbNull)
+  })
+
   it('copies the visitor blocklist, using DB null when absent', () => {
     const rules = { countries: ['XX'] }
     expect(cloneUrlData({ ...source, visitorBlock: rules } as unknown as Url, 'c').visitorBlock).toEqual(rules)
