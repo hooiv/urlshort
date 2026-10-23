@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
-import type { LinkHygiene } from '@/lib/link-hygiene'
+import type { HygieneScore, LinkHygiene } from '@/lib/link-hygiene'
 
 type Item = { key: keyof LinkHygiene; label: string; href?: string; bad: boolean; issue?: string }
 type AttentionLink = { id: string; shortCode: string; originalUrl: string; clicks: number }
@@ -21,7 +21,7 @@ const ITEMS: Item[] = [
 ]
 
 export default function HygienePage() {
-  const [data, setData] = useState<LinkHygiene | null>(null)
+  const [data, setData] = useState<(LinkHygiene & { health?: HygieneScore }) | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [open, setOpen] = useState<string | null>(null)
   const [links, setLinks] = useState<AttentionLink[] | null>(null)
@@ -56,6 +56,21 @@ export default function HygienePage() {
       <p className="mt-1 text-sm text-gray-500">What needs attention across your {data ? data.total : ''} links.</p>
       {error && <p role="alert" className="mt-4 text-red-600">{error}</p>}
       {!data && !error && <p className="mt-4 text-gray-500">Loading…</p>}
+      {data?.health && (
+        <section className="mt-6 rounded-lg border p-4" aria-label="Health score">
+          <div className="flex items-baseline gap-3">
+            <span className="text-5xl font-semibold" data-testid="health-score">{data.health.score}</span>
+            <span className="text-xl text-gray-600">Grade {data.health.grade}</span>
+          </div>
+          {data.health.penalties.length > 0 && (
+            <ul className="mt-3 space-y-1 text-sm text-gray-600">
+              {data.health.penalties.map((p) => (
+                <li key={p.issue}>−{p.points} · {ITEMS.find((i) => i.key === p.issue)?.label ?? p.issue} ({p.count.toLocaleString()})</li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
       {data && (
         <ul className="mt-6 grid gap-3 sm:grid-cols-2">
           {ITEMS.map((i) => {
