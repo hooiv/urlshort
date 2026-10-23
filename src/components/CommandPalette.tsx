@@ -39,6 +39,7 @@ const ALL_ACTIONS = [
   { name: 'Link Hygiene', path: '/manage/hygiene' },
   { name: 'Untagged Links', path: '/manage/untagged' },
   { name: 'Never-clicked Links', path: '/manage/never-clicked' },
+  { name: 'One-time Links', path: '/manage/single-use' },
   { name: 'Expired Links', path: '/manage/expired' },
   { name: 'Links Near Click Limit', path: '/manage/near-cap' },
   { name: 'Links Not In A Folder', path: '/manage/unfiled' },
