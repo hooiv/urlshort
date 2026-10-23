@@ -198,6 +198,7 @@ export const OPERATIONS: OperationDef[] = [
   { path: '/api/links/hygiene', method: 'get', summary: 'Link hygiene report', tag: 'Links', scopes: ANALYTICS },
   { path: '/api/links/lookup', method: 'get', summary: 'Look up links by destination URL', tag: 'Links', scopes: ANALYTICS },
   { path: '/api/links/untagged', method: 'get', summary: 'Links with no tags', tag: 'Links', scopes: ANALYTICS },
+  { path: '/api/links/untitled', method: 'get', summary: 'Active links with no title', tag: 'Links', scopes: ANALYTICS },
   { path: '/api/links/chains', method: 'get', summary: 'Links whose destination is another short link', tag: 'Links', scopes: ANALYTICS },
   { path: '/api/links/insecure', method: 'get', summary: 'Links with non-HTTPS destinations', tag: 'Links', scopes: ANALYTICS },
   { path: '/api/links/missing-previews', method: 'get', summary: 'Links missing a social preview', tag: 'Links', scopes: ANALYTICS },
