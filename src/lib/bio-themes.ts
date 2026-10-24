@@ -108,5 +108,5 @@ export const BIO_THEMES: Record<string, BioTheme> = {
 };
 
 export function getTheme(themeId?: string | null): BioTheme {
-  return (themeId && BIO_THEMES[themeId]) || BIO_THEMES.midnight;
+  return (themeId && Object.hasOwn(BIO_THEMES, themeId) ? BIO_THEMES[themeId] : undefined) || BIO_THEMES.midnight;
 }
