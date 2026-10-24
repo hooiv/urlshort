@@ -1,4 +1,4 @@
-# QuickLink — Smart link infrastructure
+# QuickLink - Smart link infrastructure
 
 One permanent short link, many destinations. QuickLink routes visitors by country, device, referrer, or time window; runs deterministic weighted experiments; tracks conversions back to the exact click and routing rule; and fails over automatically when a destination goes down.
 
@@ -116,6 +116,3 @@ All management endpoints accept a session cookie, a per-link management token (`
 - Schedule `POST /api/health/sweep` every 5–15 minutes with the `x-health-sweep-secret` header.
 - Rotate `QL_ATTRIBUTION_SECRET` carefully — it invalidates outstanding attribution tokens.
 
-<!-- Legacy documentation below -->
-
-## ✨ Features
