@@ -51,6 +51,12 @@ describe('evaluateVisitorBlock', () => {
     expect(evaluateVisitorBlock(b, { ip: '2001:db9::1' })).toBeNull()
     expect(evaluateVisitorBlock(b, { ip: '::ffff:203.0.113.5' })).toBe('ip')
   })
+  it('matches hex-form mapped IPv4, bracketed and zoned addresses', () => {
+    expect(evaluateVisitorBlock(b, { ip: '::ffff:cb00:7105' })).toBe('ip')
+    expect(evaluateVisitorBlock(b, { ip: '[2001:db8::5]' })).toBe('ip')
+    expect(evaluateVisitorBlock(b, { ip: 'fe80::1%eth0' })).toBeNull()
+    expect(evaluateVisitorBlock(b, { ip: 'not-an-ip' })).toBeNull()
+  })
   it('blocks referrer host and subdomains, not lookalikes', () => {
     expect(evaluateVisitorBlock(b, { referer: 'https://bad.example/page' })).toBe('referrer')
     expect(evaluateVisitorBlock(b, { referer: 'https://x.bad.example/' })).toBe('referrer')
