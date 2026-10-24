@@ -47,6 +47,7 @@ const ALL_ACTIONS = [
   { name: 'Scheduled Links', path: '/manage/scheduled' },
   { name: 'Paused Links', path: '/manage/paused' },
   { name: 'Smart-Routed Links', path: '/manage/routed' },
+  { name: 'Retargeting Pixel Links', path: '/manage/pixels' },
   { name: 'Insecure Destinations', path: '/manage/insecure' },
   { name: 'Redirect Chains', path: '/manage/chains' },
   { name: 'Tag Performance', path: '/manage/tags' },
