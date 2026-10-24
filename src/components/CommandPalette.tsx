@@ -49,6 +49,7 @@ const ALL_ACTIONS = [
   { name: 'Smart-Routed Links', path: '/manage/routed' },
   { name: 'Retargeting Pixel Links', path: '/manage/pixels' },
   { name: 'Cloaked Links', path: '/manage/cloaked' },
+  { name: 'Blocklisted Links', path: '/manage/blocklisted' },
   { name: 'Insecure Destinations', path: '/manage/insecure' },
   { name: 'Redirect Chains', path: '/manage/chains' },
   { name: 'Tag Performance', path: '/manage/tags' },
