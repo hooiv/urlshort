@@ -46,6 +46,7 @@ const ALL_ACTIONS = [
   { name: 'Links Not In A Folder', path: '/manage/unfiled' },
   { name: 'Scheduled Links', path: '/manage/scheduled' },
   { name: 'Paused Links', path: '/manage/paused' },
+  { name: 'Smart-Routed Links', path: '/manage/routed' },
   { name: 'Insecure Destinations', path: '/manage/insecure' },
   { name: 'Redirect Chains', path: '/manage/chains' },
   { name: 'Tag Performance', path: '/manage/tags' },
