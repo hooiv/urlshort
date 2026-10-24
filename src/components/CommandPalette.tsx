@@ -50,6 +50,7 @@ const ALL_ACTIONS = [
   { name: 'Retargeting Pixel Links', path: '/manage/pixels' },
   { name: 'Cloaked Links', path: '/manage/cloaked' },
   { name: 'Blocklisted Links', path: '/manage/blocklisted' },
+  { name: 'Custom Preview Links', path: '/manage/custom-og' },
   { name: 'Insecure Destinations', path: '/manage/insecure' },
   { name: 'Redirect Chains', path: '/manage/chains' },
   { name: 'Tag Performance', path: '/manage/tags' },
