@@ -139,3 +139,19 @@ describe('edge route active hours', () => {
     expect(res.headers.get('location')).toBe('https://dest.example/')
   })
 })
+
+describe('edge route click caps', () => {
+  beforeEach(() => { process.env.QL_CONFIG_SIGNING_SECRET = SECRET })
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it('hands capped links to the main route so the cap is enforced atomically', async () => {
+    const res = await run({ needsCounter: true })
+    expect(res.status).toBe(307)
+    expect(res.headers.get('location')).toBe('https://ql.test/abc')
+  })
+
+  it('serves uncapped links at the edge', async () => {
+    const res = await run({ needsCounter: false })
+    expect(res.headers.get('location')).toBe('https://dest.example/')
+  })
+})

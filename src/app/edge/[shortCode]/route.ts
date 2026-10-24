@@ -18,7 +18,7 @@ function getCountry(request:NextRequest){const v=request.headers.get('cf-ipcount
 type Rule={enabled:boolean;healthStatus?:string|null;countryCodes?:string|null;deviceType?:string|null;trafficType?:string|null;aiAgent?:string|null;os?:string|null;languageCodes?:string|null;referrerDomain?:string|null;startAt?:string|null;endAt?:string|null;schedule?:string|null;priority:number;weight:number;destinationUrl:string}
 type Variant={enabled:boolean;weight:number;destinationUrl:string}
 type Campaign={id:string;version?:number;variants:Variant[]}
-type Link={shortCode:string;originalUrl:string;expiresAt:string|null;expiredUrl?:string|null;startsAt?:string|null;visitorBlock?:VisitorBlock|null;destinationSchedule?:unknown;geoFence?:GeoFence|null;activeHours?:ActiveHours|null;offHoursUrl?:string|null;notStartedUrl?:string|null;passwordHash?:string|null;locked?:boolean|null;revision:string|null;rules:Rule[];campaigns:Campaign[]}
+type Link={shortCode:string;originalUrl:string;expiresAt:string|null;expiredUrl?:string|null;startsAt?:string|null;needsCounter?:boolean;visitorBlock?:VisitorBlock|null;destinationSchedule?:unknown;geoFence?:GeoFence|null;activeHours?:ActiveHours|null;offHoursUrl?:string|null;notStartedUrl?:string|null;passwordHash?:string|null;locked?:boolean|null;revision:string|null;rules:Rule[];campaigns:Campaign[]}
 type EdgeConfig={previousHash?:string;contentHash:string;signature:string;version?:number;link:Link}
 let lastGood:EdgeConfig|null=null
 let lastGoodAt=0
@@ -40,6 +40,8 @@ export async function GET(request:NextRequest,{params}:{params:Promise<{shortCod
 const {shortCode}=await params;const origin=new URL(request.url).origin
 if(!/^[A-Za-z0-9_-]{1,64}$/.test(shortCode))return NextResponse.redirect(new URL('/404',origin),307)
 const body=await loadConfig(request,shortCode);if(!body)return new NextResponse('Link configuration unavailable',{status:503,headers:{'Retry-After':'5'}});const link=body.link
+// Click caps (maxClicks / dailyClickCap) need an atomic counter the signed, cached edge config cannot provide: hand those links to the main route instead of serving past the cap.
+if(link.needsCounter)return NextResponse.redirect(new URL(`/${encodeURIComponent(link.shortCode)}${request.nextUrl.search}`,origin),307)
 // Timing-safe password gate. The old edge route never checked the gate and
 // served protected destinations to anyone holding the edge URL. Reuses the
 // shared constant-time checker — never `===` against the cookie value.
