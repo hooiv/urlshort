@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect -- token hydrates from sessionStorage after mount. */
 'use client'
 
+import { parseLifetimeMinutes } from '@/lib/link-lifetime'
 import { parseDailyClickCap } from '@/lib/daily-click-cap'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
@@ -67,6 +68,7 @@ export function useCampaignControls(shortCode: string) {
   const [redirectStatus, setRedirectStatus] = useState('')
   const [maxClicks, setMaxClicks] = useState('')
   const [dailyClickCap, setDailyClickCap] = useState('')
+  const [lifetimeMinutes, setLifetimeMinutes] = useState('')
   const [password, setPassword] = useState('')
   const [hasPassword, setHasPassword] = useState(false)
 
@@ -139,6 +141,7 @@ export function useCampaignControls(shortCode: string) {
       setRedirectStatus(linkPayload.redirectStatus ? String(linkPayload.redirectStatus) : '')
       setMaxClicks(linkPayload.maxClicks ? String(linkPayload.maxClicks) : '')
       setDailyClickCap(linkPayload.dailyClickCap ? String(linkPayload.dailyClickCap) : '')
+      setLifetimeMinutes(linkPayload.lifetimeMinutes ? String(linkPayload.lifetimeMinutes) : '')
       setHasPassword(Boolean(linkPayload.passwordHash))
 
       setMetaPixelId(linkPayload.metaPixelId || '')
@@ -312,10 +315,12 @@ export function useCampaignControls(shortCode: string) {
     let parsedExpiresAt: string | null
     let parsedMaxClicks: number | null
     let parsedDailyCap: number | null
+    let parsedLifetime: number | null
     try {
       parsedExpiresAt = parseExpirationInput(expiresAt)
       parsedMaxClicks = parseMaxClicks(maxClicks)
       parsedDailyCap = parseDailyClickCap(dailyClickCap)
+      parsedLifetime = parseLifetimeMinutes(lifetimeMinutes)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Invalid expiration settings')
       return
@@ -338,6 +343,7 @@ export function useCampaignControls(shortCode: string) {
           redirectStatus: redirectStatus || null,
           maxClicks: parsedMaxClicks,
           dailyClickCap: parsedDailyCap,
+          lifetimeMinutes: parsedLifetime,
         }),
       })
       toast.success('Expiration settings saved')
@@ -498,6 +504,7 @@ export function useCampaignControls(shortCode: string) {
     redirectStatus, setRedirectStatus,
     maxClicks, setMaxClicks,
     dailyClickCap, setDailyClickCap,
+    lifetimeMinutes, setLifetimeMinutes,
     password, setPassword,
     hasPassword,
     metaPixelId, setMetaPixelId,

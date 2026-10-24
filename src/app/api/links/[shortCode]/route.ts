@@ -4,6 +4,7 @@ import { parseGeoFence } from '@/lib/geo-fence'
 import { Prisma } from '@prisma/client'
 import { parseActiveHours } from '@/lib/active-hours'
 import { parseQueryForwarding } from '@/lib/query-forwarding'
+import { parseLifetimeMinutes } from '@/lib/link-lifetime'
 import { parseDailyClickCap } from '@/lib/daily-click-cap'
 import { parseRedirectStatus, assertStatusCompatible } from '@/lib/redirect-status'
 import { parseClickIdParam } from '@/lib/click-id-param'
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     where: { id: link.id },
     select: {
       id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, notes: true, tags: true, clicks: true,
-      createdAt: true, updatedAt: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, geoFence: true, visitorBlock: true, destinationSchedule: true, activeHours: true, offHoursUrl: true, clickIdParam: true, queryForwardMode: true, queryForwardAllow: true, redirectStatus: true, passwordHash: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, pinterestTagId: true, snapPixelId: true, redditPixelId: true, uetTagId: true, cloaked: true, webhookUrl: true, maxClicks: true, dailyClickCap: true, dailyClicksReserved: true, dailyClicksDate: true, isActive: true,
+      createdAt: true, updatedAt: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, geoFence: true, visitorBlock: true, destinationSchedule: true, activeHours: true, offHoursUrl: true, clickIdParam: true, queryForwardMode: true, queryForwardAllow: true, redirectStatus: true, passwordHash: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, pinterestTagId: true, snapPixelId: true, redditPixelId: true, uetTagId: true, cloaked: true, webhookUrl: true, maxClicks: true, dailyClickCap: true, lifetimeMinutes: true, firstClickAt: true, dailyClicksReserved: true, dailyClicksDate: true, isActive: true,
       riskStatus: true, healthStatus: true,
       deepLinkApp: { select: { id: true, name: true, environment: true, appVersion: true, minimumAppVersion: true, enabled: true, resolverEnabled: true } },
       _count: { select: { clickEvents: true, rules: true, goals: true, revisions: true } },
@@ -221,6 +222,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
     if (body.maxClicks !== undefined) {
       data.maxClicks = parseMaxClicks(body.maxClicks)
     }
+    if (body.lifetimeMinutes !== undefined) {
+      const nextLifetime = parseLifetimeMinutes(body.lifetimeMinutes)
+      data.lifetimeMinutes = nextLifetime
+      // Changing (or clearing) the window restarts the clock on the next human
+      // click; re-saving the same value must not extend a running countdown.
+      if (nextLifetime !== (link as { lifetimeMinutes?: number | null }).lifetimeMinutes) data.firstClickAt = null
+    }
     if (body.dailyClickCap !== undefined) {
       data.dailyClickCap = parseDailyClickCap(body.dailyClickCap)
     }
@@ -253,7 +261,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ s
         })
         data.originalUrl = newDestination
       }
-      return tx.url.update({ where: { id: link.id }, data, select: { id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, notes: true, pinnedAt: true, tags: true, isActive: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, geoFence: true, visitorBlock: true, destinationSchedule: true, activeHours: true, offHoursUrl: true, clickIdParam: true, queryForwardMode: true, queryForwardAllow: true, redirectStatus: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, pinterestTagId: true, snapPixelId: true, redditPixelId: true, uetTagId: true, cloaked: true, webhookUrl: true, maxClicks: true, dailyClickCap: true, updatedAt: true } })
+      return tx.url.update({ where: { id: link.id }, data, select: { id: true, originalUrl: true, shortCode: true, title: true, description: true, ogImage: true, notes: true, pinnedAt: true, tags: true, isActive: true, expiresAt: true, expiredUrl: true, startsAt: true, notStartedUrl: true, geoFence: true, visitorBlock: true, destinationSchedule: true, activeHours: true, offHoursUrl: true, clickIdParam: true, queryForwardMode: true, queryForwardAllow: true, redirectStatus: true, metaPixelId: true, googleTagId: true, xPixelId: true, linkedinPartnerId: true, tiktokPixelId: true, pinterestTagId: true, snapPixelId: true, redditPixelId: true, uetTagId: true, cloaked: true, webhookUrl: true, maxClicks: true, dailyClickCap: true, lifetimeMinutes: true, firstClickAt: true, updatedAt: true } })
     })
 
     await invalidateLink(updated.shortCode, updated.id)

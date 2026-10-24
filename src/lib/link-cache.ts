@@ -71,6 +71,7 @@ export type CachedLink = {
   maxClicks: number | null
   clicksReserved: number
   dailyClickCap: number | null
+  lifetimeMinutes?: number | null
   deletedAt?: Date | null
   rules: SmartRule[]
 }
@@ -312,6 +313,7 @@ const linkSelect = {
   maxClicks: true,
   clicksReserved: true,
   dailyClickCap: true,
+  lifetimeMinutes: true,
   deletedAt: true,
 } as const
 

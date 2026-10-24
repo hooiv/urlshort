@@ -21,6 +21,8 @@ interface ExpirationSectionProps {
   maxClicks: string
   dailyClickCap: string
   onDailyClickCapChange: (value: string) => void
+  lifetimeMinutes: string
+  onLifetimeMinutesChange: (value: string) => void
   password: string
   hasPassword: boolean
   onExpiresAtChange: (value: string) => void
@@ -49,6 +51,8 @@ export default function ExpirationSection({
   maxClicks,
   dailyClickCap,
   onDailyClickCapChange,
+  lifetimeMinutes,
+  onLifetimeMinutesChange,
   password,
   hasPassword,
   onExpiresAtChange,
@@ -144,6 +148,16 @@ export default function ExpirationSection({
               value={dailyClickCap}
               onChange={(e) => onDailyClickCapChange(e.target.value)}
               placeholder="e.g. 1000"
+              className="input"
+            />
+          </Field>
+          <Field label="Expires N minutes after first click">
+            <input
+              type="number"
+              min="1"
+              value={lifetimeMinutes}
+              onChange={(e) => onLifetimeMinutesChange(e.target.value)}
+              placeholder="e.g. 60"
               className="input"
             />
           </Field>

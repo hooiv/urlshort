@@ -1,3 +1,4 @@
+import { startLifetimeClock, isLifetimeElapsed } from '@/lib/link-lifetime'
 import { activeScheduledDestination } from '@/lib/destination-schedule'
 import { filterForwardedParams, type QueryForwardMode } from '@/lib/query-forwarding'
 import { reserveDailyClick } from '@/lib/daily-click-cap'
@@ -170,6 +171,16 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
     const billable = isBillableTraffic(trafficType)
     const needsQuota = billable && url.workspaceId !== null
     const needsCap = billable && url.maxClicks !== null
+    if (billable && url.lifetimeMinutes != null) {
+      // Self-destructing link: the clock starts at the first human click and
+      // the link expires lifetimeMinutes later. Bots never start the clock.
+      const startedAt = await startLifetimeClock(prisma, url.id, now)
+      if (startedAt && isLifetimeElapsed(startedAt, url.lifetimeMinutes, now)) {
+        return url.expiredUrl
+          ? NextResponse.redirect(url.expiredUrl, 307)
+          : NextResponse.redirect(new URL('/expired', baseUrl), 307)
+      }
+    }
     const needsDailyCap = billable && url.dailyClickCap != null
     let usageReserved = false
     const rejectOverLimit = () => url!.expiredUrl
@@ -338,7 +349,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ sho
       return applyRobotsHeader(response)
     }
 
-    const status = effectiveRedirectStatus(url.redirectStatus, { ruleMatched: destination !== url.originalUrl, gated: isBot || needsCap || !!url.expiresAt || !!url.startsAt || !!url.destinationSchedule || !!url.activeHours || !!url.passwordHash })
+    const status = effectiveRedirectStatus(url.redirectStatus, { ruleMatched: destination !== url.originalUrl, gated: isBot || needsCap || !!url.expiresAt || url.lifetimeMinutes != null || !!url.startsAt || !!url.destinationSchedule || !!url.activeHours || !!url.passwordHash })
     const response = NextResponse.redirect(finalDestination, status)
     // Permanent codes are meant to be cached by browsers/CDNs; only the temporary ones are no-store.
     response.headers.set('Cache-Control', status === 301 || status === 308 ? 'public, max-age=3600' : 'private, no-store')

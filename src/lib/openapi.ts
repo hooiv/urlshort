@@ -22,6 +22,18 @@ const LINK_READ = ['links:read', 'links:write']
 const ANALYTICS = ['analytics:read', 'links:read', 'links:write']
 
 export const OPERATIONS: OperationDef[] = [
+  { path: '/api/links/{shortCode}/extend', method: 'post', summary: 'Extend a link expiry', tag: 'Links', scopes: ['links:write'] },
+  { path: '/api/commissions/forecast', method: 'get', summary: 'Forecast pending commission payouts', tag: 'Analytics', scopes: LINK_READ },
+  { path: '/api/commissions/risk', method: 'get', summary: 'Commissions at risk of refund or clawback', tag: 'Analytics', scopes: LINK_READ },
+  { path: '/api/links/expired', method: 'get', summary: 'Expired links', tag: 'Links', scopes: ANALYTICS },
+  { path: '/api/links/near-cap', method: 'get', summary: 'Links nearing their click cap', tag: 'Links', scopes: ANALYTICS },
+  { path: '/api/links/never-clicked', method: 'get', summary: 'Links that never received a click', tag: 'Links', scopes: ANALYTICS },
+  { path: '/api/links/paused', method: 'get', summary: 'Paused links', tag: 'Links', scopes: ANALYTICS },
+  { path: '/api/links/protected', method: 'get', summary: 'Password-protected links', tag: 'Links', scopes: ANALYTICS },
+  { path: '/api/links/scheduled', method: 'get', summary: 'Links scheduled to go live', tag: 'Links', scopes: ANALYTICS },
+  { path: '/api/links/single-use', method: 'get', summary: 'Single-use links', tag: 'Links', scopes: ANALYTICS },
+  { path: '/api/links/slug-collisions', method: 'get', summary: 'Short codes that differ only by case or lookalikes', tag: 'Links', scopes: ANALYTICS },
+  { path: '/api/links/unfiled', method: 'get', summary: 'Links not in any folder', tag: 'Links', scopes: ANALYTICS },
   { path: '/api/links/{shortCode}/experiment', method: 'get', summary: 'A/B experiment results: per-variant clicks, conversions, lift and significance', tag: 'Analytics', scopes: ANALYTICS, query: [{ name: 'days', description: 'Window in days, 1-365 (default 30)' }, { name: 'confidence', description: 'Confidence level 0.8-0.999 (default 0.95)' }, { name: 'goalId', description: 'Conversion goal to measure' }, { name: 'control', description: 'Rule id used as the control variant' }] },
   { path: '/api/links/{shortCode}/promote', method: 'post', summary: 'Promote the winning variant to the link destination', tag: 'Links', scopes: ['links:write'] },
   { path: '/api/links/{shortCode}/import-clicks', method: 'post', summary: 'Import historical click data from a provider', tag: 'Links', scopes: ['links:write'] },

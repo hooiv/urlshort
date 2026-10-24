@@ -157,6 +157,8 @@ export default function ManageLink() {
           maxClicks={controls.maxClicks}
           dailyClickCap={controls.dailyClickCap}
           onDailyClickCapChange={controls.setDailyClickCap}
+          lifetimeMinutes={controls.lifetimeMinutes}
+          onLifetimeMinutesChange={controls.setLifetimeMinutes}
           password={controls.password}
           hasPassword={controls.hasPassword}
           onExpiresAtChange={controls.setExpiresAt}
